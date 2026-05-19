@@ -66,4 +66,10 @@ public static class Tunables
 	// the strike (matches Godot CASCADE_IMPULSE_TRANSFER tuning).
 	public const float CascadeImpulseTransfer = 0.55f;
 	public const float CascadeMinContactSpeed = 80f;
+
+	// Shatter: a landed log struck at high speed by another body skips its
+	// remaining chop count and breaks into pieces immediately. Threshold is
+	// the impacting body's velocity magnitude (u/s).
+	public const float ShatterIncomingSpeed = 300f;
+	public const float ShatterVerticalBump = 180f;
 }

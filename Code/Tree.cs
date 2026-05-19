@@ -62,6 +62,13 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 	void Component.ICollisionListener.OnCollisionStart( Collision col )
 	{
+		// Shatter: a landed log hammered at high speed bypasses its chop count.
+		if ( _landed && !_broken )
+		{
+			TryShatter( col );
+			return;
+		}
+
 		// Cascade: a falling tree slams into a neighbor → propagate fell.
 		if ( !IsFalling ) return;
 		if ( !Body.IsValid() ) return;
@@ -82,6 +89,18 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( fellDir.LengthSquared < 0.001f ) fellDir = _fellDir;
 
 		otherTree.CascadeStrike( fellDir, contactWorld, impulse );
+	}
+
+	private void TryShatter( Collision col )
+	{
+		var otherBody = col.Other.Body;
+		if ( !otherBody.IsValid() ) return;
+		var incomingSpeed = otherBody.Velocity.Length;
+		if ( incomingSpeed < Tunables.ShatterIncomingSpeed ) return;
+
+		var dir = otherBody.Velocity.WithZ( 0f ).Normal;
+		if ( dir.LengthSquared < 0.001f ) dir = Vector3.Forward;
+		BreakIntoPieces( dir );
 	}
 
 	void Component.ICollisionListener.OnCollisionUpdate( Collision col ) { }
