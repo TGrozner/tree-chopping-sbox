@@ -112,5 +112,13 @@ public static class Tunables
 	public const float ComboSlowmoDuration = 1.0f;
 	public const float ComboTraumaDecay = 1.4f;
 	public const float CameraTraumaScale = 12f;
+
+	// FOV juice — sprint widens, chop punches OUT (matches Godot _fov_punch additive).
+	// Punch decay 14/s ports beaver.gd:981 (delta * 14.0); chop=4° vs Godot's
+	// impact-scaled value (speed*0.4 clamped 5) — fixed-per-swing reads cleaner.
+	public const float FovSprintWiden = 6f;
+	public const float FovSprintLerpRate = 8f;
+	public const float FovChopPunch = 4f;
+	public const float FovPunchDecay = 14f;
 }
 

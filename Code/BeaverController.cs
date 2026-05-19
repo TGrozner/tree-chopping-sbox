@@ -15,12 +15,21 @@ public sealed class BeaverController : Component
 	private Angles _cameraAngles;
 	private float _swingCooldown;
 	private Rigidbody _rb;
+	private float _baseFov;
+	private float _fovPunch;
+	private float _sprintWiden;
 
 	protected override void OnAwake()
 	{
 		_rb = Components.Get<Rigidbody>( FindMode.EverythingInSelfAndDescendants );
 		_cameraAngles = WorldRotation.Angles();
 		_cameraAngles.pitch = 12f;
+	}
+
+	protected override void OnStart()
+	{
+		// Capture user-tuned baseline AFTER SceneStarter set FieldOfView.
+		if ( Camera.IsValid() ) _baseFov = Camera.FieldOfView;
 	}
 
 	protected override void OnUpdate()
@@ -153,6 +162,22 @@ public sealed class BeaverController : Component
 
 		Camera.WorldPosition = camPos;
 		Camera.WorldRotation = rot;
+
+		UpdateFov();
+	}
+
+	private void UpdateFov()
+	{
+		if ( _baseFov <= 0f ) _baseFov = Camera.FieldOfView;
+
+		// Sprint widen only counts when actually moving — pure key-hold shouldn't drift FOV.
+		bool sprinting = Input.Down( "Run" ) && _wishVelocity.WithZ( 0f ).LengthSquared > 1f;
+		float target = sprinting ? Tunables.FovSprintWiden : 0f;
+		_sprintWiden = MathX.Lerp( _sprintWiden, target, Time.Delta * Tunables.FovSprintLerpRate );
+
+		_fovPunch = MathF.Max( 0f, _fovPunch - Time.Delta * Tunables.FovPunchDecay );
+
+		Camera.FieldOfView = _baseFov + _sprintWiden + _fovPunch;
 	}
 
 	private static float HashFloat( uint a, uint b )
@@ -180,6 +205,7 @@ public sealed class BeaverController : Component
 		}
 
 		hit.Chop( forward );
+		_fovPunch += Tunables.FovChopPunch;
 		ComboTracker.Get( Scene )?.Beat();
 	}
 
