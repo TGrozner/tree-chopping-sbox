@@ -264,27 +264,8 @@ public sealed class SceneStarter : Component
 
 	private void SpawnTree( Vector3 footPosition )
 	{
-		var go = Scene.CreateObject();
-		go.Name = "Tree";
-		go.WorldPosition = footPosition + Vector3.Up * (Tunables.TreeHeight * 0.5f);
-		go.Tags.Add( "tree" );
-
-		go.WorldScale = new Vector3( Tunables.TreeRadius * 2f, Tunables.TreeRadius * 2f, Tunables.TreeHeight ) / Tunables.CubeBase;
-
-		var model = go.AddComponent<ModelRenderer>();
-		model.Model = Model.Cube;
-		model.Tint = new Color( 0.42f, 0.30f, 0.18f, 1f );
-
-		var col = go.AddComponent<BoxCollider>();
-		col.Scale = new Vector3( Tunables.CubeBase );
-
-		var rb = go.AddComponent<Rigidbody>();
-		rb.MassOverride = Tunables.TreeMass;
-		rb.AngularDamping = 1.2f;
-		rb.LinearDamping = 0.3f;
-		rb.StartAsleep = true;
-
-		var tree = go.AddComponent<Tree>();
-		tree.Body = rb;
+		var biome = BiomeManager.Get( Scene );
+		var tint = biome.IsValid() ? biome.TrunkTintForNewTree() : new Color( 0.42f, 0.30f, 0.18f, 1f );
+		Tree.SpawnAt( Scene, footPosition, tint );
 	}
 }

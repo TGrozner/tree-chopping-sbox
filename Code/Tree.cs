@@ -12,6 +12,39 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private float _slowTipElapsed;
 	private Vector3 _fellDir;
 	private TimeSince _timeSinceLanded;
+	private Vector3 _originalFoot;
+
+	protected override void OnStart()
+	{
+		_originalFoot = WorldPosition - Vector3.Up * (Tunables.TreeHeight * 0.5f);
+	}
+
+	public static Tree SpawnAt( Scene scene, Vector3 footPosition, Color tint )
+	{
+		var go = scene.CreateObject();
+		go.Name = "Tree";
+		go.WorldPosition = footPosition + Vector3.Up * (Tunables.TreeHeight * 0.5f);
+		go.Tags.Add( "tree" );
+		go.WorldScale = new Vector3( Tunables.TreeRadius * 2f, Tunables.TreeRadius * 2f, Tunables.TreeHeight ) / Tunables.CubeBase;
+
+		var mr = go.AddComponent<ModelRenderer>();
+		mr.Model = Model.Cube;
+		mr.Tint = tint;
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = new Vector3( Tunables.CubeBase );
+
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = Tunables.TreeMass;
+		rb.AngularDamping = 1.2f;
+		rb.LinearDamping = 0.3f;
+		rb.StartAsleep = true;
+
+		var tree = go.AddComponent<Tree>();
+		tree.Body = rb;
+		tree.TrunkTint = tint;
+		return tree;
+	}
 
 	public bool IsFalling => _chopped && !_landed && !_broken;
 	public bool IsStanding => !_chopped && !_broken;
@@ -209,6 +242,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			SpawnLogPiece( WorldPosition + localOffset, WorldRotation, direction );
 		}
 
+		Stump.SpawnAt( Scene, _originalFoot, TrunkTint );
 		GameObject.Destroy();
 	}
 

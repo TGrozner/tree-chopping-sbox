@@ -89,6 +89,12 @@ public static class Tunables
 	public const float StoneChunkHeight = 12f;
 	public const float StoneChunkMass = 6f;
 
+	// Tree regrowth — a felled tree leaves a stump, which respawns a fresh
+	// sapling after StumpDuration. Ported from Godot Tunables.TREE_REGROWTH_*.
+	public const float TreeRegrowthStumpSeconds = 30f;
+	public const float StumpHeight = 18f;
+	public const float StumpRadius = 20f;
+
 	// Day/night cycle — ported from Godot ambiance.gd (90s loop).
 	// DayPhase starts at 0.82 (late afternoon) so first launches read as golden hour.
 	// 0.0 / 1.0 = dawn at horizon, 0.5 = noon overhead, 0.25 = late night.
