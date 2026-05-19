@@ -21,6 +21,7 @@ public sealed class HintManager : Component
 	private const int HintPickaxe = 2;
 	private const int HintSprint = 3;
 	private const int HintDebug = 4;
+	private const int HintBackpackFull = 5;
 
 	public static HintManager Get( Scene scene )
 	{
@@ -85,6 +86,18 @@ public sealed class HintManager : Component
 		if ( !_shown.Contains( HintDebug ) && (float)_runStart > 60f )
 		{
 			Show( HintDebug, "Press F3 for debug info." );
+		}
+
+		// Fire once the first inventory tops out so the player gets a nudge
+		// instead of silently watching pickups bounce off the cap.
+		if ( !_shown.Contains( HintBackpackFull ) )
+		{
+			var wood = WoodInventory.Get( Scene );
+			var stone = StoneInventory.Get( Scene );
+			if ( (wood.IsValid() && wood.IsFull) || (stone.IsValid() && stone.IsFull) )
+			{
+				Show( HintBackpackFull, "Backpack full — clear chunks before chopping more." );
+			}
 		}
 	}
 

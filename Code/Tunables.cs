@@ -135,5 +135,10 @@ public static class Tunables
 	public const float FovSprintLerpRate = 8f;
 	public const float FovChopPunch = 4f;
 	public const float FovPunchDecay = 14f;
+
+	// Per-resource backpack cap. Ports Godot Tunables.BACKPACK_CAP_BASE = 20.
+	// Godot only caps wood; sbox port applies the same number independently to
+	// stone so the second pickup loop reads symmetrically on the HUD.
+	public const int BackpackCap = 20;
 }
 

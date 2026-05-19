@@ -37,8 +37,16 @@ public sealed class WoodHud : Component
 		var x = 32f;
 		var y = 32f;
 
-		DrawLine( hud, x, ref y, width, height, pad, $"Wood : {Inventory?.Wood ?? 0}", TextColor );
-		DrawLine( hud, x, ref y, width, height, pad, $"Stone : {Stones?.Stone ?? 0}", StoneColor );
+		// Cap pulled from the live component so hotload-tuned values surface
+		// immediately; fallback to Tunables when an inventory isn't ready yet.
+		var woodCap = Inventory?.Cap ?? Tunables.BackpackCap;
+		var stoneCap = Stones?.Cap ?? Tunables.BackpackCap;
+		var woodCount = Inventory?.Wood ?? 0;
+		var stoneCount = Stones?.Stone ?? 0;
+		var woodTint = (Inventory?.IsFull ?? false) ? ChainHotColor : TextColor;
+		var stoneTint = (Stones?.IsFull ?? false) ? ChainHotColor : StoneColor;
+		DrawLine( hud, x, ref y, width, height, pad, $"Wood : {woodCount}/{woodCap}", woodTint );
+		DrawLine( hud, x, ref y, width, height, pad, $"Stone : {stoneCount}/{stoneCap}", stoneTint );
 
 		if ( _beaver.IsValid() )
 		{
