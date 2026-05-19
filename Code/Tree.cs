@@ -14,9 +14,20 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private TimeSince _timeSinceLanded;
 	private Vector3 _originalFoot;
 
+	// Captured at OnStart so wind sway is RELATIVE to the planted pose, not compounding.
+	private Rotation _baseRotation;
+	// Per-tree phase offset so the forest doesn't sway in lockstep — derived from the planted
+	// position so it stays stable across hotload / save-load (no random per-instance state).
+	private float _windPhaseSeed;
+
 	protected override void OnStart()
 	{
 		_originalFoot = WorldPosition - Vector3.Up * (Tunables.TreeHeight * 0.5f);
+		_baseRotation = WorldRotation;
+		// Hash XY into a phase in [0, 2π). The Godot shader used `wp.x*0.5 + wp.z*0.4`
+		// directly as a phase; we do the equivalent here with the planted footprint.
+		var p = _originalFoot;
+		_windPhaseSeed = (p.x * 0.013f + p.y * 0.017f) % MathF.Tau;
 	}
 
 	public static Tree SpawnAt( Scene scene, Vector3 footPosition, Color tint )
@@ -167,6 +178,42 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		{
 			TickLandedDecay();
 		}
+		else if ( !_broken )
+		{
+			// Only sway while fully standing — fall physics owns rotation once chopped.
+			TickWindSway();
+		}
+	}
+
+	private void TickWindSway()
+	{
+		// Per-tree constants (Tunables.cs is owned by a parallel agent — keep them local).
+		const float WindAmplitudeDeg = 1.5f;   // ±1.5° tilt — reads as a breeze, not a tipover.
+		const float WindFreqHz = 0.8f;         // base sway, ~slow human-breath rhythm.
+		const float WindFreq2Hz = 1.7f;        // organic second harmonic so it doesn't feel sinusoidal.
+		const float WindFreq2Mul = 0.45f;      // small contribution from the harmonic.
+		const float WindGustHz = 0.13f;        // very slow envelope → wind arrives in gusts.
+
+		var t = Time.Now;
+		var phase = _windPhaseSeed;
+
+		// Slow gust envelope keeps amplitude in [0.5, 1.0] so the canopy "breathes".
+		var gust = 0.75f + 0.25f * MathF.Sin( MathF.Tau * WindGustHz * t + phase * 0.5f );
+
+		// Two-axis tilt (around local X and Y) gives an elliptical sway, like real wind.
+		var s1 = MathF.Sin( MathF.Tau * WindFreqHz * t + phase );
+		var s2 = MathF.Sin( MathF.Tau * WindFreq2Hz * t + phase * 1.7f );
+		var tiltX = (s1 + s2 * WindFreq2Mul) * WindAmplitudeDeg * gust;
+
+		var c1 = MathF.Cos( MathF.Tau * WindFreqHz * t + phase * 1.3f );
+		var c2 = MathF.Cos( MathF.Tau * WindFreq2Hz * t + phase * 0.9f );
+		var tiltY = (c1 + c2 * WindFreq2Mul) * WindAmplitudeDeg * gust;
+
+		// Apply directly — overwriting WorldRotation each tick is fine because we
+		// always rebuild from the stable _baseRotation, never from the previous frame.
+		WorldRotation = _baseRotation
+			* Rotation.FromAxis( Vector3.Right, tiltX )
+			* Rotation.FromAxis( Vector3.Forward, tiltY );
 	}
 
 	private void TickFall()
