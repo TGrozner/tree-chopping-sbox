@@ -54,6 +54,13 @@ public sealed class BeaverController : Component
 
 	protected override void OnUpdate()
 	{
+		// Pause gate — all gameplay-affecting inputs (look, move, swing,
+		// upgrade, debug spawns) skip while the menu is open. We don't trust
+		// Scene.TimeScale=0 alone since OnUpdate keeps ticking on it; the
+		// menu also repurposes WASD for slider nav, so reading Input here
+		// while paused would steal those presses.
+		if ( PauseMenu.Get( Scene )?.IsPaused == true ) return;
+
 		UpdateLook();
 		UpdateMovement();
 		UpdateCamera();

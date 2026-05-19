@@ -27,6 +27,8 @@ public sealed class SceneStarter : Component
 			EnsureDayNight();
 			EnsureHints();
 			EnsureCompass();
+			EnsurePauseMenu();
+			EnsureSelfTest();
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
@@ -127,6 +129,29 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "HudCompass";
 		go.AddComponent<HudCompass>();
+	}
+
+	private void EnsurePauseMenu()
+	{
+		var existing = Scene.GetAllComponents<PauseMenu>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "PauseMenu";
+		go.AddComponent<PauseMenu>();
+	}
+
+	private void EnsureSelfTest()
+	{
+		// Gated by env var / CLI flag (see SelfTest.IsActiveRequest) so normal
+		// editor Play sessions never see this. The headless harness in tools/
+		// flips TREE_CHOPPING_SELFTEST=1 to enable.
+		if ( !SelfTest.IsActiveRequest() ) return;
+		var existing = Scene.GetAllComponents<SelfTest>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "SelfTest";
+		go.AddComponent<SelfTest>();
+		Log.Info( "[TC_TEST] SelfTest spawned by SceneStarter" );
 	}
 
 	private BeaverController SpawnBeaver( CameraComponent existingCamera )
