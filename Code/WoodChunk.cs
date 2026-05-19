@@ -38,6 +38,7 @@ public sealed class WoodChunk : Component
 	private void Collect()
 	{
 		_collected = true;
+		AudioBank.PlayPickupWood( Scene, WorldPosition );
 		var inv = WoodInventory.Get( Scene );
 		inv?.Add( WoodValue );
 		ComboTracker.Get( Scene )?.Beat();

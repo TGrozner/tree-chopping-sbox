@@ -26,6 +26,7 @@ public sealed class Rock : Component, IChoppable
 			MathF.Min( 1f, RockTint.b * 1.3f + 0.1f ),
 			1f );
 		ChopParticles.Burst( Scene, hitPoint, dirFlat, dust, Tunables.ChipBurstCountStone, Tunables.ChipSpeedStone );
+		AudioBank.PlayChopStone( Scene, hitPoint );
 
 		if ( ChopsRemaining > 0 )
 		{
@@ -41,6 +42,8 @@ public sealed class Rock : Component, IChoppable
 	private void ShatterIntoChunks( Vector3 direction )
 	{
 		_broken = true;
+		// Reuse log-break sound — a dedicated rock-shatter asset is future work.
+		AudioBank.PlayLogBreak( Scene, WorldPosition );
 		for ( int i = 0; i < Tunables.StonesPerRock; i++ )
 		{
 			SpawnStoneChunk( direction );

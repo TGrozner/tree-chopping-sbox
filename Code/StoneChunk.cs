@@ -38,6 +38,7 @@ public sealed class StoneChunk : Component
 	private void Collect()
 	{
 		_collected = true;
+		AudioBank.PlayPickupStone( Scene, WorldPosition );
 		var inv = StoneInventory.Get( Scene );
 		inv?.Add( StoneValue );
 		ComboTracker.Get( Scene )?.Beat();

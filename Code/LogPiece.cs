@@ -22,6 +22,7 @@ public sealed class LogPiece : Component, IChoppable
 		var count = ChopsRemaining > 0 ? Tunables.ChipBurstCountWood : Tunables.ChipBurstCountWoodHeavy;
 		var speed = ChopsRemaining > 0 ? Tunables.ChipSpeedWood : Tunables.ChipSpeedWoodHeavy;
 		ChopParticles.Burst( Scene, hitPoint, dirFlat, TrunkTint, count, speed );
+		AudioBank.PlayChopWood( Scene, hitPoint );
 
 		if ( ChopsRemaining > 0 )
 		{
@@ -37,6 +38,7 @@ public sealed class LogPiece : Component, IChoppable
 	private void BreakIntoChunks( Vector3 direction )
 	{
 		_broken = true;
+		AudioBank.PlayLogBreak( Scene, WorldPosition );
 		for ( int i = 0; i < Tunables.ChunksPerLogPiece; i++ )
 		{
 			SpawnChunk( direction );

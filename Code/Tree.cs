@@ -83,6 +83,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		hitDir = hitDir.LengthSquared > 0.0001f ? hitDir.Normal : Vector3.Forward;
 		var chipPos = WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.15f) + hitDir * Tunables.TreeRadius;
 		ChopParticles.Burst( Scene, chipPos, hitDir, TrunkTint, Tunables.ChipBurstCountWood, Tunables.ChipSpeedWood );
+		AudioBank.PlayChopWood( Scene, chipPos );
 	}
 
 	private void StartFell( Vector3 direction )
@@ -224,6 +225,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		var count = ChopsRemaining > 0 ? Tunables.ChipBurstCountWood : Tunables.ChipBurstCountWoodHeavy;
 		var speed = ChopsRemaining > 0 ? Tunables.ChipSpeedWood : Tunables.ChipSpeedWoodHeavy;
 		ChopParticles.Burst( Scene, hitPoint, dirFlat, TrunkTint, count, speed );
+		AudioBank.PlayChopWood( Scene, hitPoint );
 
 		if ( ChopsRemaining > 0 )
 		{
@@ -240,6 +242,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private void BreakIntoPieces( Vector3 direction )
 	{
 		_broken = true;
+		AudioBank.PlayLogBreak( Scene, WorldPosition );
 		BiomeManager.Get( Scene )?.NotifyTreeCleared();
 		var forward = WorldRotation.Forward;
 		var origin = WorldPosition + WorldRotation.Up * (Tunables.TreeHeight * 0.5f);
