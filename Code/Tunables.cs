@@ -72,4 +72,14 @@ public static class Tunables
 	// the impacting body's velocity magnitude (u/s).
 	public const float ShatterIncomingSpeed = 300f;
 	public const float ShatterVerticalBump = 180f;
+
+	// Combo / juice tuning. A "beat" = a successful chop or pickup.
+	public const float ComboIdleTimeout = 1.5f;
+	public const int ComboSlowmoChain = 5;
+	public const int ComboFlashChain = 8;
+	public const float ComboSlowmoScale = 0.4f;
+	public const float ComboSlowmoDuration = 1.0f;
+	public const float ComboTraumaDecay = 1.4f;
+	public const float CameraTraumaScale = 12f;
 }
+

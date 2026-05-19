@@ -109,8 +109,29 @@ public sealed class BeaverController : Component
 			.Run();
 		var camPos = trace.Hit ? trace.EndPosition + trace.Normal * 4f : desired;
 
+		// Squirrel Eiserloh trauma shake: amplitude = trauma^2, scaled to screen-space-ish.
+		var combo = ComboTracker.Get( Scene );
+		if ( combo.IsValid() && combo.TraumaAmount > 0.01f )
+		{
+			float t = combo.TraumaAmount * combo.TraumaAmount;
+			var rng = (uint)(Time.Now * 1000.0);
+			float jx = (HashFloat( rng, 0u ) - 0.5f) * 2f;
+			float jy = (HashFloat( rng, 1u ) - 0.5f) * 2f;
+			float jz = (HashFloat( rng, 2u ) - 0.5f) * 2f;
+			camPos += new Vector3( jx, jy, jz ) * t * Tunables.CameraTraumaScale;
+			rot *= Rotation.FromAxis( Vector3.Up, (HashFloat( rng, 3u ) - 0.5f) * 4f * t );
+		}
+
 		Camera.WorldPosition = camPos;
 		Camera.WorldRotation = rot;
+	}
+
+	private static float HashFloat( uint a, uint b )
+	{
+		uint h = a * 374761393u + b * 668265263u;
+		h = (h ^ (h >> 13)) * 1274126177u;
+		h ^= h >> 16;
+		return (h & 0xFFFFFF) / (float)0x1000000;
 	}
 
 	private void UpdateSwing()
@@ -126,6 +147,7 @@ public sealed class BeaverController : Component
 		if ( hit is null ) return;
 
 		hit.Chop( forward );
+		ComboTracker.Get( Scene )?.Beat();
 	}
 
 	private IChoppable ChooseSwingTarget( Vector3 origin, Vector3 forward )

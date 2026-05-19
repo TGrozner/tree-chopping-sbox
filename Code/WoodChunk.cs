@@ -40,6 +40,7 @@ public sealed class WoodChunk : Component
 		_collected = true;
 		var inv = WoodInventory.Get( Scene );
 		inv?.Add( WoodValue );
+		ComboTracker.Get( Scene )?.Beat();
 		GameObject.Destroy();
 	}
 }
