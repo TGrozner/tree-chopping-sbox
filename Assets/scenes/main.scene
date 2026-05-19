@@ -38,8 +38,10 @@
     {
       "__guid": "36cd0753-9d02-41b8-9bb3-6dabce1d8f03",
       "Flags": 0,
-      "Name": "Ground",
-      "Scale": "60,60,1",
+      "Name": "CreekBed",
+      "Tags": "ground,creek",
+      "Position": "0,0,0",
+      "Scale": "4,80,1",
       "Enabled": true,
       "Components": [
         {
@@ -48,7 +50,7 @@
           "MaterialOverride": "materials/default.vmat",
           "Model": "models/dev/plane.vmdl",
           "RenderType": "On",
-          "Tint": "0.35,0.49,0.27,1"
+          "Tint": "0.25,0.30,0.20,1"
         },
         {
           "__type": "Sandbox.BoxCollider",
@@ -56,6 +58,60 @@
           "Center": "0,0,-5",
           "IsTrigger": false,
           "Scale": "100,100,10",
+          "Static": false
+        }
+      ]
+    },
+    {
+      "__guid": "4a1c2d3e-4f50-6172-8394-a5b6c7d8e9fa",
+      "Flags": 0,
+      "Name": "LeftBank",
+      "Tags": "ground,bank",
+      "Position": "-700,0,100",
+      "Scale": "20,160,4",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "5b2d3e4f-5061-7283-94a5-b6c7d8e9fa0b",
+          "MaterialOverride": "materials/default.vmat",
+          "Model": "models/dev/box.vmdl",
+          "RenderType": "On",
+          "Tint": "0.35,0.49,0.27,1"
+        },
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "6c3e4f50-6172-8394-a5b6-c7d8e9fa0b1c",
+          "Center": "0,0,0",
+          "IsTrigger": false,
+          "Scale": "50,50,50",
+          "Static": false
+        }
+      ]
+    },
+    {
+      "__guid": "7d4f5061-7283-94a5-b6c7-d8e9fa0b1c2d",
+      "Flags": 0,
+      "Name": "RightBank",
+      "Tags": "ground,bank",
+      "Position": "700,0,100",
+      "Scale": "20,160,4",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "8e506172-8394-a5b6-c7d8-e9fa0b1c2d3e",
+          "MaterialOverride": "materials/default.vmat",
+          "Model": "models/dev/box.vmdl",
+          "RenderType": "On",
+          "Tint": "0.35,0.49,0.27,1"
+        },
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "9f617283-94a5-b6c7-d8e9-fa0b1c2d3e4f",
+          "Center": "0,0,0",
+          "IsTrigger": false,
+          "Scale": "50,50,50",
           "Static": false
         }
       ]
@@ -69,11 +125,50 @@
         {
           "__type": "TreeChopping.SceneStarter",
           "__guid": "8e9c4b51-2d50-4b6c-af7e-30258d5c6e70",
-          "TreeCount": 8,
+          "TreeCount": 30,
           "ForestRadius": 600,
           "MinSpacing": 140,
           "Seed": 51804,
-          "BeaverSpawn": "0,0,48"
+          "BeaverSpawn": "-300,0,260"
+        }
+      ]
+    },
+    {
+      "__guid": "5a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+      "Flags": 0,
+      "Name": "Camera",
+      "Position": "-200,0,140",
+      "Rotation": "0,0.1045285,0,0.9945219",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "Sandbox.CameraComponent",
+          "__guid": "6b2c3d4e-5f60-7182-93a4-b5c6d7e8f9a0",
+          "BackgroundColor": "0.40,0.55,0.65,1",
+          "ClearFlags": "All",
+          "FieldOfView": 70,
+          "IsMainCamera": true,
+          "Orthographic": false,
+          "OrthographicHeight": 1204,
+          "Priority": 1,
+          "RenderExcludeTags": "",
+          "RenderTags": "",
+          "TargetEye": "None",
+          "Viewport": "0,0,1,1",
+          "ZFar": 8000,
+          "ZNear": 4
+        },
+        {
+          "__type": "Sandbox.Tonemapping",
+          "__guid": "7c3d4e5f-6071-8293-a4b5-c6d7e8f9a0b1",
+          "__version": 1,
+          "ExposureBias": 2,
+          "ExposureCompensation": 0,
+          "ExposureMethod": "RGB",
+          "MaximumExposure": 2,
+          "MinimumExposure": 1,
+          "Mode": "Legacy",
+          "Rate": 1
         }
       ]
     }

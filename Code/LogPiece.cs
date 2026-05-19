@@ -40,7 +40,7 @@ public sealed class LogPiece : Component, IChoppable
 		var go = Scene.CreateObject();
 		go.Name = "WoodChunk";
 		go.WorldPosition = WorldPosition + Vector3.Random * 20f + Vector3.Up * 10f;
-		go.WorldScale = new Vector3( Tunables.ChunkRadius * 2f, Tunables.ChunkRadius * 2f, Tunables.ChunkHeight );
+		go.WorldScale = new Vector3( Tunables.ChunkRadius * 2f, Tunables.ChunkRadius * 2f, Tunables.ChunkHeight ) / Tunables.CubeBase;
 		go.Tags.Add( "wood_chunk" );
 
 		var model = go.AddComponent<ModelRenderer>();
@@ -48,7 +48,7 @@ public sealed class LogPiece : Component, IChoppable
 		model.Tint = TrunkTint;
 
 		var col = go.AddComponent<BoxCollider>();
-		col.Scale = Vector3.One;
+		col.Scale = new Vector3( Tunables.CubeBase );
 
 		var rb = go.AddComponent<Rigidbody>();
 		rb.MassOverride = Tunables.ChunkMass;

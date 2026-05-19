@@ -157,7 +157,7 @@ public sealed class Tree : Component, IChoppable
 		go.Name = "LogPiece";
 		go.WorldPosition = pos;
 		go.WorldRotation = rot * Rotation.FromAxis( Vector3.Right, 90f );
-		go.WorldScale = new Vector3( Tunables.LogPieceRadius * 2f, Tunables.LogPieceRadius * 2f, Tunables.LogPieceHeight );
+		go.WorldScale = new Vector3( Tunables.LogPieceRadius * 2f, Tunables.LogPieceRadius * 2f, Tunables.LogPieceHeight ) / Tunables.CubeBase;
 		go.Tags.Add( "logpiece" );
 
 		var model = go.AddComponent<ModelRenderer>();
@@ -165,7 +165,7 @@ public sealed class Tree : Component, IChoppable
 		model.Tint = TrunkTint;
 
 		var col = go.AddComponent<BoxCollider>();
-		col.Scale = Vector3.One;
+		col.Scale = new Vector3( Tunables.CubeBase );
 
 		var rb = go.AddComponent<Rigidbody>();
 		rb.MassOverride = Tunables.LogPieceMass;

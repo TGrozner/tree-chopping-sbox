@@ -4,6 +4,10 @@ public static class Tunables
 {
 	public const float UnitsPerMeter = 39.37f;
 
+	// Model.Cube => models/dev/box.vmdl is a 50u native cube. Spawn helpers must scale
+	// WorldScale = wantedSize / CubeBase, and BoxCollider.Scale = (CubeBase, CubeBase, CubeBase).
+	public const float CubeBase = 50f;
+
 	public const float BeaverMoveSpeed = 240f;
 	public const float BeaverSprintMultiplier = 1.75f;
 	public const float BeaverJumpImpulse = 320f;
@@ -42,4 +46,24 @@ public static class Tunables
 	public const float PickupLerpSpeed = 16f;
 
 	public const float TreeFallenUpDotMax = 0.6f;
+
+	// Map layout — matches main.scene CreekBed + LeftBank + RightBank dimensions.
+	// Creek bed: |X| < 200u (5m wide). Banks span |X| ∈ [200, 1200] (25m wide each),
+	// top surface at Z = 200u (5m above creek). Map length: Y ∈ [-3200, +3200] (160m).
+	public const float CreekHalfWidth = 200f;
+	public const float BankTopZ = 200f;
+	public const float MapZMinDownstream = -3000f;
+	public const float MapZMaxUpstream = 3000f;
+	public const float BankRiversideMinX = 220f;
+	public const float BankRiversideMaxX = 320f;
+	public const float BankMidMinX = 360f;
+	public const float BankMidMaxX = 600f;
+	public const float BankOuterMinX = 640f;
+	public const float BankOuterMaxX = 1100f;
+
+	// Cascade — impulse transfer fraction from a falling tree's contact velocity
+	// to a neighbor it slams into. 1.0 = full conservation; <1.0 = energy loss to
+	// the strike (matches Godot CASCADE_IMPULSE_TRANSFER tuning).
+	public const float CascadeImpulseTransfer = 0.55f;
+	public const float CascadeMinContactSpeed = 80f;
 }
