@@ -11,6 +11,37 @@ public sealed class Rock : Component, IChoppable
 	bool IChoppable.IsValid() => !_broken && this.IsValid();
 	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Pickaxe;
 
+	// Mirrors SceneStarter.SpawnRock so RockStump regrowth can recreate a rock
+	// with the original tint. Duplication with SceneStarter is intentional for
+	// this commit — a parallel agent owns SceneStarter.cs.
+	public static Rock SpawnAt( Scene scene, Vector3 footPosition, Color tint )
+	{
+		var go = scene.CreateObject();
+		go.Name = "Rock";
+		go.WorldPosition = footPosition + Vector3.Up * (Tunables.RockHeight * 0.5f);
+		go.Tags.Add( "rock" );
+
+		go.WorldScale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, Tunables.RockHeight ) / Tunables.CubeBase;
+
+		var model = go.AddComponent<ModelRenderer>();
+		model.Model = Model.Cube;
+		model.Tint = tint;
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = new Vector3( Tunables.CubeBase );
+
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = Tunables.RockMass;
+		rb.AngularDamping = 2f;
+		rb.LinearDamping = 0.6f;
+		rb.StartAsleep = true;
+
+		var rock = go.AddComponent<Rock>();
+		rock.Body = rb;
+		rock.RockTint = tint;
+		return rock;
+	}
+
 	public void Chop( Vector3 direction )
 	{
 		if ( _broken ) return;
@@ -48,6 +79,10 @@ public sealed class Rock : Component, IChoppable
 		{
 			SpawnStoneChunk( direction );
 		}
+		// Leave a stump that will regrow into a fresh rock. Rocks are static so
+		// WorldPosition is still the spawn-time center — subtract half-height to
+		// get the foot plane that SpawnAt expects.
+		RockStump.SpawnAt( Scene, WorldPosition - Vector3.Up * (Tunables.RockHeight * 0.5f), RockTint );
 		GameObject.Destroy();
 	}
 
