@@ -9,6 +9,8 @@ public sealed class BeaverController : Component
 	[Property] public float CameraDistance { get; set; } = Tunables.CameraDistance;
 	[Property] public float MouseSensitivity { get; set; } = 0.12f;
 
+	public ToolKind CurrentTool { get; private set; } = ToolKind.Axe;
+
 	private Vector3 _wishVelocity;
 	private Angles _cameraAngles;
 	private float _swingCooldown;
@@ -26,7 +28,20 @@ public sealed class BeaverController : Component
 		UpdateLook();
 		UpdateMovement();
 		UpdateCamera();
+		UpdateToolSwap();
 		UpdateSwing();
+	}
+
+	private void UpdateToolSwap()
+	{
+		if ( !Input.Pressed( "Use" ) ) return;
+		CurrentTool = CurrentTool switch
+		{
+			ToolKind.Axe => ToolKind.Pickaxe,
+			ToolKind.Pickaxe => ToolKind.Axe,
+			_ => ToolKind.Axe,
+		};
+		Log.Info( $"[Beaver] tool → {CurrentTool}" );
 	}
 
 	private void UpdateLook()
@@ -146,4 +161,10 @@ public interface IChoppable
 	Vector3 WorldPosition { get; }
 	bool IsValid();
 	void Chop( Vector3 direction );
+}
+
+public enum ToolKind
+{
+	Axe,
+	Pickaxe,
 }
