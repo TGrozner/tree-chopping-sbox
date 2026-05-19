@@ -183,7 +183,7 @@ public sealed class BeaverController : Component
 	{
 		var candidates = Scene.GetAllComponents<Component>()
 			.OfType<IChoppable>()
-			.Where( c => c.IsValid() )
+			.Where( c => c.IsValid() && c.AcceptsTool( CurrentTool ) )
 			.ToList();
 
 		IChoppable best = null;
@@ -212,6 +212,7 @@ public interface IChoppable
 	Vector3 WorldPosition { get; }
 	bool IsValid();
 	void Chop( Vector3 direction );
+	bool AcceptsTool( ToolKind tool );
 }
 
 public enum ToolKind

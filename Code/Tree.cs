@@ -17,6 +17,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	public bool IsStanding => !_chopped && !_broken;
 
 	bool IChoppable.IsValid() => !_broken && !_landed && this.IsValid();
+	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Axe;
 
 	public void Chop( Vector3 direction )
 	{

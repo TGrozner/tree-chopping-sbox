@@ -4,19 +4,28 @@ namespace TreeChopping;
 public sealed class WoodHud : Component
 {
 	[Property] public WoodInventory Inventory { get; set; }
+	[Property] public StoneInventory Stones { get; set; }
 	[Property] public Color PanelColor { get; set; } = new( 0.07f, 0.09f, 0.11f, 0.78f );
 	[Property] public Color TextColor { get; set; } = new( 1f, 0.86f, 0.42f, 1f );
+	[Property] public Color StoneColor { get; set; } = new( 0.78f, 0.82f, 0.88f, 1f );
 	[Property] public Color ChainHotColor { get; set; } = new( 1f, 0.45f, 0.20f, 1f );
 	[Property] public float FontSize { get; set; } = 32f;
 
 	private ComboTracker _combo;
 	private BeaverController _beaver;
 
+	// Toggled by F3 (Input.config "DebugToggle"). Static so any other
+	// component can also check the flag without a back-ref.
+	public static bool DebugVisible { get; private set; }
+
 	protected override void OnUpdate()
 	{
 		Inventory ??= WoodInventory.Get( Scene );
+		Stones ??= StoneInventory.Get( Scene );
 		_combo ??= ComboTracker.Get( Scene );
 		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
+
+		if ( Input.Pressed( "DebugToggle" ) ) DebugVisible = !DebugVisible;
 
 		var camera = Scene?.Camera;
 		if ( !camera.IsValid() ) return;
@@ -29,6 +38,7 @@ public sealed class WoodHud : Component
 		var y = 32f;
 
 		DrawLine( hud, x, ref y, width, height, pad, $"Wood : {Inventory?.Wood ?? 0}", TextColor );
+		DrawLine( hud, x, ref y, width, height, pad, $"Stone : {Stones?.Stone ?? 0}", StoneColor );
 
 		if ( _beaver.IsValid() )
 		{
@@ -46,6 +56,27 @@ public sealed class WoodHud : Component
 		{
 			DrawLine( hud, x, ref y, width, height, pad, $"Sky : {weather.State}", TextColor );
 		}
+
+		if ( DebugVisible )
+		{
+			DrawDebugLines( hud, x, ref y, width, height, pad );
+		}
+	}
+
+	private void DrawDebugLines( Sandbox.Rendering.HudPainter hud, float x, ref float y, float width, float height, float pad )
+	{
+		var dim = new Color( 0.65f, 0.92f, 1f, 1f );
+		var fps = 1f / Time.Delta.Clamp( 1e-4f, 1f );
+		DrawLine( hud, x, ref y, width, height, pad, $"FPS : {fps:0}", dim );
+		if ( _beaver.IsValid() )
+		{
+			var p = _beaver.WorldPosition;
+			DrawLine( hud, x, ref y, width, height, pad, $"Pos : {p.x:0} {p.y:0} {p.z:0}", dim );
+		}
+		var trees = Scene?.GetAllComponents<Tree>().Count() ?? 0;
+		var pieces = Scene?.GetAllComponents<LogPiece>().Count() ?? 0;
+		var chunks = Scene?.GetAllComponents<WoodChunk>().Count() ?? 0;
+		DrawLine( hud, x, ref y, width, height, pad, $"World : T{trees} L{pieces} C{chunks}", dim );
 	}
 
 	private void DrawLine( Sandbox.Rendering.HudPainter hud, float x, ref float y, float width, float height, float pad, string label, Color tint )

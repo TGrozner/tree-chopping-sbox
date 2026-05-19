@@ -9,6 +9,7 @@ public sealed class LogPiece : Component, IChoppable
 	private bool _broken;
 
 	bool IChoppable.IsValid() => !_broken && this.IsValid();
+	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Axe;
 
 	public void Chop( Vector3 direction )
 	{

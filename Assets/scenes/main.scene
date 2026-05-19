@@ -41,6 +41,7 @@
       "Name": "CreekBed",
       "Tags": "ground,creek",
       "Position": "0,0,0",
+      "Rotation": "0.005,0,0,0.99999",
       "Scale": "4,80,1",
       "Enabled": true,
       "Components": [
@@ -68,6 +69,7 @@
       "Name": "LeftBank",
       "Tags": "ground,bank",
       "Position": "-700,0,100",
+      "Rotation": "0.005,0,0,0.99999",
       "Scale": "20,160,4",
       "Enabled": true,
       "Components": [
@@ -95,6 +97,7 @@
       "Name": "RightBank",
       "Tags": "ground,bank",
       "Position": "700,0,100",
+      "Rotation": "0.005,0,0,0.99999",
       "Scale": "20,160,4",
       "Enabled": true,
       "Components": [

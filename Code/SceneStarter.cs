@@ -3,6 +3,7 @@ namespace TreeChopping;
 public sealed class SceneStarter : Component
 {
 	[Property] public int TreeCount { get; set; } = 8;
+	[Property] public int RockCount { get; set; } = 12;
 	[Property] public float ForestRadius { get; set; } = 600f;
 	[Property] public float MinSpacing { get; set; } = 140f;
 	[Property] public int Seed { get; set; } = 0xCA5C;
@@ -13,6 +14,7 @@ public sealed class SceneStarter : Component
 		try
 		{
 			EnsureInventory();
+			EnsureStoneInventory();
 			EnsureCombo();
 			EnsureWeather();
 			EnsureBiomes();
@@ -20,11 +22,13 @@ public sealed class SceneStarter : Component
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
 			SpawnForest();
+			SpawnRocks();
 
 			var beaverMr = beaver?.Components.Get<ModelRenderer>();
 			var anyTree = Scene.GetAllComponents<Tree>().FirstOrDefault();
 			var treeMr = anyTree?.Components.Get<ModelRenderer>();
-			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition} bounds={beaverMr?.Bounds}, sample tree pos={anyTree?.WorldPosition} bounds={treeMr?.Bounds}, trees={Scene.GetAllComponents<Tree>().Count()}, cam reused={camera.IsValid()}" );
+			var anyRock = Scene.GetAllComponents<Rock>().FirstOrDefault();
+			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition} bounds={beaverMr?.Bounds}, sample tree pos={anyTree?.WorldPosition} bounds={treeMr?.Bounds}, trees={Scene.GetAllComponents<Tree>().Count()}, rocks={Scene.GetAllComponents<Rock>().Count()}, sample rock pos={anyRock?.WorldPosition}, cam reused={camera.IsValid()}" );
 		}
 		catch ( System.Exception ex )
 		{
@@ -39,6 +43,15 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "WoodInventory";
 		go.AddComponent<WoodInventory>();
+	}
+
+	private void EnsureStoneInventory()
+	{
+		var existing = Scene.GetAllComponents<StoneInventory>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "StoneInventory";
+		go.AddComponent<StoneInventory>();
 	}
 
 	private void EnsureCombo()
@@ -148,12 +161,62 @@ public sealed class SceneStarter : Component
 			float sideSign = rng.NextDouble() < 0.5 ? -1f : 1f;
 			float x = absX * sideSign;
 			float y = MathX.Lerp( Tunables.MapZMinDownstream, Tunables.MapZMaxUpstream, (float)rng.NextDouble() );
-			var pos = new Vector3( x, y, Tunables.BankTopZ );
+			var pos = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
 			if ( placed.Any( p => p.Distance( pos ) < MinSpacing ) ) continue;
 			placed.Add( pos );
 			SpawnTree( pos );
 			spawned++;
 		}
+	}
+
+	private void SpawnRocks()
+	{
+		// Rocks share the riverside band with trees but use their own placement list
+		// so they can sit between trees. A tighter min-spacing keeps them packed.
+		var rng = new Random( Seed ^ 0x5101D );
+		var placed = new List<Vector3>();
+		int attempts = 0;
+		int spawned = 0;
+		float spacing = Tunables.RockRadius * 2.5f;
+		while ( spawned < RockCount && attempts < RockCount * 50 )
+		{
+			attempts++;
+			float absX = MathX.Lerp( Tunables.BankRiversideMinX, Tunables.BankRiversideMaxX, (float)rng.NextDouble() );
+			float sideSign = rng.NextDouble() < 0.5 ? -1f : 1f;
+			float x = absX * sideSign;
+			float y = MathX.Lerp( Tunables.MapZMinDownstream, Tunables.MapZMaxUpstream, (float)rng.NextDouble() );
+			var foot = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
+			if ( placed.Any( p => p.Distance( foot ) < spacing ) ) continue;
+			placed.Add( foot );
+			SpawnRock( foot );
+			spawned++;
+		}
+	}
+
+	private void SpawnRock( Vector3 footPosition )
+	{
+		var go = Scene.CreateObject();
+		go.Name = "Rock";
+		go.WorldPosition = footPosition + Vector3.Up * (Tunables.RockHeight * 0.5f);
+		go.Tags.Add( "rock" );
+
+		go.WorldScale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, Tunables.RockHeight ) / Tunables.CubeBase;
+
+		var model = go.AddComponent<ModelRenderer>();
+		model.Model = Model.Cube;
+		model.Tint = new Color( 0.55f, 0.55f, 0.58f, 1f );
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = new Vector3( Tunables.CubeBase );
+
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = Tunables.RockMass;
+		rb.AngularDamping = 2f;
+		rb.LinearDamping = 0.6f;
+		rb.StartAsleep = true;
+
+		var rock = go.AddComponent<Rock>();
+		rock.Body = rb;
 	}
 
 	private void SpawnTree( Vector3 footPosition )

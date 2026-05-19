@@ -54,6 +54,12 @@ public static class Tunables
 	public const float BankTopZ = 200f;
 	public const float MapZMinDownstream = -3000f;
 	public const float MapZMaxUpstream = 3000f;
+
+	// 1% downstream slope: terrain tilts so upstream (+Y) is higher than
+	// downstream (-Y). Applied via X-axis rotation on the bank/creek GOs in
+	// main.scene, and used here to keep spawned content on the surface.
+	// Angle = atan(0.01) ≈ 0.5729° ; quat (sin(θ/2),0,0,cos(θ/2)) ≈ (0.005,0,0,0.99999).
+	public const float SlopeRatio = 0.01f;
 	public const float BankRiversideMinX = 220f;
 	public const float BankRiversideMaxX = 320f;
 	public const float BankMidMinX = 360f;
@@ -72,6 +78,16 @@ public static class Tunables
 	// the impacting body's velocity magnitude (u/s).
 	public const float ShatterIncomingSpeed = 300f;
 	public const float ShatterVerticalBump = 180f;
+
+	// Rocks (Pickaxe-only). Squat cubes scattered on banks, break into stone chunks.
+	public const float RockRadius = 24f;
+	public const float RockHeight = 40f;
+	public const float RockMass = 320f;
+	public const int RockChops = 3;
+	public const int StonesPerRock = 3;
+	public const float StoneChunkRadius = 10f;
+	public const float StoneChunkHeight = 12f;
+	public const float StoneChunkMass = 6f;
 
 	// Combo / juice tuning. A "beat" = a successful chop or pickup.
 	public const float ComboIdleTimeout = 1.5f;
