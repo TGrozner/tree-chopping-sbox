@@ -52,20 +52,32 @@ public sealed class WoodHud : Component
 		{
 			DrawLine( hud, x, ref y, width, height, pad, $"Tool : {_beaver.CurrentTool}", TextColor );
 
-			// Tier line — current/max + a hot tint when the player can afford the
-			// next upgrade so the R-key prompt reads at a glance. Pickaxe tier is
-			// shown but never paintable hot (no spend path yet).
+			// Tier line — current/max for the *active* tool. Hot tint when the
+			// player can afford the next upgrade in the relevant currency
+			// (wood for axe, stone for pickaxe) so the R-key prompt reads at a
+			// glance. Base tint matches the funding currency's HUD colour so
+			// the line visually points at the bar the cost will come out of.
 			var isAxe = _beaver.CurrentTool == ToolKind.Axe;
 			var tier = isAxe ? _beaver.AxeTier : _beaver.PickaxeTier;
+			var maxTier = isAxe ? Tunables.MaxAxeTier : Tunables.MaxPickaxeTier;
 			var nextTier = tier + 1;
 			bool canAfford = false;
-			if ( isAxe && nextTier <= Tunables.MaxAxeTier )
+			if ( nextTier <= maxTier )
 			{
-				var cost = Tunables.AxeTierCosts[nextTier];
-				canAfford = woodCount >= cost;
+				if ( isAxe )
+				{
+					var cost = Tunables.AxeTierCosts[nextTier];
+					canAfford = woodCount >= cost;
+				}
+				else
+				{
+					var cost = Tunables.PickaxeTierCosts[nextTier];
+					canAfford = stoneCount >= cost;
+				}
 			}
-			var tierTint = canAfford ? ChainHotColor : TextColor;
-			DrawLine( hud, x, ref y, width, height, pad, $"Tier : {tier}/{Tunables.MaxAxeTier}", tierTint );
+			var baseTierTint = isAxe ? TextColor : StoneColor;
+			var tierTint = canAfford ? ChainHotColor : baseTierTint;
+			DrawLine( hud, x, ref y, width, height, pad, $"Tier : {tier}/{maxTier}", tierTint );
 		}
 
 		if ( _combo.IsValid() && _combo.Chain > 0 )

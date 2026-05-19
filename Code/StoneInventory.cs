@@ -21,4 +21,14 @@ public sealed class StoneInventory : Component
 		Stone += taken;
 		return taken == amount;
 	}
+
+	// All-or-nothing debit. Mirrors WoodInventory.TrySpend so the pickaxe
+	// tier-up path can't silently drain stone without granting the upgrade.
+	public bool TrySpend( int amount )
+	{
+		if ( amount <= 0 ) return false;
+		if ( Stone < amount ) return false;
+		Stone -= amount;
+		return true;
+	}
 }

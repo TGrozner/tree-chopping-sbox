@@ -11,10 +11,9 @@ public sealed class BeaverController : Component
 
 	public ToolKind CurrentTool { get; private set; } = ToolKind.Axe;
 
-	// Tool tier — pay wood to upgrade, get faster swings + more chops/hit. Public
-	// getters so the HUD can read without exposing an upgrade path. Pickaxe tier
-	// is wired here but not actually advanceable yet — the upgrade input is a no-op
-	// when the pickaxe is active, deferred until StoneInventory.TrySpend lands.
+	// Tool tier — pay wood (axe) or stone (pickaxe) to upgrade, get faster
+	// swings + more chops/hit. Public getters so the HUD can read without
+	// exposing an upgrade path.
 	public int AxeTier { get; private set; } = 0;
 	public int PickaxeTier { get; private set; } = 0;
 
@@ -65,23 +64,39 @@ public sealed class BeaverController : Component
 	}
 
 	// R key tries to upgrade the *active* tool one tier. Axe path debits wood
-	// from WoodInventory; pickaxe path is intentionally a no-op for this commit
-	// because StoneInventory.TrySpend doesn't exist yet (parallel-agent constraint).
+	// from WoodInventory; pickaxe path debits stone from StoneInventory. Each
+	// tool tracks its own tier and reads its own cost ladder so tuning the two
+	// economies stays independent.
 	private void UpdateToolUpgrade()
 	{
 		if ( !Input.Pressed( "Reload" ) ) return;
-		if ( CurrentTool != ToolKind.Axe ) return; // pickaxe tier deferred
 
-		if ( AxeTier >= Tunables.MaxAxeTier ) return;
-		var nextTier = AxeTier + 1;
-		var cost = Tunables.AxeTierCosts[nextTier];
+		if ( CurrentTool == ToolKind.Axe )
+		{
+			if ( AxeTier >= Tunables.MaxAxeTier ) return;
+			var nextTier = AxeTier + 1;
+			var cost = Tunables.AxeTierCosts[nextTier];
 
-		var inv = WoodInventory.Get( Scene );
-		if ( !inv.IsValid() ) return;
-		if ( !inv.TrySpend( cost ) ) return;
+			var inv = WoodInventory.Get( Scene );
+			if ( !inv.IsValid() ) return;
+			if ( !inv.TrySpend( cost ) ) return;
 
-		AxeTier = nextTier;
-		Log.Info( $"[Beaver] Axe upgraded → tier {AxeTier} (-{cost} wood)" );
+			AxeTier = nextTier;
+			Log.Info( $"[Beaver] Axe upgraded → tier {AxeTier} (-{cost} wood)" );
+		}
+		else if ( CurrentTool == ToolKind.Pickaxe )
+		{
+			if ( PickaxeTier >= Tunables.MaxPickaxeTier ) return;
+			var nextTier = PickaxeTier + 1;
+			var cost = Tunables.PickaxeTierCosts[nextTier];
+
+			var inv = StoneInventory.Get( Scene );
+			if ( !inv.IsValid() ) return;
+			if ( !inv.TrySpend( cost ) ) return;
+
+			PickaxeTier = nextTier;
+			Log.Info( $"[Beaver] Pickaxe upgraded → tier {PickaxeTier} (-{cost} stone)" );
+		}
 	}
 
 	private void UpdateDebugSpawns()
@@ -359,12 +374,14 @@ public sealed class BeaverController : Component
 		if ( !Input.Pressed( "attack1" ) ) return;
 
 		// Tier-aware cooldown: higher tier = shorter cooldown = faster swings.
-		// Active tool drives which ladder we read (pickaxe ladder mirrors axe
-		// for now since PickaxeTier never advances in this commit, but the
-		// indexing pattern is here for when stone-spend wiring lands).
-		var activeTier = CurrentTool == ToolKind.Pickaxe ? PickaxeTier : AxeTier;
-		activeTier = Math.Clamp( activeTier, 0, Tunables.AxeTierSwingCooldown.Length - 1 );
-		_swingCooldown = Tunables.AxeTierSwingCooldown[activeTier];
+		// Active tool drives which ladder we read so the axe and pickaxe
+		// economies can be tuned independently.
+		var isPickaxe = CurrentTool == ToolKind.Pickaxe;
+		var cooldownLadder = isPickaxe ? Tunables.PickaxeTierSwingCooldown : Tunables.AxeTierSwingCooldown;
+		var multLadder = isPickaxe ? Tunables.PickaxeTierChopMultiplier : Tunables.AxeTierChopMultiplier;
+		var activeTier = isPickaxe ? PickaxeTier : AxeTier;
+		activeTier = Math.Clamp( activeTier, 0, cooldownLadder.Length - 1 );
+		_swingCooldown = cooldownLadder[activeTier];
 
 		var origin = WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f);
 		var forward = (_cameraAngles.WithPitch( 0f )).ToRotation().Forward;
@@ -375,11 +392,11 @@ public sealed class BeaverController : Component
 			return;
 		}
 
-		// Chop multiplier: tier 3 axe lands 3 chops per swing, felling a default
-		// 3-chop tree in one click — matches the Godot AXE_TIER_DAMAGE payoff
-		// curve. Looping Chop() rather than passing N keeps the IChoppable API
-		// untouched (parallel agents own Tree/LogPiece/Rock).
-		var chops = Tunables.AxeTierChopMultiplier[activeTier];
+		// Chop multiplier: tier 3 lands 3 chops per swing, felling a default
+		// 3-chop tree/rock in one click — matches the Godot proto's tier-damage
+		// payoff curve. Looping Chop() rather than passing N keeps the
+		// IChoppable API untouched (parallel agents own Tree/LogPiece/Rock).
+		var chops = multLadder[Math.Clamp( activeTier, 0, multLadder.Length - 1 )];
 		for ( int i = 0; i < chops; i++ )
 		{
 			if ( !hit.IsValid() ) break;

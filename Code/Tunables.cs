@@ -156,5 +156,17 @@ public static class Tunables
 	// = 3 means a 3-chop tree falls in one swing, matching the Godot proto's
 	// AXE_TIER_DAMAGE end-game payoff.
 	public static readonly int[] AxeTierChopMultiplier = { 1, 1, 2, 3 };
+
+	// Pickaxe tier ladder. Godot proto used 3 form-factor tiers tied to dig
+	// radius (PICKAXE_TIER_RADII = 1.6 / 2.0 / 2.5); we mirror the axe's
+	// 4-stat-tier structure here so HUD/code paths stay symmetric. Cost ladder
+	// reuses the axe's front-loaded shape (5 / 12 / 24) — kept as its own
+	// array so future tuning can diverge without touching the axe economy.
+	public const int MaxPickaxeTier = 3;
+	public static readonly int[] PickaxeTierCosts = { 0, 5, 12, 24 };
+	// Same cadence as the axe — each tier shaves ~25% off the swing cooldown.
+	public static readonly float[] PickaxeTierSwingCooldown = { 0.33f, 0.25f, 0.18f, 0.12f };
+	// Multi-chop on rocks: tier 3 one-shots a default 3-chop rock.
+	public static readonly int[] PickaxeTierChopMultiplier = { 1, 1, 2, 3 };
 }
 
