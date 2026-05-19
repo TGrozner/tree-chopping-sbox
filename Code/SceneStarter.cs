@@ -31,13 +31,14 @@ public sealed class SceneStarter : Component
 			EnsureHud();
 			SpawnForest();
 			SpawnRocks();
+			int borderBoulders = SpawnBorderBoulders();
 			EnsureSdfWorld();
 
 			var beaverMr = beaver?.Components.Get<ModelRenderer>();
 			var anyTree = Scene.GetAllComponents<Tree>().FirstOrDefault();
 			var treeMr = anyTree?.Components.Get<ModelRenderer>();
 			var anyRock = Scene.GetAllComponents<Rock>().FirstOrDefault();
-			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition} bounds={beaverMr?.Bounds}, sample tree pos={anyTree?.WorldPosition} bounds={treeMr?.Bounds}, trees={Scene.GetAllComponents<Tree>().Count()}, rocks={Scene.GetAllComponents<Rock>().Count()}, sample rock pos={anyRock?.WorldPosition}, cam reused={camera.IsValid()}" );
+			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition} bounds={beaverMr?.Bounds}, sample tree pos={anyTree?.WorldPosition} bounds={treeMr?.Bounds}, trees={Scene.GetAllComponents<Tree>().Count()}, rocks={Scene.GetAllComponents<Rock>().Count()}, borderBoulders={borderBoulders}, sample rock pos={anyRock?.WorldPosition}, cam reused={camera.IsValid()}" );
 		}
 		catch ( System.Exception ex )
 		{
@@ -244,6 +245,93 @@ public sealed class SceneStarter : Component
 			SpawnRock( foot );
 			spawned++;
 		}
+	}
+
+	private int SpawnBorderBoulders()
+	{
+		// Visual fence at the upstream/downstream map ends. Static rigidbodies
+		// (no Rock component) so the pickaxe ignores them — these read as
+		// terrain, not loot. Spread X across the full playable width so the
+		// row reads continuous from a distance, with small Y/X jitter to
+		// avoid a perfect grid.
+		const int Count = 30;
+		const float MinSize = 80f;
+		const float MaxSize = 140f;
+		const float YJitter = 90f; // staggers the line so silhouettes overlap
+		const float EndInset = 60f; // sit just inside the map limits, not exactly on them
+		const int Seed = 0xB0DEF;
+
+		var rng = new Random( Seed );
+		int spawned = 0;
+		int perEnd = Count / 2;
+
+		for ( int end = 0; end < 2; end++ )
+		{
+			// end 0 = downstream (-Y), end 1 = upstream (+Y).
+			float baseY = end == 0
+				? Tunables.MapZMinDownstream + EndInset
+				: Tunables.MapZMaxUpstream - EndInset;
+
+			int rowCount = (end == 0) ? perEnd : (Count - perEnd);
+
+			for ( int i = 0; i < rowCount; i++ )
+			{
+				// Evenly distribute X across the full bank width, side-to-side.
+				float t = (i + 0.5f) / rowCount;
+				float x = MathX.Lerp( -Tunables.BankOuterMaxX, Tunables.BankOuterMaxX, t );
+				// Small jitter so the row doesn't look surveyed.
+				x += MathX.Lerp( -40f, 40f, (float)rng.NextDouble() );
+				float y = baseY + MathX.Lerp( -YJitter, YJitter, (float)rng.NextDouble() );
+
+				float sx = MathX.Lerp( MinSize, MaxSize, (float)rng.NextDouble() );
+				float sy = MathX.Lerp( MinSize, MaxSize, (float)rng.NextDouble() );
+				float sz = MathX.Lerp( MinSize, MaxSize, (float)rng.NextDouble() );
+
+				// Foot sits on the sloped bank surface; lift by half-height so
+				// the box rests on top rather than half-sunk.
+				var foot = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
+				var pos = foot + Vector3.Up * (sz * 0.5f);
+
+				// Random yaw + small tilt → varied silhouettes without
+				// collider weirdness from extreme orientations.
+				var rot = Rotation.FromYaw( (float)(rng.NextDouble() * 360.0) )
+					* Rotation.FromPitch( MathX.Lerp( -15f, 15f, (float)rng.NextDouble() ) )
+					* Rotation.FromRoll( MathX.Lerp( -15f, 15f, (float)rng.NextDouble() ) );
+
+				SpawnBorderBoulder( pos, rot, new Vector3( sx, sy, sz ) );
+				spawned++;
+			}
+		}
+
+		return spawned;
+	}
+
+	private void SpawnBorderBoulder( Vector3 position, Rotation rotation, Vector3 size )
+	{
+		var go = Scene.CreateObject();
+		go.Name = "BorderBoulder";
+		go.WorldPosition = position;
+		go.WorldRotation = rotation;
+		go.Tags.Add( "border_boulder" );
+
+		go.WorldScale = size / Tunables.CubeBase;
+
+		var model = go.AddComponent<ModelRenderer>();
+		model.Model = Model.Cube;
+		// Desaturated grey-brown vs Rock's cooler grey (0.55,0.55,0.58) —
+		// reads as background terrain, not as a minable target.
+		model.Tint = new Color( 0.45f, 0.43f, 0.40f, 1f );
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = new Vector3( Tunables.CubeBase );
+
+		// Static-feeling body: high mass, asleep on spawn so the physics engine
+		// never wakes them. No Rock component → IChoppable picks ignore them.
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = 5000f;
+		rb.LinearDamping = 4f;
+		rb.AngularDamping = 8f;
+		rb.StartAsleep = true;
 	}
 
 	private void SpawnRock( Vector3 footPosition )
