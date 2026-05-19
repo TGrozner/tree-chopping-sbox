@@ -193,6 +193,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private void BreakIntoPieces( Vector3 direction )
 	{
 		_broken = true;
+		BiomeManager.Get( Scene )?.NotifyTreeCleared();
 		var forward = WorldRotation.Forward;
 		var origin = WorldPosition + WorldRotation.Up * (Tunables.TreeHeight * 0.5f);
 

@@ -15,6 +15,7 @@ public sealed class SceneStarter : Component
 			EnsureInventory();
 			EnsureCombo();
 			EnsureWeather();
+			EnsureBiomes();
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
@@ -56,6 +57,15 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "Weather";
 		go.AddComponent<Weather>();
+	}
+
+	private void EnsureBiomes()
+	{
+		var existing = Scene.GetAllComponents<BiomeManager>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "BiomeManager";
+		go.AddComponent<BiomeManager>();
 	}
 
 	private void EnsureHud()
