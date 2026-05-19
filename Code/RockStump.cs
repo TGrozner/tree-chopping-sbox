@@ -38,21 +38,26 @@ public sealed class RockStump : Component
 		go.WorldPosition = footPosition + Vector3.Up * (stumpHeight * 0.5f);
 		go.Tags.Add( "rock_stump" );
 
-		// Roughly same footprint as the parent rock so the silhouette reads
-		// as "this rock got knocked down" rather than a different prop.
-		go.WorldScale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, stumpHeight ) / Tunables.CubeBase;
+		// Half the live-rock scale so the stump reads as a smaller remnant of
+		// the parent without picking a different silhouette family.
+		var seed = footPosition.GetHashCode();
+		var stumpScale = Rock.RockModelScale * 0.5f;
+		go.WorldScale = new Vector3( stumpScale );
+		go.WorldRotation = Rotation.FromYaw( (seed & 0xFFFF) * 0.0055f );
 
-		// Dim grey: same hue family as the source rock, pushed darker so it
-		// reads as a stump rather than a fresh rock.
+		// Smaller variant pool (A/B/C) keeps the stump visually coherent with
+		// the parent rock — same hue family, calmer silhouette.
 		var darker = new Color( tint.r * 0.6f, tint.g * 0.6f, tint.b * 0.6f, 1f );
 		var mr = go.AddComponent<ModelRenderer>();
-		mr.Model = Model.Cube;
+		mr.Model = Models.RockVariant( Math.Abs( seed ) % 3 );
 		mr.Tint = darker;
 
 		// Solid collider (not a trigger) — the player can stand on it; it does
 		// not respond to pickaxe because there's no Rock/IChoppable component.
+		// Collider scale undoes WorldScale so the final box matches the squat
+		// stump footprint regardless of the model's authored size.
 		var col = go.AddComponent<BoxCollider>();
-		col.Scale = new Vector3( Tunables.CubeBase );
+		col.Scale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, stumpHeight ) / stumpScale;
 		col.Static = true;
 
 		var stump = go.AddComponent<RockStump>();

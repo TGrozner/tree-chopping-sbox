@@ -14,6 +14,12 @@ public sealed class Rock : Component, IChoppable
 	// Mirrors SceneStarter.SpawnRock so RockStump regrowth can recreate a rock
 	// with the original tint. Duplication with SceneStarter is intentional for
 	// this commit — a parallel agent owns SceneStarter.cs.
+	// Visual scale for Kenney rock_small*.vmdl. The source meshes are authored
+	// at ~1m so without a multiplier they read as pebbles next to the beaver.
+	// 30x lands them in the same silhouette band as the old cube (RockRadius=24,
+	// RockHeight=40) while keeping a natural rock proportion.
+	public const float RockModelScale = 30f;
+
 	public static Rock SpawnAt( Scene scene, Vector3 footPosition, Color tint )
 	{
 		var go = scene.CreateObject();
@@ -21,14 +27,21 @@ public sealed class Rock : Component, IChoppable
 		go.WorldPosition = footPosition + Vector3.Up * (Tunables.RockHeight * 0.5f);
 		go.Tags.Add( "rock" );
 
-		go.WorldScale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, Tunables.RockHeight ) / Tunables.CubeBase;
+		// Per-position deterministic variant pick — same world spot always picks
+		// the same rock silhouette across hotloads / regrowth so the world reads
+		// stable rather than randomly reshuffling on each respawn.
+		var seed = footPosition.GetHashCode();
+		go.WorldScale = new Vector3( RockModelScale );
+		go.WorldRotation = Rotation.FromYaw( (seed & 0xFFFF) * 0.0055f );
 
 		var model = go.AddComponent<ModelRenderer>();
-		model.Model = Model.Cube;
+		model.Model = Models.RockVariant( Math.Abs( seed ) );
 		model.Tint = tint;
 
+		// Collider footprint stays cube-shaped — Kenney rocks are visually
+		// blobby but a box read is cheap and matches the old gameplay feel.
 		var col = go.AddComponent<BoxCollider>();
-		col.Scale = new Vector3( Tunables.CubeBase );
+		col.Scale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, Tunables.RockHeight ) / RockModelScale;
 
 		var rb = go.AddComponent<Rigidbody>();
 		rb.MassOverride = Tunables.RockMass;
