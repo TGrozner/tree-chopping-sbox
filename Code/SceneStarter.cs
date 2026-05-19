@@ -9,6 +9,12 @@ public sealed class SceneStarter : Component
 	[Property] public int Seed { get; set; } = 0xCA5C;
 	[Property] public Vector3 BeaverSpawn { get; set; } = new( 0f, 0f, 48f );
 
+	// Drop a .sdfvol asset here in the editor to wire up Pickaxe voxel digging.
+	// When null, Phase 2e wiring stays dormant and the existing rock/chop loop is untouched.
+	[Property] public Sdf3DVolume RockVolume { get; set; }
+	[Property] public Vector3 SdfWorldSize { get; set; } = new( 1200f, 6400f, 300f );
+	[Property] public Vector3 SdfWorldOrigin { get; set; } = new( -600f, -3200f, -50f );
+
 	protected override void OnStart()
 	{
 		try
@@ -23,6 +29,7 @@ public sealed class SceneStarter : Component
 			EnsureHud();
 			SpawnForest();
 			SpawnRocks();
+			EnsureSdfWorld();
 
 			var beaverMr = beaver?.Components.Get<ModelRenderer>();
 			var anyTree = Scene.GetAllComponents<Tree>().FirstOrDefault();
@@ -166,6 +173,32 @@ public sealed class SceneStarter : Component
 			placed.Add( pos );
 			SpawnTree( pos );
 			spawned++;
+		}
+	}
+
+	private void EnsureSdfWorld()
+	{
+		if ( RockVolume == null )
+		{
+			Log.Info( "[SceneStarter] SDF wiring skipped — drop a .sdfvol asset on SceneStarter.RockVolume to enable Pickaxe voxel dig." );
+			return;
+		}
+
+		try
+		{
+			var go = Scene.CreateObject();
+			go.Name = "SdfWorld";
+			go.WorldPosition = SdfWorldOrigin;
+			var world = go.AddComponent<Sdf3DWorld>();
+			world.IsFinite = true;
+			world.Size = SdfWorldSize;
+			// Solid fill spanning the world's local bounds — Pickaxe carves into it.
+			_ = world.AddAsync( new BoxSdf3D( Vector3.Zero, SdfWorldSize ), RockVolume );
+			Log.Info( $"[SceneStarter] Sdf3DWorld ready: origin={SdfWorldOrigin} size={SdfWorldSize}, volume={RockVolume.ResourcePath}" );
+		}
+		catch ( System.Exception ex )
+		{
+			Log.Warning( $"[SceneStarter] SDF init failed: {ex.Message}" );
 		}
 	}
 

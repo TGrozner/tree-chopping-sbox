@@ -173,9 +173,34 @@ public sealed class BeaverController : Component
 		var origin = WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f);
 		var forward = (_cameraAngles.WithPitch( 0f )).ToRotation().Forward;
 		var hit = ChooseSwingTarget( origin, forward );
-		if ( hit is null ) return;
+		if ( hit is null )
+		{
+			TrySdfDig( origin, forward );
+			return;
+		}
 
 		hit.Chop( forward );
+		ComboTracker.Get( Scene )?.Beat();
+	}
+
+	private Sdf3DWorld _sdfWorld;
+
+	private void TrySdfDig( Vector3 origin, Vector3 forward )
+	{
+		if ( CurrentTool != ToolKind.Pickaxe ) return;
+		_sdfWorld ??= Scene?.GetAllComponents<Sdf3DWorld>().FirstOrDefault();
+		if ( !_sdfWorld.IsValid() ) return;
+
+		var pitchedForward = _cameraAngles.ToRotation().Forward;
+		var trace = Scene.Trace
+			.Ray( origin, origin + pitchedForward * Tunables.SwingRange )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.Run();
+		if ( !trace.Hit ) return;
+
+		var digWorld = trace.EndPosition - pitchedForward * 8f;
+		var digLocal = _sdfWorld.WorldTransform.PointToLocal( digWorld );
+		_ = _sdfWorld.SubtractAsync( new SphereSdf3D( digLocal, 24f ) );
 		ComboTracker.Get( Scene )?.Beat();
 	}
 
