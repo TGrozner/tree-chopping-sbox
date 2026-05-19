@@ -61,6 +61,35 @@ public sealed class WoodHud : Component
 		{
 			DrawDebugLines( hud, x, ref y, width, height, pad );
 		}
+
+		var hints = HintManager.Get( Scene );
+		if ( hints.IsValid() && hints.Alpha > 0.01f && !string.IsNullOrEmpty( hints.CurrentText ) )
+		{
+			DrawHint( hud, hints.CurrentText, hints.Alpha );
+		}
+	}
+
+	private void DrawHint( Sandbox.Rendering.HudPainter hud, string text, float alpha )
+	{
+		float screenW = Screen.Width;
+		float screenH = Screen.Height;
+		float hintWidth = MathF.Min( 760f, screenW * 0.7f );
+		float fontSize = 26f;
+		float pad = 18f;
+		float h = fontSize + pad * 1.5f;
+		float x = (screenW - hintWidth) * 0.5f;
+		float y = screenH * 0.78f;
+
+		var bg = PanelColor.WithAlpha( PanelColor.a * alpha );
+		var rim = TextColor.WithAlpha( 0.45f * alpha );
+		var fg = new Color( 0.95f, 0.93f, 0.85f, alpha );
+
+		hud.DrawRect( new Rect( x, y, hintWidth, h ), bg );
+		hud.DrawRect( new Rect( x, y, hintWidth, 2f ), rim );
+		hud.DrawRect( new Rect( x, y + h - 2f, hintWidth, 2f ), rim );
+		var rect = new Rect( x, y, hintWidth, h );
+		var scope = new TextRendering.Scope( text, fg, fontSize );
+		hud.DrawText( scope, rect, TextFlag.Center );
 	}
 
 	private void DrawDebugLines( Sandbox.Rendering.HudPainter hud, float x, ref float y, float width, float height, float pad )
