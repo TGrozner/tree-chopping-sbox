@@ -14,6 +14,7 @@ public sealed class SceneStarter : Component
 		{
 			EnsureInventory();
 			EnsureCombo();
+			EnsureWeather();
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
@@ -46,6 +47,15 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "ComboTracker";
 		go.AddComponent<ComboTracker>();
+	}
+
+	private void EnsureWeather()
+	{
+		var existing = Scene.GetAllComponents<Weather>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "Weather";
+		go.AddComponent<Weather>();
 	}
 
 	private void EnsureHud()

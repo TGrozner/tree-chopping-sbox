@@ -1,5 +1,6 @@
 namespace TreeChopping;
 
+
 public sealed class WoodHud : Component
 {
 	[Property] public WoodInventory Inventory { get; set; }
@@ -38,6 +39,12 @@ public sealed class WoodHud : Component
 		{
 			var hot = _combo.Chain >= Tunables.ComboSlowmoChain ? ChainHotColor : TextColor;
 			DrawLine( hud, x, ref y, width, height, pad, $"Chain x{_combo.Chain}", hot );
+		}
+
+		var weather = Weather.Get( Scene );
+		if ( weather.IsValid() )
+		{
+			DrawLine( hud, x, ref y, width, height, pad, $"Sky : {weather.State}", TextColor );
 		}
 	}
 
