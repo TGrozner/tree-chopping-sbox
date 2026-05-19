@@ -14,8 +14,8 @@ public sealed class WoodHud : Component
 	private ComboTracker _combo;
 	private BeaverController _beaver;
 
-	// Toggled by F3 (Input.config "DebugToggle"). Static so any other
-	// component can also check the flag without a back-ref.
+	// Toggled by the "DebugToggle" input (key bound in Input.config). Static so any
+	// other component can also check the flag without a back-ref.
 	public static bool DebugVisible { get; private set; }
 
 	protected override void OnUpdate()

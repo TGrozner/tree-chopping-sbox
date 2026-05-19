@@ -85,7 +85,7 @@ public sealed class HintManager : Component
 
 		if ( !_shown.Contains( HintDebug ) && (float)_runStart > 60f )
 		{
-			Show( HintDebug, "Press F3 for debug info." );
+			Show( HintDebug, "Press B for debug info." );
 		}
 
 		// Fire once the first inventory tops out so the player gets a nudge
