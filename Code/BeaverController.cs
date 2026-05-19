@@ -48,6 +48,19 @@ public sealed class BeaverController : Component
 		// Capture user-tuned baseline AFTER SceneStarter set FieldOfView.
 		if ( Camera.IsValid() ) _baseFov = Camera.FieldOfView;
 
+		// Retroactively swap the cube body that SceneStarter spawned for the
+		// Poly Pizza beaver mesh. Done here (not in OnAwake) so we're sure
+		// SceneStarter.SpawnBeaver finished AddComponent<ModelRenderer>; the
+		// non-uniform parent WorldScale (32,32,72)/CubeBase still applies, so
+		// the mesh inherits a mild stretch — accepted vs touching SceneStarter.
+		var bodyMr = GameObject.Components.Get<ModelRenderer>();
+		if ( bodyMr.IsValid() )
+		{
+			bodyMr.Model = Models.Beaver;
+			// Clear the cube tint so the model's own materials show through.
+			bodyMr.Tint = Color.White;
+		}
+
 		BuildHeldTools();
 		ApplyToolVisibility();
 	}
@@ -169,33 +182,29 @@ public sealed class BeaverController : Component
 		_pickaxeRoot = BuildPickaxe( pivot );
 	}
 
-	// Brown elongated cube — axe ~8x8x30u in world before parent anisotropic scale.
-	// Local sizes are wantedSize/CubeBase (matches the rest of the codebase).
+	// Kenney axe held in hand. LocalScale=One — the parent's non-uniform
+	// (32,32,72)/CubeBase squash propagates and is accepted (mentioned in
+	// commit body). Model.Tint stays untouched so the GLB's own materials
+	// read; only fall back to a brown cube if Models.Axe failed to load.
 	private GameObject BuildAxe( GameObject pivot )
 	{
-		const float HandleX = 8f, HandleY = 8f, HandleZ = 30f;
-
 		var go = Scene.CreateObject();
 		go.Name = "Axe";
 		go.Parent = pivot;
 		go.LocalPosition = new Vector3( 0f, 0f, 0f );
-		go.LocalScale = new Vector3( HandleX, HandleY, HandleZ ) / Tunables.CubeBase;
+		go.LocalScale = Vector3.One;
 		go.Tags.Add( "beaver_tool" );
 
 		var mr = go.AddComponent<ModelRenderer>();
-		mr.Model = Model.Cube;
-		mr.Tint = new Color( 0.45f, 0.28f, 0.15f, 1f ); // wood brown
+		mr.Model = Models.Axe;
 		return go;
 	}
 
-	// Grey shaft + crossed head — fakes a T-shape with a sibling cube head block.
+	// Creative Trio pickaxe held in hand. Single ModelRenderer with the
+	// imported GLB replaces the prior procedural shaft+head cube pair. Same
+	// scale-inheritance squash applies as for the axe.
 	private GameObject BuildPickaxe( GameObject pivot )
 	{
-		const float ShaftX = 8f, ShaftY = 8f, ShaftZ = 26f;
-		const float HeadX = 22f, HeadY = 6f, HeadZ = 6f;
-		// Position the head at the top of the shaft (shaft centered on pivot, so +Z half).
-		const float HeadOffsetZLocal = 0.30f; // tuned for the shaft's local Z extent.
-
 		var root = Scene.CreateObject();
 		root.Name = "Pickaxe";
 		root.Parent = pivot;
@@ -203,27 +212,8 @@ public sealed class BeaverController : Component
 		root.LocalScale = Vector3.One;
 		root.Tags.Add( "beaver_tool" );
 
-		// Shaft (slightly greyer than the axe).
-		var shaft = Scene.CreateObject();
-		shaft.Name = "Shaft";
-		shaft.Parent = root;
-		shaft.LocalPosition = Vector3.Zero;
-		shaft.LocalScale = new Vector3( ShaftX, ShaftY, ShaftZ ) / Tunables.CubeBase;
-		shaft.Tags.Add( "beaver_tool" );
-		var shaftMr = shaft.AddComponent<ModelRenderer>();
-		shaftMr.Model = Model.Cube;
-		shaftMr.Tint = new Color( 0.38f, 0.30f, 0.22f, 1f );
-
-		// Head — crossed at the top to read as a T.
-		var head = Scene.CreateObject();
-		head.Name = "Head";
-		head.Parent = root;
-		head.LocalPosition = new Vector3( 0f, 0f, HeadOffsetZLocal );
-		head.LocalScale = new Vector3( HeadX, HeadY, HeadZ ) / Tunables.CubeBase;
-		head.Tags.Add( "beaver_tool" );
-		var headMr = head.AddComponent<ModelRenderer>();
-		headMr.Model = Model.Cube;
-		headMr.Tint = new Color( 0.45f, 0.47f, 0.50f, 1f ); // stone grey
+		var mr = root.AddComponent<ModelRenderer>();
+		mr.Model = Models.Pickaxe;
 		return root;
 	}
 
@@ -434,10 +424,84 @@ public sealed class BeaverController : Component
 		ComboTracker.Get( Scene )?.Beat();
 	}
 
+	// Test hook for [[sbox-selftest-pattern]] — exercises the real UpdateSwing
+	// chain (ChooseSwingTarget + Chop) without going through Input.Pressed or
+	// the cooldown. Lets the headless SelfTest probe cone/range/tool gating so
+	// a "Chop() direct works but swinging in-game doesn't" regression is caught.
+	//
+	// Returns the IChoppable that got hit, or null when nothing was in range.
+	// Reads CurrentTool and the current yaw — set them via DebugSetYaw + the
+	// existing Use input (or DebugSetTool) before calling.
+	public IChoppable DebugSwing()
+	{
+		var origin = WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f);
+		var forward = (_cameraAngles.WithPitch( 0f )).ToRotation().Forward;
+		var hit = ChooseSwingTarget( origin, forward );
+		if ( hit is null ) return null;
+		hit.Chop( forward );
+		ComboTracker.Get( Scene )?.Beat();
+		return hit;
+	}
+
+	// Verbose version for the headless test — same selection logic but logs
+	// every candidate's filter result so a "tree should be hittable but isn't"
+	// regression can be diagnosed straight from the harness output.
+	public IChoppable DebugSwingVerbose()
+	{
+		var origin = WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f);
+		var forward = (_cameraAngles.WithPitch( 0f )).ToRotation().Forward;
+		Log.Info( $"[TC_TEST] DebugSwingVerbose origin={origin} forward={forward} tool={CurrentTool}" );
+
+		var all = Scene.GetAllComponents<IChoppable>().ToList();
+		int considered = 0, droppedValid = 0, droppedTool = 0, droppedRange = 0, droppedCone = 0;
+		IChoppable best = null;
+		var bestScore = float.NegativeInfinity;
+		foreach ( var c in all )
+		{
+			considered++;
+			if ( !c.IsValid() ) { droppedValid++; continue; }
+			if ( !c.AcceptsTool( CurrentTool ) ) { droppedTool++; continue; }
+			var to = c.WorldPosition - origin;
+			to.z = 0f;
+			var dist = to.Length;
+			if ( dist > Tunables.SwingRange ) { droppedRange++; continue; }
+			var dot = forward.Dot( to.Normal );
+			if ( dot < Tunables.SwingConeDot ) { droppedCone++; continue; }
+			var score = dot - dist * 0.005f;
+			Log.Info( $"[TC_TEST]   candidate {c.GetType().Name} pos={c.WorldPosition} dist={dist:F1} dot={dot:F2} score={score:F2}" );
+			if ( score > bestScore )
+			{
+				bestScore = score;
+				best = c;
+			}
+		}
+		Log.Info( $"[TC_TEST] DebugSwingVerbose considered={considered} droppedValid={droppedValid} droppedTool={droppedTool} droppedRange={droppedRange} droppedCone={droppedCone} best={(best == null ? "null" : best.GetType().Name)}" );
+		if ( best is null ) return null;
+		best.Chop( forward );
+		ComboTracker.Get( Scene )?.Beat();
+		return best;
+	}
+
+	// Yaw setter for tests — the SelfTest can aim the beaver at a known target
+	// (tree, rock) before calling DebugSwing.
+	public void DebugSetYaw( float yawDegrees )
+	{
+		_cameraAngles.yaw = yawDegrees;
+		_cameraAngles.pitch = 0f;
+		_cameraAngles.roll = 0f;
+	}
+
+	public Angles DebugCameraAngles => _cameraAngles;
+
+	public void DebugSetTool( ToolKind tool ) => CurrentTool = tool;
+
 	private IChoppable ChooseSwingTarget( Vector3 origin, Vector3 forward )
 	{
-		var candidates = Scene.GetAllComponents<Component>()
-			.OfType<IChoppable>()
+		// Scene.GetAllComponents<T> with the base Component type returns nothing —
+		// the engine matches by exact T (or T = interface) and there are no raw
+		// Component instances. Querying the interface directly is the supported
+		// path (Sandbox.Engine.xml says: "This can include interfaces.").
+		var candidates = Scene.GetAllComponents<IChoppable>()
 			.Where( c => c.IsValid() && c.AcceptsTool( CurrentTool ) )
 			.ToList();
 
