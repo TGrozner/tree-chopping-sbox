@@ -43,15 +43,19 @@ public sealed class Stump : Component
 		go.WorldPosition = footPosition + Vector3.Up * (Tunables.StumpHeight * 0.5f);
 		go.Tags.Add( "stump" );
 
-		// Stump is a short squat cylinder represented as a cube. Slightly
-		// darker than the tree it came from so it reads as dead wood.
-		go.WorldScale = new Vector3( Tunables.StumpRadius * 2f, Tunables.StumpRadius * 2f, Tunables.StumpHeight ) / Tunables.CubeBase;
+		// Kenney stump .vmdl encodes the correct shape — drop the legacy
+		// cube-scaling. Pick a variant by hashing the foot position so each
+		// stump is stable across save/load and not all clones of each other.
+		go.WorldScale = Vector3.One;
 
 		var darker = new Color( tint.r * 0.7f, tint.g * 0.65f, tint.b * 0.55f, 1f );
 		var mr = go.AddComponent<ModelRenderer>();
-		mr.Model = Model.Cube;
+		mr.Model = Models.StumpVariant( Math.Abs( footPosition.GetHashCode() ) );
 		mr.Tint = darker;
 
+		// Physics envelope stays box-shaped at the legacy size — the player
+		// only ever bumps into stumps, never chops them, so cheap collision
+		// is fine and the Kenney mesh would over-spec it.
 		var col = go.AddComponent<BoxCollider>();
 		col.Scale = new Vector3( Tunables.CubeBase );
 		col.Static = true;

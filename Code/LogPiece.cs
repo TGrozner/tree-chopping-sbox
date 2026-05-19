@@ -54,6 +54,9 @@ public sealed class LogPiece : Component, IChoppable
 		go.WorldScale = new Vector3( Tunables.ChunkRadius * 2f, Tunables.ChunkRadius * 2f, Tunables.ChunkHeight ) / Tunables.CubeBase;
 		go.Tags.Add( "wood_chunk" );
 
+		// Chunks stay as Model.Cube — they're small enough that the Kenney log
+		// silhouette would be visual overkill, and the tinted cube reads
+		// clearly as "wood chip" against the ground.
 		var model = go.AddComponent<ModelRenderer>();
 		model.Model = Model.Cube;
 		model.Tint = TrunkTint;

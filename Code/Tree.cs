@@ -52,12 +52,24 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		go.Name = $"Tree.{species}";
 		go.WorldPosition = footPosition + Vector3.Up * (Tunables.TreeHeight * 0.5f * scaleMul);
 		go.Tags.Add( "tree" );
-		go.WorldScale = new Vector3( Tunables.TreeRadius * 2f, Tunables.TreeRadius * 2f, Tunables.TreeHeight ) * scaleMul / Tunables.CubeBase;
+		// Kenney .vmdl already encodes correct intrinsic geometry, so we drop
+		// the legacy cube-scaling (was: TreeRadius*2,...,TreeHeight / CubeBase).
+		// Per-species `scaleMul` from Tunables still applies so a forest of
+		// mixed species reads as a forest. Starting at Vector3.One — if the
+		// imported .vmdl reads too small in editor, scale up by ~UnitsPerMeter/4
+		// (Godot proto used scale 5.5-6.6m to yield ~9m canopies, ≈ 350u; our
+		// 280u envelope wants a similar factor in inches).
+		go.WorldScale = Vector3.One * scaleMul;
 
 		var mr = go.AddComponent<ModelRenderer>();
-		mr.Model = Model.Cube;
+		mr.Model = Models.TreeFor( species );
+		// Species tint multiplies with the Kenney baked vertex colours so the
+		// canopy/trunk shading reads species-coded but never goes flat.
 		mr.Tint = speciesTint;
 
+		// Physics envelope stays at the legacy box — Tree.cs game-feel (chop
+		// cone, cascade impulse, fell torque) was tuned against this size, so
+		// the visual swap doesn't disturb collision feel.
 		var col = go.AddComponent<BoxCollider>();
 		col.Scale = new Vector3( Tunables.CubeBase );
 
@@ -78,7 +90,13 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	public bool IsFalling => _chopped && !_landed && !_broken;
 	public bool IsStanding => !_chopped && !_broken;
 
-	bool IChoppable.IsValid() => !_broken && !_landed && this.IsValid();
+	// A landed log is still a valid Chop target — Chop() routes to HandleLogHit
+	// and shatters the trunk into LogPieces after Tunables.LogBreakHits more
+	// strikes. Only "broken" (BreakIntoPieces called, GameObject destroyed) and
+	// a still-falling trunk are excluded — both because there's no useful action
+	// for the player. (Falling trees keep ticking their fell physics and only
+	// becomes a log target once landed.)
+	bool IChoppable.IsValid() => !_broken && !IsFalling && this.IsValid();
 	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Axe;
 
 	public void Chop( Vector3 direction )
@@ -332,14 +350,22 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		var go = Scene.CreateObject();
 		go.Name = "LogPiece";
 		go.WorldPosition = pos;
+		// The 90° X-axis rotation aligns the procedural cube's long axis with
+		// the trunk; the Kenney log .vmdl is modelled horizontal so it inherits
+		// the same world rotation — the resulting piece lies along the felled
+		// trunk's axis either way.
 		go.WorldRotation = rot * Rotation.FromAxis( Vector3.Right, 90f );
-		go.WorldScale = new Vector3( Tunables.LogPieceRadius * 2f, Tunables.LogPieceRadius * 2f, Tunables.LogPieceHeight ) / Tunables.CubeBase;
+		// Kenney log .vmdl has correct intrinsic dimensions. Start at One and
+		// tune per visual feedback later — physics envelope below is unchanged.
+		go.WorldScale = Vector3.One;
 		go.Tags.Add( "logpiece" );
 
 		var model = go.AddComponent<ModelRenderer>();
-		model.Model = Model.Cube;
+		model.Model = Models.Log;
 		model.Tint = TrunkTint;
 
+		// Physics envelope stays at the legacy box size — LogPiece.cs chop
+		// feel + auto-break-on-impact were tuned against this collider.
 		var col = go.AddComponent<BoxCollider>();
 		col.Scale = new Vector3( Tunables.CubeBase );
 
