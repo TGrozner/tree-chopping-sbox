@@ -26,6 +26,7 @@ public sealed class SceneStarter : Component
 			EnsureBiomes();
 			EnsureDayNight();
 			EnsureHints();
+			EnsureCompass();
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
@@ -117,6 +118,15 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "WoodHud";
 		go.AddComponent<WoodHud>();
+	}
+
+	private void EnsureCompass()
+	{
+		var existing = Scene.GetAllComponents<HudCompass>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "HudCompass";
+		go.AddComponent<HudCompass>();
 	}
 
 	private BeaverController SpawnBeaver( CameraComponent existingCamera )
