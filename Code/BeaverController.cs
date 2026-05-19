@@ -19,6 +19,11 @@ public sealed class BeaverController : Component
 	private float _fovPunch;
 	private float _sprintWiden;
 
+	// Cached refs to the swappable tool meshes parented under ToolPivot.
+	// Both stay alive — we only toggle .Enabled so swapping is allocation-free.
+	private GameObject _axeRoot;
+	private GameObject _pickaxeRoot;
+
 	protected override void OnAwake()
 	{
 		_rb = Components.Get<Rigidbody>( FindMode.EverythingInSelfAndDescendants );
@@ -30,6 +35,9 @@ public sealed class BeaverController : Component
 	{
 		// Capture user-tuned baseline AFTER SceneStarter set FieldOfView.
 		if ( Camera.IsValid() ) _baseFov = Camera.FieldOfView;
+
+		BuildHeldTools();
+		ApplyToolVisibility();
 	}
 
 	protected override void OnUpdate()
@@ -80,6 +88,93 @@ public sealed class BeaverController : Component
 			_ => ToolKind.Axe,
 		};
 		Log.Info( $"[Beaver] tool → {CurrentTool}" );
+		ApplyToolVisibility();
+	}
+
+	// Spawns the ToolPivot + Axe + Pickaxe child hierarchy once on start.
+	// Mirrors the Godot proto's AxePivot pattern: both meshes always exist,
+	// visibility is toggled, swing rotation eventually animates the pivot.
+	// NOTE: parent beaver has non-uniform WorldScale (32,32,72)/CubeBase — local
+	// transforms inherit that stretch and we accept the visual squash for now.
+	private void BuildHeldTools()
+	{
+		// Pivot offset in *local* units (parent's WorldScale stretches X/Y/Z 0.64/0.64/1.44).
+		// Chest height + a touch forward so the tool reads as held in front of the beaver.
+		const float PivotForwardLocal = 0.55f;     // ~28u forward after X-stretch
+		const float PivotUpLocal = 0.25f;          // ~18u up after Z-stretch (mid-chest)
+
+		var pivot = Scene.CreateObject();
+		pivot.Name = "ToolPivot";
+		pivot.Parent = GameObject;
+		pivot.LocalPosition = new Vector3( PivotForwardLocal, 0f, PivotUpLocal );
+		pivot.LocalScale = Vector3.One;
+
+		_axeRoot = BuildAxe( pivot );
+		_pickaxeRoot = BuildPickaxe( pivot );
+	}
+
+	// Brown elongated cube — axe ~8x8x30u in world before parent anisotropic scale.
+	// Local sizes are wantedSize/CubeBase (matches the rest of the codebase).
+	private GameObject BuildAxe( GameObject pivot )
+	{
+		const float HandleX = 8f, HandleY = 8f, HandleZ = 30f;
+
+		var go = Scene.CreateObject();
+		go.Name = "Axe";
+		go.Parent = pivot;
+		go.LocalPosition = new Vector3( 0f, 0f, 0f );
+		go.LocalScale = new Vector3( HandleX, HandleY, HandleZ ) / Tunables.CubeBase;
+		go.Tags.Add( "beaver_tool" );
+
+		var mr = go.AddComponent<ModelRenderer>();
+		mr.Model = Model.Cube;
+		mr.Tint = new Color( 0.45f, 0.28f, 0.15f, 1f ); // wood brown
+		return go;
+	}
+
+	// Grey shaft + crossed head — fakes a T-shape with a sibling cube head block.
+	private GameObject BuildPickaxe( GameObject pivot )
+	{
+		const float ShaftX = 8f, ShaftY = 8f, ShaftZ = 26f;
+		const float HeadX = 22f, HeadY = 6f, HeadZ = 6f;
+		// Position the head at the top of the shaft (shaft centered on pivot, so +Z half).
+		const float HeadOffsetZLocal = 0.30f; // tuned for the shaft's local Z extent.
+
+		var root = Scene.CreateObject();
+		root.Name = "Pickaxe";
+		root.Parent = pivot;
+		root.LocalPosition = new Vector3( 0f, 0f, 0f );
+		root.LocalScale = Vector3.One;
+		root.Tags.Add( "beaver_tool" );
+
+		// Shaft (slightly greyer than the axe).
+		var shaft = Scene.CreateObject();
+		shaft.Name = "Shaft";
+		shaft.Parent = root;
+		shaft.LocalPosition = Vector3.Zero;
+		shaft.LocalScale = new Vector3( ShaftX, ShaftY, ShaftZ ) / Tunables.CubeBase;
+		shaft.Tags.Add( "beaver_tool" );
+		var shaftMr = shaft.AddComponent<ModelRenderer>();
+		shaftMr.Model = Model.Cube;
+		shaftMr.Tint = new Color( 0.38f, 0.30f, 0.22f, 1f );
+
+		// Head — crossed at the top to read as a T.
+		var head = Scene.CreateObject();
+		head.Name = "Head";
+		head.Parent = root;
+		head.LocalPosition = new Vector3( 0f, 0f, HeadOffsetZLocal );
+		head.LocalScale = new Vector3( HeadX, HeadY, HeadZ ) / Tunables.CubeBase;
+		head.Tags.Add( "beaver_tool" );
+		var headMr = head.AddComponent<ModelRenderer>();
+		headMr.Model = Model.Cube;
+		headMr.Tint = new Color( 0.45f, 0.47f, 0.50f, 1f ); // stone grey
+		return root;
+	}
+
+	private void ApplyToolVisibility()
+	{
+		if ( _axeRoot.IsValid() ) _axeRoot.Enabled = CurrentTool == ToolKind.Axe;
+		if ( _pickaxeRoot.IsValid() ) _pickaxeRoot.Enabled = CurrentTool == ToolKind.Pickaxe;
 	}
 
 	private void UpdateLook()
