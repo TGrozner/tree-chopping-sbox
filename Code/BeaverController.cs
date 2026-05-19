@@ -29,7 +29,36 @@ public sealed class BeaverController : Component
 		UpdateMovement();
 		UpdateCamera();
 		UpdateToolSwap();
+		UpdateDebugSpawns();
 		UpdateSwing();
+	}
+
+	private void UpdateDebugSpawns()
+	{
+		if ( Input.Pressed( "Slot1" ) ) SpawnTestBody( densityFactor: 0.4f, tint: new Color( 0.20f, 0.55f, 0.90f, 1f ) ); // floater
+		if ( Input.Pressed( "Slot2" ) ) SpawnTestBody( densityFactor: 2.5f, tint: new Color( 0.85f, 0.20f, 0.20f, 1f ) ); // sinker
+		if ( Input.Pressed( "Slot3" ) ) SpawnTestBody( densityFactor: 1.0f, tint: new Color( 0.90f, 0.85f, 0.40f, 1f ) ); // neutral
+	}
+
+	private void SpawnTestBody( float densityFactor, Color tint )
+	{
+		var go = Scene.CreateObject();
+		go.Name = "TestBody";
+		go.WorldPosition = WorldPosition + Vector3.Up * 120f;
+		go.WorldScale = new Vector3( 40f ) / Tunables.CubeBase;
+		go.Tags.Add( "test_body" );
+
+		var mr = go.AddComponent<ModelRenderer>();
+		mr.Model = Model.Cube;
+		mr.Tint = tint;
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = new Vector3( Tunables.CubeBase );
+
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = 8f * densityFactor;
+		rb.LinearDamping = 0.5f;
+		rb.AngularDamping = 0.8f;
 	}
 
 	private void UpdateToolSwap()
