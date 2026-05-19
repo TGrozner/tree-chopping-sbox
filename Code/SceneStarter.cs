@@ -410,10 +410,13 @@ public sealed class SceneStarter : Component
 		go.WorldRotation = rotation;
 		go.Tags.Add( "grass_tuft" );
 
-		go.WorldScale = size / Tunables.CubeBase;
+		// Variant chosen from a stable hash so the scatter looks varied but
+		// hotload-stable. Kenney grass/bush GLBs are ~0.5-1m scale; uniform
+		// scale plus the per-instance size jitter from caller reads naturally.
+		go.WorldScale = Vector3.One * MathX.Lerp( 0.7f, 1.3f, size.x / 12f );
 
 		var model = go.AddComponent<ModelRenderer>();
-		model.Model = Model.Cube;
+		model.Model = Models.GrassVariant( Math.Abs( position.GetHashCode() ) );
 		model.Tint = tint;
 
 		// Intentionally no collider / no rigidbody — purely decorative.
@@ -427,10 +430,16 @@ public sealed class SceneStarter : Component
 		go.WorldRotation = rotation;
 		go.Tags.Add( "border_boulder" );
 
-		go.WorldScale = size / Tunables.CubeBase;
+		// Scale derived from the requested 80-140u silhouette band. Kenney
+		// rocks sit at ~1m intrinsic; divide by ~2 to land in our target
+		// inch range. The Rock spawn path uses the same trick at 30x.
+		float bulk = size.x / 4f;
+		go.WorldScale = new Vector3( bulk );
 
 		var model = go.AddComponent<ModelRenderer>();
-		model.Model = Model.Cube;
+		// Bigger variants (E/F/G have more mass) for boulder silhouettes —
+		// rock_smallA-D are reserved for the minable rocks per Rock.SpawnAt.
+		model.Model = Models.RockVariant( 4 + (Math.Abs( position.GetHashCode() ) % 3) );
 		// Desaturated grey-brown vs Rock's cooler grey (0.55,0.55,0.58) —
 		// reads as background terrain, not as a minable target.
 		model.Tint = new Color( 0.45f, 0.43f, 0.40f, 1f );
