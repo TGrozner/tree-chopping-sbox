@@ -140,5 +140,21 @@ public static class Tunables
 	// Godot only caps wood; sbox port applies the same number independently to
 	// stone so the second pickup loop reads symmetrically on the HUD.
 	public const int BackpackCap = 20;
+
+	// Axe / pickaxe tier ladder. Ported (simplified) from Godot beaver.gd's
+	// AXE_TIER_RANGES/DAMAGE ladder — original had 5 form-factor tiers; here
+	// we collapse to 4 stat tiers (0..3) since the wood-economy reward we care
+	// about is "pay wood, chop faster, fell in fewer swings". Cost ladder is
+	// front-loaded so tier 1 is cheap (early payoff) and tier 3 forces a real
+	// grind. Tier 0 is the starting tool — free.
+	public const int MaxAxeTier = 3;
+	public static readonly int[] AxeTierCosts = { 0, 5, 12, 24 };
+	// Per-tier swing cooldown (seconds). Tier 0 matches the legacy SwingCooldown
+	// so unupgraded play is identical to pre-tier; each step shaves ~25% off.
+	public static readonly float[] AxeTierSwingCooldown = { 0.33f, 0.25f, 0.18f, 0.12f };
+	// Per-tier chop multiplier — how many Chop() calls land per swing. Tier 3
+	// = 3 means a 3-chop tree falls in one swing, matching the Godot proto's
+	// AXE_TIER_DAMAGE end-game payoff.
+	public static readonly int[] AxeTierChopMultiplier = { 1, 1, 2, 3 };
 }
 

@@ -51,6 +51,21 @@ public sealed class WoodHud : Component
 		if ( _beaver.IsValid() )
 		{
 			DrawLine( hud, x, ref y, width, height, pad, $"Tool : {_beaver.CurrentTool}", TextColor );
+
+			// Tier line — current/max + a hot tint when the player can afford the
+			// next upgrade so the R-key prompt reads at a glance. Pickaxe tier is
+			// shown but never paintable hot (no spend path yet).
+			var isAxe = _beaver.CurrentTool == ToolKind.Axe;
+			var tier = isAxe ? _beaver.AxeTier : _beaver.PickaxeTier;
+			var nextTier = tier + 1;
+			bool canAfford = false;
+			if ( isAxe && nextTier <= Tunables.MaxAxeTier )
+			{
+				var cost = Tunables.AxeTierCosts[nextTier];
+				canAfford = woodCount >= cost;
+			}
+			var tierTint = canAfford ? ChainHotColor : TextColor;
+			DrawLine( hud, x, ref y, width, height, pad, $"Tier : {tier}/{Tunables.MaxAxeTier}", tierTint );
 		}
 
 		if ( _combo.IsValid() && _combo.Chain > 0 )

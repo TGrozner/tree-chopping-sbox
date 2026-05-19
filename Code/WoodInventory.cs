@@ -26,4 +26,14 @@ public sealed class WoodInventory : Component
 		Wood += taken;
 		return taken == amount;
 	}
+
+	// All-or-nothing debit. Used by tool tier-up so a partial payment doesn't
+	// silently drain wood without granting the upgrade.
+	public bool TrySpend( int amount )
+	{
+		if ( amount <= 0 ) return false;
+		if ( Wood < amount ) return false;
+		Wood -= amount;
+		return true;
+	}
 }
