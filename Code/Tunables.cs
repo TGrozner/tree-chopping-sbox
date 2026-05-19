@@ -89,6 +89,15 @@ public static class Tunables
 	public const float StoneChunkHeight = 12f;
 	public const float StoneChunkMass = 6f;
 
+	// Day/night cycle — ported from Godot ambiance.gd (90s loop).
+	// DayPhase starts at 0.82 (late afternoon) so first launches read as golden hour.
+	// 0.0 / 1.0 = dawn at horizon, 0.5 = noon overhead, 0.25 = late night.
+	public const float DayLengthSeconds = 90f;
+	public const float DayPhaseStart = 0.82f;
+	public const float SunYawDegrees = 23f;
+	public const float SunMaxEnergyMul = 1.6f;
+	public const float SunMinEnergyMul = 0.05f;
+
 	// Combo / juice tuning. A "beat" = a successful chop or pickup.
 	public const float ComboIdleTimeout = 1.5f;
 	public const int ComboSlowmoChain = 5;

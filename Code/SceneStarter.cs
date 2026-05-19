@@ -24,6 +24,7 @@ public sealed class SceneStarter : Component
 			EnsureCombo();
 			EnsureWeather();
 			EnsureBiomes();
+			EnsureDayNight();
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
@@ -86,6 +87,15 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "BiomeManager";
 		go.AddComponent<BiomeManager>();
+	}
+
+	private void EnsureDayNight()
+	{
+		var existing = Scene.GetAllComponents<DayNightCycle>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "DayNightCycle";
+		go.AddComponent<DayNightCycle>();
 	}
 
 	private void EnsureHud()
