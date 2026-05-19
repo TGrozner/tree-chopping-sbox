@@ -1,0 +1,98 @@
+{
+  "__guid": "526eb1a9-32b6-4267-a6cc-9081a602cb16",
+  "GameObjects": [
+    {
+      "__guid": "6a8af53f-d52f-4f14-b58b-8857165b1282",
+      "Flags": 0,
+      "Name": "Sun",
+      "Rotation": "-0.0729315,0.4822396,0.1305433,0.8631827",
+      "Tags": "light_directional,light",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "Sandbox.DirectionalLight",
+          "__guid": "db174e53-38ba-4975-a0be-924d0e8ecdfd",
+          "FogMode": "Enabled",
+          "FogStrength": 1,
+          "LightColor": "1,0.94,0.85,1",
+          "Shadows": true,
+          "SkyColor": "0.36,0.45,0.55,1"
+        }
+      ]
+    },
+    {
+      "__guid": "c3f5cc44-6e19-4c18-ad94-6277cd64ac05",
+      "Flags": 0,
+      "Name": "Skybox",
+      "Tags": "skybox",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "Sandbox.SkyBox2D",
+          "__guid": "f3b81185-6266-429e-a7cd-89379d2639a9",
+          "SkyMaterial": "materials/skybox/skybox_day_01.vmat",
+          "Tint": "1,1,1,1"
+        }
+      ]
+    },
+    {
+      "__guid": "36cd0753-9d02-41b8-9bb3-6dabce1d8f03",
+      "Flags": 0,
+      "Name": "Ground",
+      "Scale": "60,60,1",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "2e1f83fe-9187-4338-95ea-afacb84a2c2a",
+          "MaterialOverride": "materials/default.vmat",
+          "Model": "models/dev/plane.vmdl",
+          "RenderType": "On",
+          "Tint": "0.35,0.49,0.27,1"
+        },
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "ae4605cf-abd2-4d5d-bbf5-299a4948badb",
+          "Center": "0,0,-5",
+          "IsTrigger": false,
+          "Scale": "100,100,10",
+          "Static": false
+        }
+      ]
+    },
+    {
+      "__guid": "7d8b3a40-1c4f-4a5b-9e6d-2f1a8c4b5d6e",
+      "Flags": 0,
+      "Name": "Bootstrap",
+      "Enabled": true,
+      "Components": [
+        {
+          "__type": "TreeChopping.SceneStarter",
+          "__guid": "8e9c4b51-2d50-4b6c-af7e-30258d5c6e70",
+          "TreeCount": 8,
+          "ForestRadius": 600,
+          "MinSpacing": 140,
+          "Seed": 51804,
+          "BeaverSpawn": "0,0,48"
+        }
+      ]
+    }
+  ],
+  "SceneProperties": {
+    "FixedUpdateFrequency": 50,
+    "MaxFixedUpdates": 5,
+    "NetworkFrequency": 60,
+    "NetworkInterpolation": true,
+    "ThreadedAnimation": true,
+    "TimeScale": 1,
+    "UseFixedUpdate": true,
+    "NavMesh": {
+      "Enabled": false
+    }
+  },
+  "Title": "main",
+  "Description": "Tree chopping prototype starter scene.",
+  "ResourceVersion": 1,
+  "__references": [],
+  "__version": 1
+}

@@ -1,0 +1,181 @@
+namespace TreeChopping;
+
+public sealed class Tree : Component, IChoppable
+{
+	[Property] public Rigidbody Body { get; set; }
+	[Property] public Color TrunkTint { get; set; } = new( 0.46f, 0.32f, 0.22f, 1f );
+	[Property] public int ChopsRemaining { get; set; } = 3;
+
+	private bool _chopped;
+	private bool _landed;
+	private bool _broken;
+	private float _slowTipElapsed;
+	private Vector3 _fellDir;
+	private TimeSince _timeSinceLanded;
+
+	bool IChoppable.IsValid() => !_broken && !_landed && this.IsValid();
+
+	public void Chop( Vector3 direction )
+	{
+		if ( _broken ) return;
+
+		if ( _landed )
+		{
+			HandleLogHit( direction );
+			return;
+		}
+
+		ChopsRemaining--;
+		if ( ChopsRemaining > 0 )
+		{
+			GiveFeedbackJiggle( direction );
+			return;
+		}
+
+		StartFell( direction );
+	}
+
+	private void GiveFeedbackJiggle( Vector3 direction )
+	{
+		if ( !Body.IsValid() ) return;
+		var impulsePos = WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.55f);
+		Body.ApplyImpulseAt( impulsePos, -direction.WithZ( 0f ).Normal * 60f );
+	}
+
+	private void StartFell( Vector3 direction )
+	{
+		_chopped = true;
+		_fellDir = direction.WithZ( 0f ).Normal;
+		if ( _fellDir.LengthSquared < 0.001f ) _fellDir = Vector3.Forward;
+		_slowTipElapsed = 0f;
+
+		if ( Body.IsValid() )
+		{
+			Body.MotionEnabled = true;
+			Body.LinearDamping = 0f;
+			Body.AngularDamping = 0.3f;
+		}
+	}
+
+	protected override void OnFixedUpdate()
+	{
+		if ( _chopped && !_landed )
+		{
+			TickFall();
+		}
+		else if ( _landed )
+		{
+			TickLandedDecay();
+		}
+	}
+
+	private void TickFall()
+	{
+		if ( !Body.IsValid() ) return;
+
+		_slowTipElapsed += Time.Delta;
+		var t = (_slowTipElapsed / Tunables.SlowTipDuration).Clamp( 0f, 1f );
+		var frac = MathX.Lerp( Tunables.SlowTipInitialFrac, Tunables.SlowTipRampFrac, t );
+		var torqueAxis = Vector3.Up.Cross( _fellDir );
+		Body.ApplyTorque( torqueAxis * Tunables.FellTorque * frac * Time.Delta );
+
+		if ( _slowTipElapsed < 0.1f )
+		{
+			Body.ApplyImpulseAt(
+				WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.85f),
+				_fellDir * Tunables.FellPush
+			);
+		}
+
+		var upDot = WorldRotation.Up.Dot( Vector3.Up );
+		if ( upDot < Tunables.TreeFallenUpDotMax )
+		{
+			BecomeLandedLog();
+		}
+	}
+
+	private void BecomeLandedLog()
+	{
+		_landed = true;
+		_timeSinceLanded = 0f;
+		ChopsRemaining = (int)Tunables.LogBreakHits;
+		Tags.Add( "log" );
+
+		if ( Body.IsValid() )
+		{
+			Body.AngularDamping = Tunables.TreeAngularDampLanded;
+			Body.LinearDamping = Tunables.TreeLinearDampLanded;
+		}
+	}
+
+	private void TickLandedDecay()
+	{
+		if ( !Body.IsValid() ) return;
+		if ( _timeSinceLanded < 0.6f ) return;
+		Body.Sleeping = Body.Velocity.LengthSquared < 4f && Body.AngularVelocity.LengthSquared < 0.5f;
+	}
+
+	private void HandleLogHit( Vector3 direction )
+	{
+		ChopsRemaining--;
+		if ( ChopsRemaining > 0 )
+		{
+			if ( Body.IsValid() )
+			{
+				var hitPoint = WorldPosition + Vector3.Up * 20f;
+				Body.ApplyImpulseAt( hitPoint, direction.WithZ( 0.2f ).Normal * 40f );
+			}
+			return;
+		}
+
+		BreakIntoPieces( direction );
+	}
+
+	private void BreakIntoPieces( Vector3 direction )
+	{
+		_broken = true;
+		var forward = WorldRotation.Forward;
+		var origin = WorldPosition + WorldRotation.Up * (Tunables.TreeHeight * 0.5f);
+
+		var halfLen = Tunables.TreeHeight * 0.5f;
+		var spacing = Tunables.LogPieceHeight * 0.55f;
+		var n = MathX.CeilToInt( halfLen * 2f / spacing );
+
+		for ( int i = 0; i < n; i++ )
+		{
+			var t = (i + 0.5f) / n;
+			var localOffset = WorldRotation.Up * (halfLen * 2f * (t - 0.5f));
+			SpawnLogPiece( WorldPosition + localOffset, WorldRotation, direction );
+		}
+
+		GameObject.Destroy();
+	}
+
+	private void SpawnLogPiece( Vector3 pos, Rotation rot, Vector3 direction )
+	{
+		var go = Scene.CreateObject();
+		go.Name = "LogPiece";
+		go.WorldPosition = pos;
+		go.WorldRotation = rot * Rotation.FromAxis( Vector3.Right, 90f );
+		go.WorldScale = new Vector3( Tunables.LogPieceRadius * 2f, Tunables.LogPieceRadius * 2f, Tunables.LogPieceHeight );
+		go.Tags.Add( "logpiece" );
+
+		var model = go.AddComponent<ModelRenderer>();
+		model.Model = Model.Cube;
+		model.Tint = TrunkTint;
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = Vector3.One;
+
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = Tunables.LogPieceMass;
+		rb.LinearDamping = 0.4f;
+		rb.AngularDamping = 0.8f;
+		rb.ApplyImpulse( direction.WithZ( 0.3f ).Normal * Tunables.LogPieceMass * 1.5f );
+		rb.ApplyTorque( Vector3.Random * 80f );
+
+		var piece = go.AddComponent<LogPiece>();
+		piece.Body = rb;
+		piece.TrunkTint = TrunkTint;
+	}
+}

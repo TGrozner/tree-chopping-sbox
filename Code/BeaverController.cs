@@ -1,0 +1,149 @@
+namespace TreeChopping;
+
+public sealed class BeaverController : Component
+{
+	[Property] public GameObject CameraRoot { get; set; }
+	[Property] public CameraComponent Camera { get; set; }
+	[Property] public float MoveSpeed { get; set; } = Tunables.BeaverMoveSpeed;
+	[Property] public float JumpImpulse { get; set; } = Tunables.BeaverJumpImpulse;
+	[Property] public float CameraDistance { get; set; } = Tunables.CameraDistance;
+	[Property] public float MouseSensitivity { get; set; } = 0.12f;
+
+	private Vector3 _wishVelocity;
+	private Angles _cameraAngles;
+	private float _swingCooldown;
+	private Rigidbody _rb;
+
+	protected override void OnAwake()
+	{
+		_rb = Components.Get<Rigidbody>( FindMode.EverythingInSelfAndDescendants );
+		_cameraAngles = WorldRotation.Angles();
+		_cameraAngles.pitch = 12f;
+	}
+
+	protected override void OnUpdate()
+	{
+		UpdateLook();
+		UpdateMovement();
+		UpdateCamera();
+		UpdateSwing();
+	}
+
+	private void UpdateLook()
+	{
+		var look = Input.AnalogLook;
+		_cameraAngles.pitch += look.pitch;
+		_cameraAngles.yaw += look.yaw;
+		_cameraAngles.pitch = _cameraAngles.pitch.Clamp( Tunables.CameraMinPitch, Tunables.CameraMaxPitch );
+		_cameraAngles.roll = 0f;
+	}
+
+	private void UpdateMovement()
+	{
+		var move = Input.AnalogMove;
+		var yawOnly = new Angles( 0f, _cameraAngles.yaw, 0f ).ToRotation();
+		var wish = yawOnly * new Vector3( move.x, move.y, 0f );
+		var speed = MoveSpeed * (Input.Down( "Run" ) ? Tunables.BeaverSprintMultiplier : 1f);
+		_wishVelocity = wish.Normal * speed;
+
+		if ( _rb.IsValid() )
+		{
+			var v = _rb.Velocity;
+			v.x = _wishVelocity.x;
+			v.y = _wishVelocity.y;
+			_rb.Velocity = v;
+
+			if ( Input.Pressed( "Jump" ) && IsGrounded() )
+			{
+				_rb.ApplyImpulse( Vector3.Up * JumpImpulse * _rb.PhysicsBody.Mass );
+			}
+		}
+		else
+		{
+			WorldPosition += _wishVelocity * Time.Delta;
+		}
+
+		var horiz = wish.Normal;
+		if ( horiz.LengthSquared > 0.01f )
+		{
+			var targetYaw = Rotation.LookAt( horiz, Vector3.Up );
+			WorldRotation = Rotation.Slerp( WorldRotation, targetYaw, Time.Delta * 12f );
+		}
+	}
+
+	private bool IsGrounded()
+	{
+		var down = Scene.Trace
+			.Ray( WorldPosition + Vector3.Up * 4f, WorldPosition + Vector3.Down * 8f )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.Run();
+		return down.Hit;
+	}
+
+	private void UpdateCamera()
+	{
+		if ( !Camera.IsValid() ) return;
+		var pivot = WorldPosition + Vector3.Up * Tunables.CameraHeightAboveBeaver;
+		var rot = _cameraAngles.ToRotation();
+		var desired = pivot - rot.Forward * CameraDistance;
+
+		var trace = Scene.Trace
+			.Ray( pivot, desired )
+			.Radius( 10f )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.Run();
+		var camPos = trace.Hit ? trace.EndPosition + trace.Normal * 4f : desired;
+
+		Camera.WorldPosition = camPos;
+		Camera.WorldRotation = rot;
+	}
+
+	private void UpdateSwing()
+	{
+		_swingCooldown = MathF.Max( 0f, _swingCooldown - Time.Delta );
+		if ( _swingCooldown > 0f ) return;
+		if ( !Input.Pressed( "attack1" ) ) return;
+
+		_swingCooldown = Tunables.SwingCooldown;
+		var origin = WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f);
+		var forward = (_cameraAngles.WithPitch( 0f )).ToRotation().Forward;
+		var hit = ChooseSwingTarget( origin, forward );
+		if ( hit is null ) return;
+
+		hit.Chop( forward );
+	}
+
+	private IChoppable ChooseSwingTarget( Vector3 origin, Vector3 forward )
+	{
+		var candidates = Scene.GetAllComponents<Component>()
+			.OfType<IChoppable>()
+			.Where( c => c.IsValid() )
+			.ToList();
+
+		IChoppable best = null;
+		var bestScore = float.NegativeInfinity;
+		foreach ( var c in candidates )
+		{
+			var to = c.WorldPosition - origin;
+			to.z = 0f;
+			var dist = to.Length;
+			if ( dist > Tunables.SwingRange ) continue;
+			var dot = forward.Dot( to.Normal );
+			if ( dot < Tunables.SwingConeDot ) continue;
+			var score = dot - dist * 0.005f;
+			if ( score > bestScore )
+			{
+				bestScore = score;
+				best = c;
+			}
+		}
+		return best;
+	}
+}
+
+public interface IChoppable
+{
+	Vector3 WorldPosition { get; }
+	bool IsValid();
+	void Chop( Vector3 direction );
+}

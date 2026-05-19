@@ -1,0 +1,27 @@
+# s&box generated
+.sbox/
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.slnx
+obj/
+bin/
+Properties/
+*.generated.*
+*.*_c
+!*.shader_c
+
+# Editor scratch
+*.user
+*.userosscache
+*.suo
+[Tt]humbs.db
+
+# Local logs / tmp
+*.log
+*.tmp
+.tmp/
+
+# Exported builds
+Exports/
