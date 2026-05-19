@@ -8,6 +8,7 @@ public sealed class Stump : Component
 {
 	[Property] public Vector3 FootPosition { get; set; }
 	[Property] public Color TrunkTint { get; set; } = new( 0.42f, 0.28f, 0.18f, 1f );
+	[Property] public TreeSpecies Species { get; set; } = TreeSpecies.Beech;
 	[Property] public float RegrowSeconds { get; set; } = Tunables.TreeRegrowthStumpSeconds;
 
 	private TimeSince _timeAlive;
@@ -21,12 +22,21 @@ public sealed class Stump : Component
 	{
 		if ( _timeAlive < RegrowSeconds ) return;
 		var biome = BiomeManager.Get( Scene );
+		// Preserve the species that produced this stump — the player chopped a
+		// crystal tree, the regrowth is another crystal tree. Biome tint is
+		// still used as the legacy 3rd-arg even though Tree.SpawnAt now lets
+		// the species tint win; passing it keeps the contract intact for any
+		// future divergence.
 		var tint = biome.IsValid() ? biome.TrunkTintForNewTree() : TrunkTint;
-		Tree.SpawnAt( Scene, FootPosition, tint );
+		Tree.SpawnAt( Scene, FootPosition, tint, Species );
 		GameObject.Destroy();
 	}
 
-	public static Stump SpawnAt( Scene scene, Vector3 footPosition, Color tint )
+	// Optional `species` arg — defaults to Beech so existing callers
+	// (SceneStarter or any code that doesn't know the original tree's
+	// species) keep compiling. Tree.cs passes it explicitly so the
+	// regrowth matches what was felled.
+	public static Stump SpawnAt( Scene scene, Vector3 footPosition, Color tint, TreeSpecies species = TreeSpecies.Beech )
 	{
 		var go = scene.CreateObject();
 		go.Name = "Stump";
@@ -49,6 +59,7 @@ public sealed class Stump : Component
 		var stump = go.AddComponent<Stump>();
 		stump.FootPosition = footPosition;
 		stump.TrunkTint = tint;
+		stump.Species = species;
 		return stump;
 	}
 }

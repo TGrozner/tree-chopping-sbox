@@ -5,6 +5,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	[Property] public Rigidbody Body { get; set; }
 	[Property] public Color TrunkTint { get; set; } = new( 0.46f, 0.32f, 0.22f, 1f );
 	[Property] public int ChopsRemaining { get; set; } = 3;
+	[Property] public TreeSpecies Species { get; set; } = TreeSpecies.Beech;
 
 	private bool _chopped;
 	private bool _landed;
@@ -30,17 +31,32 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		_windPhaseSeed = (p.x * 0.013f + p.y * 0.017f) % MathF.Tau;
 	}
 
+	// Legacy 3-arg path — keeps SceneStarter.SpawnTree (and any other existing
+	// caller) compiling without modification. Defaults to Beech so the
+	// "biome-untyped" spawn still produces a normal-looking starter tree.
 	public static Tree SpawnAt( Scene scene, Vector3 footPosition, Color tint )
+		=> SpawnAt( scene, footPosition, tint, TreeSpecies.Beech );
+
+	public static Tree SpawnAt( Scene scene, Vector3 footPosition, Color tint, TreeSpecies species )
 	{
+		// Species-specific look wins over the biome tint argument — both are
+		// passed so callers that want to keep the biome cue can still do so by
+		// reading TrunkTint downstream; the trunk model itself uses the
+		// species tint because it's the more visible per-tree cue.
+		var speciesIdx = (int)species;
+		var speciesTint = Tunables.SpeciesTrunkTints[speciesIdx];
+		var scaleMul = Tunables.SpeciesScaleMul[speciesIdx];
+		var chops = Tunables.SpeciesChopsRequired[speciesIdx];
+
 		var go = scene.CreateObject();
-		go.Name = "Tree";
-		go.WorldPosition = footPosition + Vector3.Up * (Tunables.TreeHeight * 0.5f);
+		go.Name = $"Tree.{species}";
+		go.WorldPosition = footPosition + Vector3.Up * (Tunables.TreeHeight * 0.5f * scaleMul);
 		go.Tags.Add( "tree" );
-		go.WorldScale = new Vector3( Tunables.TreeRadius * 2f, Tunables.TreeRadius * 2f, Tunables.TreeHeight ) / Tunables.CubeBase;
+		go.WorldScale = new Vector3( Tunables.TreeRadius * 2f, Tunables.TreeRadius * 2f, Tunables.TreeHeight ) * scaleMul / Tunables.CubeBase;
 
 		var mr = go.AddComponent<ModelRenderer>();
 		mr.Model = Model.Cube;
-		mr.Tint = tint;
+		mr.Tint = speciesTint;
 
 		var col = go.AddComponent<BoxCollider>();
 		col.Scale = new Vector3( Tunables.CubeBase );
@@ -53,7 +69,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 		var tree = go.AddComponent<Tree>();
 		tree.Body = rb;
-		tree.TrunkTint = tint;
+		tree.TrunkTint = speciesTint;
+		tree.Species = species;
+		tree.ChopsRemaining = chops;
 		return tree;
 	}
 
@@ -305,7 +323,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			SpawnLogPiece( WorldPosition + localOffset, WorldRotation, direction );
 		}
 
-		Stump.SpawnAt( Scene, _originalFoot, TrunkTint );
+		Stump.SpawnAt( Scene, _originalFoot, TrunkTint, Species );
 		GameObject.Destroy();
 	}
 

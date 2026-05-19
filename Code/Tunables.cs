@@ -1,5 +1,17 @@
 namespace TreeChopping;
 
+// Species port of the Godot proto's wood_type variants (tree.gd:_SPECIES_DENSITY,
+// _SPECIES_COUNT). The Godot list was oak/birch/maple/pine; renamed here to
+// Beech/Spruce/Ironwood/Crystal so the biome-themed flavor reads from the name
+// alone — biome bias is decided in BiomeManager.SpeciesForNewTree, not here.
+public enum TreeSpecies
+{
+	Beech,
+	Spruce,
+	Ironwood,
+	Crystal,
+}
+
 public static class Tunables
 {
 	public const float UnitsPerMeter = 39.37f;
@@ -168,5 +180,24 @@ public static class Tunables
 	public static readonly float[] PickaxeTierSwingCooldown = { 0.33f, 0.25f, 0.18f, 0.12f };
 	// Multi-chop on rocks: tier 3 one-shots a default 3-chop rock.
 	public static readonly int[] PickaxeTierChopMultiplier = { 1, 1, 2, 3 };
+
+	// Per-species visual + difficulty knobs. Indexed by (int)TreeSpecies so the
+	// enum is the source of truth. Tints are picked to be visually distinct at
+	// glance distance — warm brown beech, dusty green-brown spruce, dark
+	// orange-red ironwood, light cyan-white crystal. Species tint wins over the
+	// biome trunk tint (the biome bank tint still reads as the dominant cue).
+	public static readonly Color[] SpeciesTrunkTints =
+	{
+		new Color( 0.55f, 0.38f, 0.22f, 1f ), // Beech — warm brown
+		new Color( 0.38f, 0.40f, 0.24f, 1f ), // Spruce — dusty green-brown
+		new Color( 0.58f, 0.22f, 0.12f, 1f ), // Ironwood — dark orange-red
+		new Color( 0.78f, 0.92f, 0.96f, 1f ), // Crystal — pale cyan-white
+	};
+	// Chops to fell, mirrors Godot BASE_CHOPS_REQUIRED ladder (harder species
+	// gate behind axe tier in the original; here we just up the chop count).
+	public static readonly int[] SpeciesChopsRequired = { 2, 3, 4, 5 };
+	// Slight scale variety so a forest of mixed species reads as a forest, not
+	// a uniform grid. Multiplied into the trunk WorldScale at spawn.
+	public static readonly float[] SpeciesScaleMul = { 0.9f, 1.0f, 1.1f, 1.05f };
 }
 

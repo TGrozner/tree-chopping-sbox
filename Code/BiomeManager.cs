@@ -38,6 +38,31 @@ public sealed class BiomeManager : Component
 		return PaletteFor( Current ).Trunk;
 	}
 
+	// Weighted species roll for a new tree in the current biome. Caller owns
+	// the Random so spawn-time determinism (seeded forest layouts, tests)
+	// stays in the caller's hands. Weights:
+	//   Forest = 60% Beech / 40% Spruce
+	//   Autumn = 70% Ironwood / 20% Beech / 10% Spruce
+	//   Frost  = 70% Crystal / 30% Spruce
+	// All 4 species remain in the code; the bias just makes each biome read.
+	public TreeSpecies SpeciesForNewTree( Random rng )
+	{
+		var roll = rng.NextDouble();
+		switch ( Current )
+		{
+			case BiomeKind.Forest:
+				return roll < 0.60 ? TreeSpecies.Beech : TreeSpecies.Spruce;
+			case BiomeKind.Autumn:
+				if ( roll < 0.70 ) return TreeSpecies.Ironwood;
+				if ( roll < 0.90 ) return TreeSpecies.Beech;
+				return TreeSpecies.Spruce;
+			case BiomeKind.Frost:
+				return roll < 0.70 ? TreeSpecies.Crystal : TreeSpecies.Spruce;
+			default:
+				return TreeSpecies.Beech;
+		}
+	}
+
 	protected override void OnStart()
 	{
 		ApplyImmediate( Current );
