@@ -19,6 +19,12 @@ public sealed class BeaverController : Component
 	private float _fovPunch;
 	private float _sprintWiden;
 
+	// Walk-bob phase + smoothed amplitude scalar.
+	// Phase is in radians; amp 0..1 lerps toward 1 while moving, toward 0 when stopped
+	// so there's no visual snap on stop and the sine wave glides out at its current phase.
+	private float _walkPhase;
+	private float _walkBobAmp;
+
 	// Cached refs to the swappable tool meshes parented under ToolPivot.
 	// Both stay alive — we only toggle .Enabled so swapping is allocation-free.
 	private GameObject _axeRoot;
@@ -257,6 +263,41 @@ public sealed class BeaverController : Component
 
 		Camera.WorldPosition = camPos;
 		Camera.WorldRotation = rot;
+
+		// Walk-bob — ported from Godot proto's visual-mesh bob (beaver.gd `_animate_visual`
+		// used sin(_move_phase) * 0.04 m vertical + sin(_move_phase*0.5) * 0.05 roll).
+		// Here we apply it to the *camera position* instead of the beaver mesh: vertical
+		// from sin(phase), lateral from cos(phase*0.5) along the camera's right vector so
+		// it composes with the trauma jiggle that just wrote camPos. Adding AFTER the
+		// shake means the shake jitters the bobbed position, not the other way around.
+		const float BobFrequencyHz = 1.6f;        // ~steps per second at base walk
+		const float BobAmplitudeUp = 2.4f;        // SU (~0.06 m, slightly tighter than Godot's 0.04 m on body)
+		const float BobAmplitudeSide = 1.4f;      // SU sway peak
+		const float BobSpeedThreshold = 30f;      // below this horiz speed we decay to neutral
+		const float BobSprintFreqMul = 1.5f;      // sprint cadence bump (matches Godot ~1.5x boost feel)
+		const float BobSprintAmpMul = 1.25f;
+		const float BobDecayRate = 6f;            // amp lerp rate when stopped (and when ramping back up)
+		const float Tau = MathF.PI * 2f;
+
+		var horizSpeed = _rb.IsValid() ? _rb.Velocity.WithZ( 0f ).Length : _wishVelocity.WithZ( 0f ).Length;
+		bool moving = horizSpeed > BobSpeedThreshold;
+		bool sprintingBob = Input.Down( "Run" );
+
+		// Phase advances proportional to speed so it doesn't tick while idle-creeping;
+		// freq * Tau converts Hz → rad/s. Sprint bumps cadence to read as a faster gait.
+		float speedFactor = MathX.Clamp( horizSpeed / (Tunables.BeaverMoveSpeed + 0.001f), 0f, 2f );
+		float freq = BobFrequencyHz * (sprintingBob ? BobSprintFreqMul : 1f);
+		_walkPhase += Time.Delta * speedFactor * freq * Tau;
+		if ( _walkPhase > Tau * 1024f ) _walkPhase -= Tau * 1024f; // keep from blowing up over hours
+
+		// Smooth amp toward 0 when stopped (no snap) or toward target when moving.
+		float targetAmp = moving ? 1f : 0f;
+		_walkBobAmp = MathX.Lerp( _walkBobAmp, targetAmp, MathX.Clamp( Time.Delta * BobDecayRate, 0f, 1f ) );
+
+		float ampMul = (sprintingBob ? BobSprintAmpMul : 1f) * _walkBobAmp;
+		float bobUp = MathF.Sin( _walkPhase ) * BobAmplitudeUp * ampMul;
+		float bobSide = MathF.Cos( _walkPhase * 0.5f ) * BobAmplitudeSide * ampMul;
+		Camera.WorldPosition += Vector3.Up * bobUp + rot.Right * bobSide;
 
 		UpdateFov();
 	}
