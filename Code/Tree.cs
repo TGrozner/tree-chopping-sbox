@@ -77,6 +77,12 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( !Body.IsValid() ) return;
 		var impulsePos = WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.55f);
 		Body.ApplyImpulseAt( impulsePos, -direction.WithZ( 0f ).Normal * 60f );
+
+		// Chip burst at axe-strike height on the side that got hit.
+		var hitDir = direction.WithZ( 0f );
+		hitDir = hitDir.LengthSquared > 0.0001f ? hitDir.Normal : Vector3.Forward;
+		var chipPos = WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.15f) + hitDir * Tunables.TreeRadius;
+		ChopParticles.Burst( Scene, chipPos, hitDir, TrunkTint, Tunables.ChipBurstCountWood, Tunables.ChipSpeedWood );
 	}
 
 	private void StartFell( Vector3 direction )
@@ -211,11 +217,18 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private void HandleLogHit( Vector3 direction )
 	{
 		ChopsRemaining--;
+		var hitPoint = WorldPosition + Vector3.Up * 20f;
+		var dirFlat = direction.WithZ( 0f );
+		dirFlat = dirFlat.LengthSquared > 0.0001f ? dirFlat.Normal : Vector3.Forward;
+		// Heavier burst on the killing blow so the break-up reads.
+		var count = ChopsRemaining > 0 ? Tunables.ChipBurstCountWood : Tunables.ChipBurstCountWoodHeavy;
+		var speed = ChopsRemaining > 0 ? Tunables.ChipSpeedWood : Tunables.ChipSpeedWoodHeavy;
+		ChopParticles.Burst( Scene, hitPoint, dirFlat, TrunkTint, count, speed );
+
 		if ( ChopsRemaining > 0 )
 		{
 			if ( Body.IsValid() )
 			{
-				var hitPoint = WorldPosition + Vector3.Up * 20f;
 				Body.ApplyImpulseAt( hitPoint, direction.WithZ( 0.2f ).Normal * 40f );
 			}
 			return;

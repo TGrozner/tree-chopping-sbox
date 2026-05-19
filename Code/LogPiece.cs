@@ -15,11 +15,19 @@ public sealed class LogPiece : Component, IChoppable
 	{
 		if ( _broken ) return;
 		ChopsRemaining--;
+
+		var hitPoint = WorldPosition + Vector3.Up * 10f;
+		var dirFlat = direction.WithZ( 0f );
+		dirFlat = dirFlat.LengthSquared > 0.0001f ? dirFlat.Normal : Vector3.Forward;
+		var count = ChopsRemaining > 0 ? Tunables.ChipBurstCountWood : Tunables.ChipBurstCountWoodHeavy;
+		var speed = ChopsRemaining > 0 ? Tunables.ChipSpeedWood : Tunables.ChipSpeedWoodHeavy;
+		ChopParticles.Burst( Scene, hitPoint, dirFlat, TrunkTint, count, speed );
+
 		if ( ChopsRemaining > 0 )
 		{
 			if ( Body.IsValid() )
 			{
-				Body.ApplyImpulseAt( WorldPosition + Vector3.Up * 10f, direction.WithZ( 0.3f ).Normal * 30f );
+				Body.ApplyImpulseAt( hitPoint, direction.WithZ( 0.3f ).Normal * 30f );
 			}
 			return;
 		}

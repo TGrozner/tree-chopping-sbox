@@ -104,6 +104,21 @@ public static class Tunables
 	public const float SunMaxEnergyMul = 1.6f;
 	public const float SunMinEnergyMul = 0.05f;
 
+	// Chop impact chips — tiny tinted cubes spawned at each axe/pick hit.
+	// Ported from Godot proto's _emit_chips (CPUParticles3D BoxMesh, amount=18,
+	// lifetime=0.7s). Sizes in s&box inches (Godot 0.07m ≈ 2.76 u; we go a touch
+	// bigger so they read at distance with Model.Cube).
+	public const int ChipBurstCountWood = 14;
+	public const int ChipBurstCountWoodHeavy = 20;
+	public const int ChipBurstCountStone = 16;
+	public const float ChipSpeedWood = 220f;
+	public const float ChipSpeedWoodHeavy = 300f;
+	public const float ChipSpeedStone = 260f;
+	public const float ChipSizeMin = 4f;
+	public const float ChipSizeMax = 7f;
+	public const float ChipLifetimeMin = 0.6f;
+	public const float ChipLifetimeMax = 1.0f;
+
 	// Combo / juice tuning. A "beat" = a successful chop or pickup.
 	public const float ComboIdleTimeout = 1.5f;
 	public const int ComboSlowmoChain = 5;

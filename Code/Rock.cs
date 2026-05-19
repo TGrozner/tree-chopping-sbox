@@ -15,11 +15,22 @@ public sealed class Rock : Component, IChoppable
 	{
 		if ( _broken ) return;
 		ChopsRemaining--;
+
+		var hitPoint = WorldPosition + Vector3.Up * 8f;
+		var dirFlat = direction.WithZ( 0f );
+		dirFlat = dirFlat.LengthSquared > 0.0001f ? dirFlat.Normal : Vector3.Forward;
+		// Stone dust = rock tint pushed brighter so it reads vs the rock body.
+		var dust = new Color(
+			MathF.Min( 1f, RockTint.r * 1.3f + 0.1f ),
+			MathF.Min( 1f, RockTint.g * 1.3f + 0.1f ),
+			MathF.Min( 1f, RockTint.b * 1.3f + 0.1f ),
+			1f );
+		ChopParticles.Burst( Scene, hitPoint, dirFlat, dust, Tunables.ChipBurstCountStone, Tunables.ChipSpeedStone );
+
 		if ( ChopsRemaining > 0 )
 		{
 			if ( Body.IsValid() )
 			{
-				var hitPoint = WorldPosition + Vector3.Up * 8f;
 				Body.ApplyImpulseAt( hitPoint, direction.WithZ( 0.1f ).Normal * 30f );
 			}
 			return;
