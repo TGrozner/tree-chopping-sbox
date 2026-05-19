@@ -1,6 +1,6 @@
 namespace TreeChopping;
 
-public sealed class Tree : Component, IChoppable
+public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 {
 	[Property] public Rigidbody Body { get; set; }
 	[Property] public Color TrunkTint { get; set; } = new( 0.46f, 0.32f, 0.22f, 1f );
@@ -12,6 +12,9 @@ public sealed class Tree : Component, IChoppable
 	private float _slowTipElapsed;
 	private Vector3 _fellDir;
 	private TimeSince _timeSinceLanded;
+
+	public bool IsFalling => _chopped && !_landed && !_broken;
+	public bool IsStanding => !_chopped && !_broken;
 
 	bool IChoppable.IsValid() => !_broken && !_landed && this.IsValid();
 
@@ -54,6 +57,43 @@ public sealed class Tree : Component, IChoppable
 			Body.MotionEnabled = true;
 			Body.LinearDamping = 0f;
 			Body.AngularDamping = 0.3f;
+		}
+	}
+
+	void Component.ICollisionListener.OnCollisionStart( Collision col )
+	{
+		// Cascade: a falling tree slams into a neighbor → propagate fell.
+		if ( !IsFalling ) return;
+		if ( !Body.IsValid() ) return;
+		var speed = Body.Velocity.Length;
+		if ( speed < Tunables.CascadeMinContactSpeed ) return;
+
+		var otherGo = col.Other.GameObject;
+		if ( !otherGo.IsValid() || otherGo == GameObject ) return;
+		var otherTree = otherGo.Components.Get<Tree>();
+		if ( !otherTree.IsValid() || !otherTree.IsStanding ) return;
+
+		var contactWorld = col.Contact.Point;
+		var arm = contactWorld - Body.WorldPosition;
+		var vAtContact = Body.Velocity + Body.AngularVelocity.Cross( arm );
+		var impulse = vAtContact * Body.PhysicsBody.Mass * Tunables.CascadeImpulseTransfer;
+
+		var fellDir = (otherTree.WorldPosition - WorldPosition).WithZ( 0f ).Normal;
+		if ( fellDir.LengthSquared < 0.001f ) fellDir = _fellDir;
+
+		otherTree.CascadeStrike( fellDir, contactWorld, impulse );
+	}
+
+	void Component.ICollisionListener.OnCollisionUpdate( Collision col ) { }
+	void Component.ICollisionListener.OnCollisionStop( CollisionStop col ) { }
+
+	public void CascadeStrike( Vector3 dir, Vector3 contactWorld, Vector3 impulse )
+	{
+		if ( _broken || _chopped ) return;
+		StartFell( dir );
+		if ( Body.IsValid() )
+		{
+			Body.ApplyImpulseAt( contactWorld, impulse );
 		}
 	}
 
