@@ -7,12 +7,13 @@ namespace TreeChopping;
 //   Verify         — assert : GameState.Wood increased, target tree felled
 //   TestStats      — assert : TryUpgradeSpeed pays wood + bumps tier
 //   TestPrestige   — assert : prestige formula + tier reset + lifetime kept
+//   TestGateBreak  — spawn a 1-chop gate, fell it, assert GatesBroken++
 //   Done
 //
 // ConVar tc_selftest=1 to enable. PowerShell harness greps [TC_TEST] markers.
 public sealed class SelfTest : Component
 {
-	enum Phase { Init, Approach, Swing, Verify, TestStats, TestPrestige, Done }
+	enum Phase { Init, Approach, Swing, Verify, TestStats, TestPrestige, TestGateBreak, Done }
 
 	private Phase _phase = Phase.Init;
 	private TimeSince _phaseTime;
@@ -47,6 +48,7 @@ public sealed class SelfTest : Component
 			case Phase.Verify: TickVerify(); break;
 			case Phase.TestStats: TickTestStats(); break;
 			case Phase.TestPrestige: TickTestPrestige(); break;
+			case Phase.TestGateBreak: TickTestGateBreak(); break;
 			case Phase.Done: break;
 		}
 	}
@@ -254,9 +256,66 @@ public sealed class SelfTest : Component
 		if ( ok )
 		{
 			Log.Info( $"[TC_TEST] PRESTIGE PASS  spirits 0→{_state.Spirits}  lifetime kept at {_state.TotalWoodEarned}" );
-			PhaseOk( Phase.TestPrestige );
+			Transition( Phase.TestGateBreak );
+		}
+		else
+		{
+			Finish();
+		}
+	}
+
+	private Tree _testGate;
+	private int _gatesBeforeBreak;
+	private void TickTestGateBreak()
+	{
+		// First tick of the phase : spawn a 1-chop gate next to the beaver,
+		// snapshot GatesBroken, kick its HP to 0 with a single Chop call.
+		// Subsequent ticks wait for the gate to land (TickFall → upDot
+		// threshold or 5s force-land), which triggers Tree.GiveWoodOnce
+		// → SceneStarter.OnGateBroken → GatesBroken++.
+		if ( !_testGate.IsValid() )
+		{
+			_gatesBeforeBreak = _state.GatesBroken;
+			var pos = _beaver.WorldPosition + new Vector3( 80f, 0f, 0f );
+			if ( TryGetGroundZ( pos.x, pos.y, out float z ) ) pos.z = z;
+			_testGate = Tree.SpawnGate( Scene, pos, 1, 0f );
+			Log.Info( $"[TC_TEST] GATE spawned at {pos}, GatesBroken={_state.GatesBroken}" );
+			// Chop once with arbitrary forward — drops to 0 → StartFell.
+			_testGate.Chop( Vector3.Forward, 1 );
+			return;
+		}
+		// Wait for the gate's GiveWoodOnce path to run (BecomeLandedLog).
+		// That bumps GatesBroken. Max 8s like Verify.
+		bool gatesIncremented = _state.GatesBroken > _gatesBeforeBreak;
+		if ( !gatesIncremented && (float)_phaseTime < 8f ) return;
+
+		bool ok = true;
+		if ( _state.GatesBroken != _gatesBeforeBreak + 1 )
+		{
+			Log.Error( $"[TC_TEST] FAIL: GatesBroken {_gatesBeforeBreak} → {_state.GatesBroken}, expected +1" );
+			ok = false;
+		}
+		if ( _testGate.IsValid() && _testGate.IsStanding )
+		{
+			Log.Error( $"[TC_TEST] FAIL: test gate still standing after Chop+8s" );
+			ok = false;
+		}
+		if ( ok )
+		{
+			Log.Info( $"[TC_TEST] GATE PASS  GatesBroken {_gatesBeforeBreak}→{_state.GatesBroken}" );
+			PhaseOk( Phase.TestGateBreak );
 		}
 		Finish();
+	}
+
+	private bool TryGetGroundZ( float x, float y, out float groundZ )
+	{
+		var top = new Vector3( x, y, 2000f );
+		var bot = new Vector3( x, y, -2000f );
+		var hit = Scene.Trace.Ray( top, bot ).WithAnyTags( "ground" ).Run();
+		if ( !hit.Hit ) { groundZ = 0f; return false; }
+		groundZ = hit.EndPosition.z;
+		return true;
 	}
 
 	private void ParkBeaverInFrontOfTarget()
