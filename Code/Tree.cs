@@ -424,8 +424,16 @@ public sealed class Tree : Component, IChoppable
 		int baseWood = Tunables.TreeKindWoodReward[kindIdx];
 		if ( IsMythic ) baseWood += Tunables.MythicWoodBonus;
 		int gain = Math.Max( 1, (int)Math.Ceiling( baseWood * gs.WoodMultiplier ) );
-		if ( gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance ) gain *= 2;
+		bool luckCrit = gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance;
+		if ( luckCrit ) gain *= 2;
 		gs.AddWood( gain );
+		// Treasure puff — golden leaf burst sized by the wood gain. Crit
+		// (Luck stat doubled the drop) bumps the count + uses the brighter
+		// Mythic canopy tint so the rare event reads visually.
+		int puffCount = Math.Min( 4 + gain / 2, 18 );
+		var puffTint = Tunables.MythicTrunkTint;
+		if ( luckCrit ) { puffCount = Math.Min( puffCount + 8, 26 ); puffTint = Tunables.MythicCanopyTint; }
+		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 60f, Vector3.Up, puffCount, puffTint );
 	}
 
 	private void TickLandedDecay()
