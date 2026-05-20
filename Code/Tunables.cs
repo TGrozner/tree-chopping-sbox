@@ -106,9 +106,6 @@ public static class Tunables
 	// Swing feel : click → WindUp (anticipation) → Impact (Chop + chips + cam
 	// punch + hit-stop) → Recovery (input locked) → Idle. The wind-up is what
 	// turns the swing from a toggle into a gesture ; the hit-stop sells weight.
-	// Wind-up matched to citizen's Melee_Weapons_2H_Attack_01 sequence so
-	// the procedural impact tick lands at the same moment as the on-screen
-	// blade-meets-target frame of the animation.
 	public const float SwingWindUpDuration = 0.45f;
 	public const float SwingRecoveryDuration = 0.18f;
 	public const float SwingFovPunch = 6f;
@@ -173,9 +170,10 @@ public static class Tunables
 	public static readonly Color BorderTintLow = new( 0.38f, 0.44f, 0.50f, 1f );
 	public static readonly Color BorderTintHigh = new( 0.52f, 0.58f, 0.62f, 1f );
 
-	// Mountain shape rotation — daily seed picks one. Cone is the baseline
-	// radial peak ; Ridges is a long N-S spine ; TwinPeaks has two summits
-	// the cascade can chain between ; Plateau is a sharper drop-off mesa.
+	// Mountain shape variants — the boot Seed picks one deterministically.
+	// Cone is the baseline radial peak ; Ridges is a long N-S spine ;
+	// TwinPeaks has two summits the player can chain a cascade between ;
+	// Plateau is a sharper drop-off mesa.
 	public enum NoiseStyle { Cone, Ridges, TwinPeaks, Plateau }
 
 }

@@ -9,8 +9,8 @@ namespace TreeChopping;
 // 2500 so the player + entire forest sit comfortably inside.
 public static class TerrainHeightmap
 {
-	// Picks one of the NoiseStyle variants based on the seed (deterministic).
-	// Daily seed → same shape across the day ; different shape next day.
+	// Picks one of the NoiseStyle variants based on the seed (deterministic
+	// — same seed always picks the same mountain shape).
 	public static Tunables.NoiseStyle PickStyle( int seed )
 	{
 		int values = Enum.GetValues( typeof( Tunables.NoiseStyle ) ).Length;
