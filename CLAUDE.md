@@ -137,7 +137,8 @@ Sélection biome-biased par `biomeDifficulty ∈ [0, 1]` calculé `(dist - Spawn
 
 ```
 SceneStarter.OnStart()
- ├─ Singletons (créés si absents) : GameState · WoodHud · SelfTest? (gated par tc_selftest)
+ ├─ Singletons (créés si absents) : GameState · WoodHud · AutoPlay · PerfProbe
+ │   · SelfTest? (gated par tc_selftest)
  ├─ DisableSceneGround() — la plane par défaut s'efface, le terrain heightmap la remplace
  ├─ TerrainHeightmap.Spawn(scene, seed, BeaverSpawn) — cône radial + 3-octave FBM noise,
  │   plateau au sommet pour le shop, tagged "ground"

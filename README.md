@@ -33,13 +33,14 @@ dotnet build Code/tree_chopping.csproj
 
 | Fichier | Rôle |
 |---|---|
-| `Code/SceneStarter.cs` | Bootstrap : singletons (GameState, WoodHud, AutoPlay, SelfTest), terrain procédural, mountain borders, beaver spawn, forêt biome-biased, shop area |
+| `Code/SceneStarter.cs` | Bootstrap : singletons (GameState, WoodHud, AutoPlay, PerfProbe, SelfTest), terrain procédural, mountain borders, beaver spawn, forêt biome-biased, shop area |
 | `Code/Tree.cs` | Multi-chop + StartFell + force-land timeout + GiveWoodOnce. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
 | `Code/BeaverController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
 | `Code/GameState.cs` | Wood + AxeTier persistence (FileSystem.Data/progress.json). ChopPower + WoodMultiplier derived from tier |
 | `Code/ShopArea.cs` | Player-near-shop detect + E to upgrade |
 | `Code/WoodHud.cs` | HUD immediate-mode (crosshair, wood balance pulse, axe tier badge, shop hint, teleport hint) |
-| `Code/AutoPlay.cs` | Autonomous gameplay driver — pose à un point d'observation (WideShotPose) ou chop-loop in-forest (Active). Pilotable via MCP bridge `set_runtime_property` |
+| `Code/AutoPlay.cs` | Autonomous chop-loop in-forest driver (Active=true via MCP bridge). Teleporte le castor vers le tree le plus proche, swing until fell, repeat |
+| `Code/PerfProbe.cs` | Rolling-window FPS + renderer/tree counts via `[Property, ReadOnly]`. Lisible par MCP bridge sans toucher au HUD debug |
 | `Code/SelfTest.cs` | Headless harness phases : Init → Approach → Swing → Verify(Wood>0). Wait-on-condition, pas time-based |
 | `Code/TerrainHeightmap.cs` | Procedural cone + 3-octave FBM noise terrain (Sandbox.Terrain), MaterialOverride sur `materials/ground.vmat` |
 | `Code/MapBorders.cs` | Ring de mountain segments tagged "border" (pas "ground") au-delà de la forêt |
