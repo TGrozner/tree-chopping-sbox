@@ -25,6 +25,11 @@ public sealed class BeaverController : Component
 	[Property] public Vector3 DebugTeleportTo { get; set; }
 	[Property] public bool DebugApplyTeleport { get; set; }
 	[Property] public float DebugTeleportYawDegrees { get; set; }
+	// Top-down screenshot mode : when true, OnPreRender pins the runtime
+	// camera at (-1000, 0, 4000) looking straight down. Player rigidbody
+	// stays grounded — only the camera moves, so we don't violate the
+	// "no flying" rule.
+	[Property] public bool AerialView { get; set; }
 
 	protected override void OnAwake()
 	{
@@ -54,6 +59,14 @@ public sealed class BeaverController : Component
 		if ( !Camera.IsValid() ) return;
 		if ( _baseFov <= 0f ) _baseFov = Camera.FieldOfView;
 		Camera.FieldOfView = _baseFov + _fovOffset;
+		if ( AerialView )
+		{
+			var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn
+				?? new Vector3( -1000f, 0f, 600f );
+			Camera.WorldPosition = spawn + Vector3.Up * 3500f;
+			Camera.WorldRotation = Rotation.LookAt( Vector3.Down );
+			Camera.FieldOfView = 60f;
+		}
 	}
 
 	private void TickHitstop()
