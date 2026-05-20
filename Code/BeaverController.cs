@@ -77,14 +77,23 @@ public sealed class BeaverController : Component
 		}
 	}
 
+	private int _aimPreviewFrame;
 	private void TickAimPreview()
 	{
 		bool canHighlight = _phase == SwingPhase.Idle;
-		Tree target = null;
-		if ( canHighlight )
+		Tree target = _previewTree;
+		// Re-pick the target every 3 frames (~20Hz) instead of every frame.
+		// Aim highlight feels identical to a human at this rate, the 60Hz
+		// sphere+ray traces against 400 trees burned cycles for nothing.
+		_aimPreviewFrame++;
+		if ( canHighlight && _aimPreviewFrame % 3 == 0 )
 		{
 			var hit = PickCameraAimTarget( out _ );
 			target = hit as Tree;
+		}
+		else if ( !canHighlight )
+		{
+			target = null;
 		}
 		if ( target != _previewTree )
 		{

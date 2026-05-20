@@ -112,10 +112,10 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Claude v1.3.1) expose 99 
 | `tree_chopping.slnx` | Solution VS qui pointe vers `Code/`, `Editor/`, et les addons sbox dans `Program Files (x86)\Steam\steamapps\common\sbox\`. |
 | `Code/` | Assembly de jeu. Namespace `TreeChopping`. `Assembly.cs` = global usings. **`Code/CLAUDE.md`** = patterns API s&box / Source 2 / hotload, chargé seulement quand tu touches `Code/**/*.cs`. |
 | `Editor/` | Assembly **éditeur** séparée (`tree_chopping.editor.csproj`) — code outils, pas sandboxé. Actuellement vide à part les usings. |
-| `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, FogMode Enabled FogStrength 0.85) + `Skybox` (SkyBox2D) + `Fog` (GradientFog) + `Ground` (plane initial — désactivé au boot par SceneStarter, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter, TreeCount=400, MinSpacing=180, BeaverSpawn=(-1000,0,80), SpawnPadRadius=200) + `Camera` (FieldOfView=65, Tonemapping HableFilmic + Bloom + ColorGrading). Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopArea, WoodHud, GameState) est spawné au runtime par `SceneStarter`. |
+| `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, overridden au runtime par SceneStarter.SetupLighting) + `Skybox` (SkyBox2D, warm orange tint) + `Fog` (GradientFog, copper-orange `0.92,0.62,0.42`) + `Ground` (plane initial — désactivé au boot, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter, TreeCount=400, MinSpacing=180, BeaverSpawn=(-1000,0,80), SpawnPadRadius=180) + `Camera` (FieldOfView=72, Tonemapping HableFilmic + Bloom + ColorGrading). Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopArea, WoodHud, GameState, AutoPlay) est spawné au runtime par `SceneStarter`. |
 | `ProjectSettings/Input.config` | Bindings clavier/gamepad. **Tu lis ces noms** dans `Input.Pressed("Jump")` etc. "Use" (E) achète un upgrade dans ShopArea ; "Reload" (R) téléporte le joueur au spawn shop. |
 | `ProjectSettings/Collision.config` | Matrice de collision. |
-| `Libraries/` | Libs externes. Contient `claudebridge/` (MCP bridge addon — cf. section "Avec l'éditeur"). Le package distant `titanovsky.low_poly_tree` est déclaré dans `tree_chopping.sbproj.PackageReferences` — sbox-dev le DL au project-open, pas de fichier dans `Libraries/`. |
+| `Libraries/` | Libs externes. Contient `claudebridge/` (MCP bridge addon — cf. section "Avec l'éditeur"). `tree_chopping.sbproj.PackageReferences = ["facepunch.woodaxe"]` — sbox-dev DL au project-open, pas de fichier local. |
 | `tools/` | `selftest.ps1` (harness mow-the-lawn scenario, exit 0/1/3 = PASS/FAIL/TIMEOUT) + `session-prompt.md` + `hooks/` (scripts appelés par `.claude/settings.json`). |
 | `.claude/settings.json` | Hooks Claude Code — voir section "Harness automation" plus haut. PostToolUse = build auto, Stop = selftest auto. |
 | `.sbox/` | Cache éditeur — généré, **ne pas commiter** (déjà gitignored). |
@@ -149,12 +149,13 @@ SceneStarter.OnStart()
  │   BeaverController (handles swing only) + axe (facepunch.woodaxe) parenté à hand_R
  ├─ SpawnShop() : ShopArea au ResolvedBeaverSpawn + visual disk wood-amber au sol
  └─ SpawnForest() : N Tree dans un disque (Tunables.ArenaRadius=2500), MinSpacing=180
-                    ├─ uniform disc sampling avec √u correction
+                    ├─ uniform disc sampling avec √u correction (forêt 360° autour
+                    │  du joueur — l'ancien filtre +X-only-of-beaver de l'ère
+                    │  bowling a été viré phase5f)
                     ├─ ValueNoise2D + Hash2D gate (densité > ArenaDensityThreshold)
                     ├─ keepout central + SpawnPadRadius autour du shop
-                    ├─ filtre +X-only-of-beaver (cam wide derrière reste clean)
                     ├─ raycast au sol pour foot Z (terrain contour)
-                    └─ Tree.SpawnAt(scene, pos, tint, biomeDifficulty)
+                    └─ Tree.SpawnAt(scene, pos, biomeDifficulty)
 
 Player loop (Sandbox.PlayerController + BeaverController) :
   PlayerController : WASD + souris + jump + third-person camera. On ne touche pas.
