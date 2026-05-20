@@ -1,83 +1,83 @@
-# Tree Chopping — s&box prototype
+# Tree Chopping — s&box
 
-Migration vertical-slice du proto Godot `tree-chopping` vers s&box. **Ce dossier ne touche pas au projet Godot d'origine** (`../tree-chopping`).
+Mow-the-lawn-like (style Plants vs. Zombies' Lawn) avec mécanique d'arbres qui tombent à la Valheim. Tu chop, le bois s'accumule, tu upgrades ta hache au shop sur le sommet, tu redescends, tu chop plus gros.
 
-## Statut
+Singleplayer s&box (Source 2 + C#/.NET). Pas de score, pas de runs : continuous play.
 
-Ce qui marche :
-- Castor TPS — WASD, sprint (Shift), saut (Espace), souris pour regarder
-- Map `\_/` valley = CreekBed + LeftBank + RightBank (auj sans tilt downstream)
-- Hache → clic gauche → cycle de chop (3 hits → arbre tombe avec slow tip)
-- **Cascade impact** : arbre qui tombe heurte un voisin → propage le fell (`apply_impulse(impulse, contact_offset)`)
-- **Shatter** : tronc landed receivant un gros impact (>300 u/s) → split immédiat en log pieces
-- Log → 2 hits → casse en log pieces → 4 wood chunks par piece
-- Wood chunks aimantés au castor → `WoodInventory.Add`
-- HUD : Wood, Tool, Chain x N, Sky : <state>
-- **Tool tier** (E key) : Axe ↔ Pickaxe (Pickaxe placeholder en attendant le voxel dig)
-- **Combo** : chain reset à 1.5s idle, slowmo @5, flash trauma @8
-- **Camera trauma** : shake amplitude = trauma², decay 1.4/s
-- **Weather** : CLEAR / CLOUDY / RAIN state machine, retune sun + sky tints
-- **3 biomes** : Forest → Autumn → Frost (palette tween 1.5s, swap toutes 30 trees clear)
-- Debug bodies : 1 = floater, 2 = sinker, 3 = neutral (pour tester buoyancy plus tard)
-- Vendored : `Libraries/facepunch.libsdf/` (sbox-sdf MIT, pour le voxel)
+## Loop
 
-À venir (Phase 2/3) :
-- Voxel terrain via `facepunch.libsdf` (Sdf3DWorld) — remplacer bank colliders + pickaxe dig
-- SWE 2D water sim portage GLSL → HLSL compute (`Sandbox.ComputeShader`)
-- Body buoyancy + drift via sample sur eta texture
-- Dam mécanique (pile de troncs raises bedrock)
-- AudioBank procédural (s&box sound API)
-- Map slope tilt 1% downstream
-- F3 debug overlay toggle (binding Input.config)
+1. Tu spawn sur un plateau au sommet d'une montagne. Le shop marker est sous tes pieds.
+2. Tu descends la pente. Forêt biome-biased autour : saplings (1 chop) près du shop, veterans (8 chops) au bord.
+3. Click gauche = swing. Chop multiple selon le tier (T0=1, T1=2, T2=3, T3=5 chops par swing).
+4. Tree fells, le trunk roule, paye du bois (Sapling 1, Normal 3, Veteran 8, Brittle 2, Mythic +12).
+5. R = téléport au shop. E (quand près) = upgrade axe (coûts 8 / 28 / 80 bois).
+6. Wood + tier persistent dans `progress.json` (`FileSystem.Data`).
 
-## Ouvrir le projet
+Trees tombent en physique naturelle — un trunk qui tombe peut bumper un voisin debout (Valheim soft cascade). Pas de CascadeStrike scripté.
 
-L'éditeur a déjà été enregistré (`config/addons.json` mis à jour). Au lancement de **sbox-dev.exe**, `Tree Chopping` apparaîtra dans la liste des projets.
+## Run
 
-Sinon, à l'éditeur :
-1. File → Open Project → naviguer vers `C:\dev\tree-chopping-sbox\tree_chopping.sbproj`
-2. Une fois ouvert, ouvre `Assets/scenes/main.scene`
-3. Play (F5)
-
-## Build manuel (vérification compile sans GUI)
-
-Le code C# est validé offline avec :
-
+Headless self-test (12s, exit 0/1/3 = PASS/FAIL/TIMEOUT) :
 ```powershell
-cd C:\dev\tree-chopping-sbox\Code
-dotnet build tree_chopping.csproj
+tools\selftest.ps1 -Seeds 3
 ```
 
-Sortie : `Code/bin/tree_chopping.dll`. Le csproj est gitignored et régénéré au besoin — celui fourni référence directement `bin/managed/Sandbox.*.dll` depuis l'install s&box.
+Lance le jeu visuel : ouvrir `tree_chopping.sbproj` dans `sbox-dev.exe`, Play (F5) sur `Assets/scenes/main.scene`.
+
+Compiler le C# offline (validation types, sans Steam) :
+```powershell
+dotnet build Code/tree_chopping.csproj
+```
 
 ## Architecture
 
 | Fichier | Rôle |
 |---|---|
-| `Code/Tunables.cs` | Constantes game-feel (vitesse, masse, distances). Source 2 units (≈ inches, 1 m ≈ 40 u). |
-| `Code/SceneStarter.cs` | Bootstrap component sur la scène — spawn castor + forêt + HUD + inventaire au `OnAwake`. |
-| `Code/BeaverController.cs` | Move/look/jump + chooseSwingTarget (cône + range, dot-based). |
-| `Code/Tree.cs` | États : standing → falling (slow tip torque + push) → landed log. Implémente `IChoppable`. |
-| `Code/LogPiece.cs` | Multi-hit → spawn de wood chunks. Implémente `IChoppable`. |
-| `Code/WoodChunk.cs` | Aimantation distance-based vers le castor + `WoodInventory.Add`. |
-| `Code/WoodInventory.cs` | Singleton scope-scène, expose `Wood` count. |
-| `Code/WoodHud.cs` | `Scene.Camera.Hud` immediate-mode pour afficher le compteur. |
-| `Assets/scenes/main.scene` | Sun + Skybox + Ground plane + Bootstrap GameObject. Tout le reste est spawn-au-runtime. |
+| `Code/SceneStarter.cs` | Bootstrap : singletons (GameState, WoodHud, AutoPlay, SelfTest), terrain procédural, mountain borders, beaver spawn, forêt biome-biased, shop area |
+| `Code/Tree.cs` | Multi-chop + StartFell + force-land timeout + GiveWoodOnce. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
+| `Code/BeaverController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
+| `Code/GameState.cs` | Wood + AxeTier persistence (FileSystem.Data/progress.json). ChopPower + WoodMultiplier derived from tier |
+| `Code/ShopArea.cs` | Player-near-shop detect + E to upgrade |
+| `Code/WoodHud.cs` | HUD immediate-mode (crosshair, wood balance pulse, axe tier badge, shop hint, teleport hint) |
+| `Code/AutoPlay.cs` | Autonomous gameplay driver — pose à un point d'observation (WideShotPose) ou chop-loop in-forest (Active). Pilotable via MCP bridge `set_runtime_property` |
+| `Code/SelfTest.cs` | Headless harness phases : Init → Approach → Swing → Verify(Wood>0). Wait-on-condition, pas time-based |
+| `Code/TerrainHeightmap.cs` | Procedural cone + 3-octave FBM noise terrain (Sandbox.Terrain), MaterialOverride sur `materials/ground.vmat` |
+| `Code/MapBorders.cs` | Ring de mountain segments tagged "border" (pas "ground") au-delà de la forêt |
+| `Code/ChipBurst.cs` | Chips/leaves/splinters custom-physics (no Rigidbody — pattern dans memory `sbox-particle-rigidbody-trap`) |
+| `Code/Mat.cs` | Helper `AddTintedCube` (Model.Cube ignore Tint sauf si MaterialOverride = `materials/default.vmat`) |
+| `Code/Sfx.cs` | Try/catch-wrapped Sound.Play |
+| `Code/Tunables.cs` | Toutes les constantes gameplay : axe tier ladder, tree kind weights/scales/tints, fell physics, terrain shape, chip burst, swing feel |
+| `Assets/scenes/main.scene` | Sun + Skybox + Fog + Ground (disabled at runtime) + Bootstrap (SceneStarter) + Camera |
+| `Assets/materials/ground.vmat` | Tinted grass-green vmat — bypass le `g_vColorTint` alpha=0 de `materials/default.vmat` |
 
-Pattern repris de `C:/dev/nico/moon_fps` (pas de Razor, HudPainter en immediate mode).
+## Bindings (`ProjectSettings/Input.config`)
 
-## Différences vs proto Godot
+| Touche | Action |
+|---|---|
+| WASD | Move (Sandbox.PlayerController) |
+| Souris | Look |
+| Espace | Jump |
+| Shift | Sprint |
+| Click gauche | Swing axe |
+| E ("Use") | Acheter axe upgrade (dans ShopArea) |
+| R ("Reload") | Téléport au shop |
+| B ("DebugToggle") | FPS + tree counts HUD overlay |
 
-- **Units** : Source 2 utilise des inches (1u ≈ 2.54 cm). Tous les Tunables sont en unités s&box, pas en mètres.
-- **Coords** : Z is up (vs Y in Godot).
-- **Pas de voxel** : ground = plane statique. Pioche + dig non portés.
-- **Pas d'eau** : aucun équivalent SWE/APIC. Trees tombent sur le plan, pas dans une rivière.
-- **Pas de Kenney** : `Model.Cube` partout, tinte via `ModelRenderer.Tint`. Bon enough pour un prototype, à remplacer par des `.vmdl` plus tard.
+## Workflow Claude
 
-## Étapes suivantes plausibles
+Patterns + non-negotiables dans `CLAUDE.md` (root) et `Code/CLAUDE.md` (chargé quand on touche `Code/`). Hook automation :
 
-1. Test à la main, vérifier que les arbres tombent + se cassent + chunks ramassés
-2. Tuner Tunables (probablement masse / torque off d'un facteur dans Source units)
-3. Remplacer Model.Cube par 1-2 `.vmdl` (tree.vmdl + chunk.vmdl) si on veut un look
-4. Ajouter axe-anim (swing visible sur le castor)
-5. Decider : porter l'eau (SWE → HLSL compute), ou rester sur ce slice
+- **PostToolUse hook** : `dotnet build` après chaque edit sur `Code/**/*.cs`. Échec → blocking message.
+- **Stop hook** : `tools/selftest.ps1` si `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `ShopArea.cs` modifiés. Échec → bloque le stop.
+
+Hooks dans `.claude/settings.json`, scripts `tools/hooks/`.
+
+## Source 2 / s&box gotchas
+
+- Z is up. Unités = inches (1 m ≈ 39.37 u).
+- `Model.Cube` ignore `ModelRenderer.Tint` sauf `MaterialOverride = materials/default.vmat`.
+- `Scene.GetAllComponents<Component>()` retourne 0 — query par type concret ou interface (`IChoppable`).
+- Standing tree Rigidbody **doit** être `MotionEnabled = false` (sinon player les fait tomber juste en marchant dedans).
+- `System.Environment.*` est sur le deny-list du compiler — flags via `[ConVar]` + `sbox-server.exe +name value`.
+
+Voir `Code/CLAUDE.md` pour la liste complète des patterns.
