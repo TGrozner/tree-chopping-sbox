@@ -10,10 +10,13 @@ public sealed class DayNightCycle : Component
 	[Property] public SkyBox2D Sky { get; set; }
 	[Property] public float DayLength { get; set; } = Tunables.DayLengthSeconds;
 	[Property, Range( 0f, 1f )] public float DayPhase { get; set; } = Tunables.DayPhaseStart;
-	[Property] public Color DaySunColor { get; set; } = new( 1f, 0.94f, 0.85f, 1f );
+	[Property] public Color DaySunColor { get; set; } = new( 0.96f, 0.97f, 0.95f, 1f );
 	[Property] public Color DuskSunColor { get; set; } = new( 1f, 0.55f, 0.30f, 1f );
 	[Property] public Color NightSunColor { get; set; } = new( 0.40f, 0.50f, 0.70f, 1f );
-	[Property] public Color DaySkyTint { get; set; } = new( 1f, 1f, 1f, 1f );
+	// Pastel lavender-pink push agressif pour matcher Godot ref (sky soft pink-lavender).
+	// Pre-mult R+B vs G pour vibe rose stylisé. Subtle dans la précédente iter,
+	// maintenant plus visible.
+	[Property] public Color DaySkyTint { get; set; } = new( 1.10f, 0.85f, 1.08f, 1f );
 	[Property] public Color DuskSkyTint { get; set; } = new( 0.95f, 0.65f, 0.40f, 1f );
 	[Property] public Color NightSkyTint { get; set; } = new( 0.10f, 0.12f, 0.22f, 1f );
 

@@ -6,7 +6,10 @@
   "Schema": 1,
   "IncludeSourceFiles": false,
   "Resources": null,
-  "PackageReferences": [],
+  "PackageReferences": [
+    "titanovsky.low_poly_tree",
+    "titanovsky.low_poly_rock"
+  ],
   "EditorReferences": null,
   "Mounts": null,
   "IsStandaloneOnly": false,

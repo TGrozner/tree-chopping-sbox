@@ -13,10 +13,10 @@
           "__type": "Sandbox.DirectionalLight",
           "__guid": "db174e53-38ba-4975-a0be-924d0e8ecdfd",
           "FogMode": "Enabled",
-          "FogStrength": 1,
-          "LightColor": "1,0.94,0.85,1",
+          "FogStrength": 0.45,
+          "LightColor": "1,0.86,0.62,1",
           "Shadows": true,
-          "SkyColor": "0.36,0.45,0.55,1"
+          "SkyColor": "0.42,0.50,0.60,1"
         }
       ]
     },
@@ -38,11 +38,11 @@
     {
       "__guid": "36cd0753-9d02-41b8-9bb3-6dabce1d8f03",
       "Flags": 0,
-      "Name": "CreekBed",
-      "Tags": "ground,creek",
+      "Name": "Ground",
+      "Tags": "ground",
       "Position": "0,0,0",
-      "Rotation": "0.005,0,0,0.99999",
-      "Scale": "4,80,1",
+      "Rotation": "0,0.10395,0,0.99458",
+      "Scale": "60,60,1",
       "Enabled": true,
       "Components": [
         {
@@ -51,7 +51,7 @@
           "MaterialOverride": "materials/default.vmat",
           "Model": "models/dev/plane.vmdl",
           "RenderType": "On",
-          "Tint": "0.25,0.30,0.20,1"
+          "Tint": "0.52,0.62,0.30,1"
         },
         {
           "__type": "Sandbox.BoxCollider",
@@ -59,63 +59,7 @@
           "Center": "0,0,-5",
           "IsTrigger": false,
           "Scale": "100,100,10",
-          "Static": false
-        }
-      ]
-    },
-    {
-      "__guid": "4a1c2d3e-4f50-6172-8394-a5b6c7d8e9fa",
-      "Flags": 0,
-      "Name": "LeftBank",
-      "Tags": "ground,bank",
-      "Position": "-700,0,100",
-      "Rotation": "0.005,0,0,0.99999",
-      "Scale": "20,160,4",
-      "Enabled": true,
-      "Components": [
-        {
-          "__type": "Sandbox.ModelRenderer",
-          "__guid": "5b2d3e4f-5061-7283-94a5-b6c7d8e9fa0b",
-          "MaterialOverride": "materials/default.vmat",
-          "Model": "models/dev/box.vmdl",
-          "RenderType": "On",
-          "Tint": "0.35,0.49,0.27,1"
-        },
-        {
-          "__type": "Sandbox.BoxCollider",
-          "__guid": "6c3e4f50-6172-8394-a5b6-c7d8e9fa0b1c",
-          "Center": "0,0,0",
-          "IsTrigger": false,
-          "Scale": "50,50,50",
-          "Static": false
-        }
-      ]
-    },
-    {
-      "__guid": "7d4f5061-7283-94a5-b6c7-d8e9fa0b1c2d",
-      "Flags": 0,
-      "Name": "RightBank",
-      "Tags": "ground,bank",
-      "Position": "700,0,100",
-      "Rotation": "0.005,0,0,0.99999",
-      "Scale": "20,160,4",
-      "Enabled": true,
-      "Components": [
-        {
-          "__type": "Sandbox.ModelRenderer",
-          "__guid": "8e506172-8394-a5b6-c7d8-e9fa0b1c2d3e",
-          "MaterialOverride": "materials/default.vmat",
-          "Model": "models/dev/box.vmdl",
-          "RenderType": "On",
-          "Tint": "0.35,0.49,0.27,1"
-        },
-        {
-          "__type": "Sandbox.BoxCollider",
-          "__guid": "9f617283-94a5-b6c7-d8e9-fa0b1c2d3e4f",
-          "Center": "0,0,0",
-          "IsTrigger": false,
-          "Scale": "50,50,50",
-          "Static": false
+          "Static": true
         }
       ]
     },
@@ -128,11 +72,10 @@
         {
           "__type": "TreeChopping.SceneStarter",
           "__guid": "8e9c4b51-2d50-4b6c-af7e-30258d5c6e70",
-          "TreeCount": 30,
-          "ForestRadius": 600,
-          "MinSpacing": 140,
+          "TreeCount": 1000,
+          "MinSpacing": 48,
           "Seed": 51804,
-          "BeaverSpawn": "-300,0,260"
+          "BeaverSpawn": "0,0,60"
         }
       ]
     },
@@ -140,14 +83,14 @@
       "__guid": "5a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
       "Flags": 0,
       "Name": "Camera",
-      "Position": "-200,0,140",
+      "Position": "0,0,140",
       "Rotation": "0,0.1045285,0,0.9945219",
       "Enabled": true,
       "Components": [
         {
           "__type": "Sandbox.CameraComponent",
           "__guid": "6b2c3d4e-5f60-7182-93a4-b5c6d7e8f9a0",
-          "BackgroundColor": "0.40,0.55,0.65,1",
+          "BackgroundColor": "0.45,0.55,0.68,1",
           "ClearFlags": "All",
           "FieldOfView": 70,
           "IsMainCamera": true,
@@ -165,13 +108,29 @@
           "__type": "Sandbox.Tonemapping",
           "__guid": "7c3d4e5f-6071-8293-a4b5-c6d7e8f9a0b1",
           "__version": 1,
-          "ExposureBias": 2,
+          "ExposureBias": 0,
           "ExposureCompensation": 0,
           "ExposureMethod": "RGB",
-          "MaximumExposure": 2,
-          "MinimumExposure": 1,
-          "Mode": "Legacy",
+          "MaximumExposure": 1.2,
+          "MinimumExposure": 0.6,
+          "Mode": "HableFilmic",
           "Rate": 1
+        },
+        {
+          "__type": "Sandbox.Bloom",
+          "__guid": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+          "BloomColor": "1,0.95,0.85,1",
+          "Strength": 0.32,
+          "Threshold": 0.70,
+          "ThresholdSoftness": 0.45
+        },
+        {
+          "__type": "Sandbox.ColorGrading",
+          "__guid": "b1c2d3e4-f5a6-7890-1234-567890abcdef",
+          "Enabled": true,
+          "Saturation": 1.45,
+          "Contrast": 1.15,
+          "Brightness": 0.95
         }
       ]
     }
@@ -189,7 +148,7 @@
     }
   },
   "Title": "main",
-  "Description": "Tree chopping prototype starter scene.",
+  "Description": "Bowling-with-trees: one swing, watch the cascade, score = trees felled.",
   "ResourceVersion": 1,
   "__references": [],
   "__version": 1

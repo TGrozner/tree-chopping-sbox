@@ -14,7 +14,9 @@ public static class AudioBank
 	// Resource paths the eventual .sound assets must live under.  Keeping
 	// them as const-string is intentional: we log the set once at startup so
 	// the user has a checklist of what still needs to be authored.
-	private const string SwingSound = "sounds/swing.sound";
+	// SwingSound alias vers chop_wood (pas de fichier swing.sound dédié), avec
+	// pitch shifté très haut pour distinguer le "whoosh" du swing de l'impact.
+	private const string SwingSound = "sounds/chop_wood.sound";
 	private const string ChopWoodSound = "sounds/chop_wood.sound";
 	private const string ChopStoneSound = "sounds/chop_stone.sound";
 	private const string LogBreakSound = "sounds/log_break.sound";
@@ -30,24 +32,28 @@ public static class AudioBank
 	// here are LINEAR (0..1+); Godot uses dB, so we convert mentally:
 	// 0 dB ≈ 1.0, -2 dB ≈ 0.79, -4 dB ≈ 0.63, +1 dB ≈ 1.12, +4 dB ≈ 1.58.
 	public static void PlaySwing( Scene scene, Vector3 position )
-		=> PlayInternal( SwingSound, scene, position, volume: 0.85f, pitchMin: 0.92f, pitchMax: 1.10f );
+		=> PlayInternal( SwingSound, scene, position, volume: 0.55f, pitchMin: 1.45f, pitchMax: 1.65f );
 
+	// Pitch widened 0.88-1.10 → 0.78-1.30 pour rapid-fire chops sonner moins
+	// répétitifs. Variety perçue ↑ sans changer le son source.
 	public static void PlayChopWood( Scene scene, Vector3 position )
-		=> PlayInternal( ChopWoodSound, scene, position, volume: 0.85f, pitchMin: 0.88f, pitchMax: 1.10f );
+		=> PlayInternal( ChopWoodSound, scene, position, volume: 0.85f, pitchMin: 0.78f, pitchMax: 1.30f );
 
 	public static void PlayChopStone( Scene scene, Vector3 position )
-		=> PlayInternal( ChopStoneSound, scene, position, volume: 0.90f, pitchMin: 0.85f, pitchMax: 1.08f );
+		=> PlayInternal( ChopStoneSound, scene, position, volume: 0.90f, pitchMin: 0.78f, pitchMax: 1.25f );
 
-	// Loud thunk on tree / log shatter.  Higher base volume = the Godot
-	// proto layered crack(+4 dB) + rumble(-4 dB) for the same beat.
+	// Log break — pitch range plus large pour cascade variety (chaque tronc
+	// landed sonne distinct). Volume trim 1.20→1.00 — avec cascade de 100+
+	// trees, 1.20 saturait l'audio mix.
 	public static void PlayLogBreak( Scene scene, Vector3 position )
-		=> PlayInternal( LogBreakSound, scene, position, volume: 1.20f, pitchMin: 0.85f, pitchMax: 1.05f );
+		=> PlayInternal( LogBreakSound, scene, position, volume: 1.00f, pitchMin: 0.72f, pitchMax: 1.18f );
 
+	// Pickup pitch widened pour rapid chunk attract — chaque pickup sonne distinct.
 	public static void PlayPickupWood( Scene scene, Vector3 position )
-		=> PlayInternal( PickupWoodSound, scene, position, volume: 0.80f, pitchMin: 1.05f, pitchMax: 1.25f );
+		=> PlayInternal( PickupWoodSound, scene, position, volume: 0.75f, pitchMin: 0.92f, pitchMax: 1.45f );
 
 	public static void PlayPickupStone( Scene scene, Vector3 position )
-		=> PlayInternal( PickupStoneSound, scene, position, volume: 0.80f, pitchMin: 1.00f, pitchMax: 1.18f );
+		=> PlayInternal( PickupStoneSound, scene, position, volume: 0.80f, pitchMin: 0.88f, pitchMax: 1.35f );
 
 	private static void PlayInternal( string path, Scene scene, Vector3 position, float volume, float pitchMin, float pitchMax )
 	{

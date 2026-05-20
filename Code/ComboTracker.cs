@@ -35,6 +35,16 @@ public sealed class ComboTracker : Component
 		TraumaAmount = MathF.Min( 1f, TraumaAmount + amount );
 	}
 
+	public void TriggerSlowmo() { SlowmoElapsed = 0f; }
+
+	// Hit-stop : courte freeze de TimeScale au moment d'impact (50-60ms). Donne
+	// du POIDS visuel au chop sans déranger la cascade. Géré séparément du
+	// slowmo de milestone car cadence et durée différentes.
+	[Property, ReadOnly] public TimeSince HitStopTime { get; private set; } = 100f;
+	public const float HitStopDuration = 0.055f;
+	public const float HitStopScale = 0.08f;
+	public void TriggerHitStop() { HitStopTime = 0f; }
+
 	protected override void OnUpdate()
 	{
 		TimeLeft = MathF.Max( 0f, Tunables.ComboIdleTimeout - _timeSinceLastBeat );
@@ -45,8 +55,13 @@ public sealed class ComboTracker : Component
 
 		TraumaAmount = MathF.Max( 0f, TraumaAmount - Time.Delta * Tunables.ComboTraumaDecay );
 
-		// Slowmo ramp + recover
-		if ( SlowmoElapsed >= 0f && SlowmoElapsed < Tunables.ComboSlowmoDuration )
+		// Hit-stop wins over normal flow — short freeze on impact for weight.
+		if ( (float)HitStopTime < HitStopDuration )
+		{
+			Scene.TimeScale = HitStopScale;
+		}
+		// Slowmo ramp + recover (milestone-driven).
+		else if ( SlowmoElapsed >= 0f && SlowmoElapsed < Tunables.ComboSlowmoDuration )
 		{
 			SlowmoElapsed += Time.Delta;
 			float t = SlowmoElapsed / Tunables.ComboSlowmoDuration;

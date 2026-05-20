@@ -23,6 +23,9 @@ public sealed class WoodChunk : Component
 			_attractToBeaver = true;
 			var rb = Components.Get<Rigidbody>();
 			if ( rb.IsValid() ) rb.MotionEnabled = false;
+			// Attract spark — bright golden burst quand chunk entre dans le
+			// pickup radius. Donne sensation "récolté" même avant le collect.
+			ChopParticles.Burst( Scene, WorldPosition, Vector3.Up, new Color( 1.0f, 0.85f, 0.40f, 1f ), 4, 140f );
 		}
 
 		if ( _attractToBeaver )

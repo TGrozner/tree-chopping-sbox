@@ -76,7 +76,7 @@ public sealed class BiomeManager : Component
 		ApplyBankTint( bank );
 	}
 
-	private void AdvanceBiome()
+	public void AdvanceBiome()
 	{
 		_previous = Current;
 		Current = Current switch
@@ -93,6 +93,20 @@ public sealed class BiomeManager : Component
 		_toTrunk = PaletteFor( Current ).Trunk;
 		TweenProgress = 0f;
 		Log.Info( $"[Biome] -> {Current}" );
+	}
+
+	public void ForceBiome( BiomeKind kind )
+	{
+		if ( kind == Current ) return;
+		_previous = Current;
+		Current = kind;
+		TreesCleared = 0;
+		_fromBank = PaletteFor( _previous ).Bank;
+		_toBank = PaletteFor( Current ).Bank;
+		_fromTrunk = PaletteFor( _previous ).Trunk;
+		_toTrunk = PaletteFor( Current ).Trunk;
+		TweenProgress = 0f;
+		Log.Info( $"[Biome] forced -> {Current}" );
 	}
 
 	private void ApplyImmediate( BiomeKind kind )

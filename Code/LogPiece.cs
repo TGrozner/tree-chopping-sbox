@@ -39,6 +39,10 @@ public sealed class LogPiece : Component, IChoppable
 	{
 		_broken = true;
 		AudioBank.PlayLogBreak( Scene, WorldPosition );
+		// Splinter burst visuel pour marquer le shatter — distinct du chunk
+		// spawn (qui est gameplay/pickup), c'est purement particle effect.
+		ChopParticles.SplinterBurst( Scene, WorldPosition, direction.WithZ( 0.4f ).Normal, TrunkTint, 10, 280f );
+		ComboTracker.Get( Scene )?.AddTrauma( 0.10f );
 		for ( int i = 0; i < Tunables.ChunksPerLogPiece; i++ )
 		{
 			SpawnChunk( direction );
@@ -51,7 +55,12 @@ public sealed class LogPiece : Component, IChoppable
 		var go = Scene.CreateObject();
 		go.Name = "WoodChunk";
 		go.WorldPosition = WorldPosition + Vector3.Random * 20f + Vector3.Up * 10f;
-		go.WorldScale = new Vector3( Tunables.ChunkRadius * 2f, Tunables.ChunkRadius * 2f, Tunables.ChunkHeight ) / Tunables.CubeBase;
+		// Size jitter ±35% pour chaque chunk — flat slab uniform devient une
+		// scatter de morceaux de tailles différentes, lit comme "bois éclaté".
+		float chunkJitter = Game.Random.Float( 0.65f, 1.35f );
+		float zJitter = Game.Random.Float( 0.80f, 1.45f );
+		go.WorldScale = new Vector3( Tunables.ChunkRadius * 2f * chunkJitter, Tunables.ChunkRadius * 2f * chunkJitter, Tunables.ChunkHeight * zJitter ) / Tunables.CubeBase;
+		go.WorldRotation = Rotation.Random;
 		go.Tags.Add( "wood_chunk" );
 
 		// Chunks stay as Model.Cube — they're small enough that the Kenney log

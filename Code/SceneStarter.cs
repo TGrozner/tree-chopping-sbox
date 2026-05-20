@@ -2,47 +2,63 @@ namespace TreeChopping;
 
 public sealed class SceneStarter : Component
 {
-	[Property] public int TreeCount { get; set; } = 8;
-	[Property] public int RockCount { get; set; } = 12;
-	[Property] public float ForestRadius { get; set; } = 600f;
-	[Property] public float MinSpacing { get; set; } = 140f;
+	[Property] public int TreeCount { get; set; } = 1000;
+	// MinSpacing 48 (était 35) : avec scaleJitter adaptive 0.7×–1.4× donne
+	// un spacing réel 33.6–67.2u. Tree collider half-width = 16u → centers à
+	// 32u au minimum, donc 33.6u laisse 1.6u de marge. Avant 35×0.7=24.5
+	// → overlap visible des colliders kinematic.
+	[Property] public float MinSpacing { get; set; } = 48f;
 	[Property] public int Seed { get; set; } = 0xCA5C;
-	[Property] public Vector3 BeaverSpawn { get; set; } = new( 0f, 0f, 48f );
+	// Spawn uphill (-X = uphill side of the +Y-axis 12° slope) so the player
+	// looks downhill +X with the forest descending in front of them — bowling
+	// framing. Z = ground at this X (+320u from slope) + small drop so rigidbody
+	// settles on contact. ArenaCenterKeepout used to gate trees around origin ;
+	// la pad keepout est désormais autour de BeaverSpawn (SpawnPadRadius).
+	[Property] public Vector3 BeaverSpawn { get; set; } = new( -1500f, 0f, 380f );
+	// Rayon autour de BeaverSpawn où aucun arbre ne spawn — laisse le joueur
+	// faire 1-2 pas avant le 1er tronc, et garde la vue dégagée à l'avant.
+	[Property] public float SpawnPadRadius { get; set; } = 180f;
 
-	// Drop a .sdfvol asset here in the editor to wire up Pickaxe voxel digging.
-	// When null, Phase 2e wiring stays dormant and the existing rock/chop loop is untouched.
-	[Property] public Sdf3DVolume RockVolume { get; set; }
-	[Property] public Vector3 SdfWorldSize { get; set; } = new( 1200f, 6400f, 300f );
-	[Property] public Vector3 SdfWorldOrigin { get; set; } = new( -600f, -3200f, -50f );
+	// If you want to ship a daily-challenge arena: leave Seed at 51804 (the
+	// scene-default sentinel) and SceneStarter.OnStart will substitute today's
+	// date hash so every player gets the same arena on the same calendar day.
+	// Override Seed to any other value to pin a specific layout for testing.
+	public const int SeedDailySentinel = 51804;
 
 	protected override void OnStart()
 	{
 		try
 		{
+			if ( Seed == SeedDailySentinel )
+			{
+				Seed = DailySeed();
+				Log.Info( $"[SceneStarter] Daily seed activated: {Seed} for {DateTime.UtcNow:yyyy-MM-dd}" );
+			}
 			EnsureInventory();
-			EnsureStoneInventory();
 			EnsureCombo();
 			EnsureWeather();
 			EnsureBiomes();
 			EnsureDayNight();
-			EnsureHints();
 			EnsureCompass();
+			EnsureAmbientLeaves();
 			EnsurePauseMenu();
+			EnsureTitleScreen();
+			EnsureRunManager();
+			EnsureAimIndicator();
 			EnsureSelfTest();
+			EnsureTestSuite();
+			EnsureAutoSpin();
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			EnsureHud();
 			SpawnForest();
-			SpawnRocks();
-			int borderBoulders = SpawnBorderBoulders();
 			int grassTufts = SpawnGrassTufts();
-			EnsureSdfWorld();
+			int rocks = SpawnRocks();
 
 			var beaverMr = beaver?.Components.Get<ModelRenderer>();
 			var anyTree = Scene.GetAllComponents<Tree>().FirstOrDefault();
 			var treeMr = anyTree?.Components.Get<ModelRenderer>();
-			var anyRock = Scene.GetAllComponents<Rock>().FirstOrDefault();
-			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition} bounds={beaverMr?.Bounds}, sample tree pos={anyTree?.WorldPosition} bounds={treeMr?.Bounds}, trees={Scene.GetAllComponents<Tree>().Count()}, rocks={Scene.GetAllComponents<Rock>().Count()}, borderBoulders={borderBoulders}, grassTufts={grassTufts}, sample rock pos={anyRock?.WorldPosition}, cam reused={camera.IsValid()}" );
+			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition} bounds={beaverMr?.Bounds}, sample tree pos={anyTree?.WorldPosition} bounds={treeMr?.Bounds}, trees={Scene.GetAllComponents<Tree>().Count()}, grassTufts={grassTufts}, rocks={rocks}, cam reused={camera.IsValid()}" );
 		}
 		catch ( System.Exception ex )
 		{
@@ -57,15 +73,6 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "WoodInventory";
 		go.AddComponent<WoodInventory>();
-	}
-
-	private void EnsureStoneInventory()
-	{
-		var existing = Scene.GetAllComponents<StoneInventory>().FirstOrDefault();
-		if ( existing.IsValid() ) return;
-		var go = Scene.CreateObject();
-		go.Name = "StoneInventory";
-		go.AddComponent<StoneInventory>();
 	}
 
 	private void EnsureCombo()
@@ -104,15 +111,6 @@ public sealed class SceneStarter : Component
 		go.AddComponent<DayNightCycle>();
 	}
 
-	private void EnsureHints()
-	{
-		var existing = Scene.GetAllComponents<HintManager>().FirstOrDefault();
-		if ( existing.IsValid() ) return;
-		var go = Scene.CreateObject();
-		go.Name = "HintManager";
-		go.AddComponent<HintManager>();
-	}
-
 	private void EnsureHud()
 	{
 		var existing = Scene.GetAllComponents<WoodHud>().FirstOrDefault();
@@ -131,6 +129,65 @@ public sealed class SceneStarter : Component
 		go.AddComponent<HudCompass>();
 	}
 
+	private void EnsureAmbientLeaves()
+	{
+		var existing = Scene.GetAllComponents<AmbientLeaves>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "AmbientLeaves";
+		go.AddComponent<AmbientLeaves>();
+	}
+
+	private void EnsureRunManager()
+	{
+		var existing = Scene.GetAllComponents<RunManager>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "RunManager";
+		go.AddComponent<RunManager>();
+	}
+
+	// Restart hook for RunManager — re-runs the procedural spawn with a fresh
+	// seed so each run reads as a new arena layout. Beaver / managers /
+	// ground stay; RunManager is responsible for destroying the previous
+	// run's trees + log pieces + chunks + stumps before calling us.
+	public void RegenerateForest()
+	{
+		Seed = unchecked( Seed * 1664525 + 1013904223 );
+		SpawnForest();
+		Log.Info( $"[SceneStarter] Forest regenerated with seed={Seed}, trees={Scene.GetAllComponents<Tree>().Count()}" );
+	}
+
+	public static int DailySeed()
+	{
+		// UtcNow.Date hashed to keep the seed stable for everyone in the same
+		// calendar day. Fold to a positive int.
+		var d = DateTime.UtcNow.Date;
+		int h = d.Year * 10000 + d.Month * 100 + d.Day;
+		// Mix a constant prime so the seed doesn't trivially shift by 1 each day.
+		return (int)(unchecked( (uint)h * 2654435761u ) & 0x7FFFFFFFu);
+	}
+
+	private void EnsureAimIndicator()
+	{
+		var existing = Scene.GetAllComponents<AimIndicator>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "AimIndicator";
+		go.AddComponent<AimIndicator>();
+	}
+
+	private void EnsureAutoSpin()
+	{
+		if ( !AutoSpin.IsActiveRequest() ) return;
+		var existing = Scene.GetAllComponents<AutoSpin>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "AutoSpin";
+		go.AddComponent<AutoSpin>();
+		Log.Info( "[AutoSpin] spawned by SceneStarter" );
+	}
+
 	private void EnsurePauseMenu()
 	{
 		var existing = Scene.GetAllComponents<PauseMenu>().FirstOrDefault();
@@ -138,6 +195,26 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "PauseMenu";
 		go.AddComponent<PauseMenu>();
+	}
+
+	private void EnsureTitleScreen()
+	{
+		var existing = Scene.GetAllComponents<TitleScreen>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "TitleScreen";
+		go.AddComponent<TitleScreen>();
+	}
+
+	private void EnsureTestSuite()
+	{
+		if ( !TestSuite.IsActiveRequest() ) return;
+		var existing = Scene.GetAllComponents<TestSuite>().FirstOrDefault();
+		if ( existing.IsValid() ) return;
+		var go = Scene.CreateObject();
+		go.Name = "TestSuite";
+		go.AddComponent<TestSuite>();
+		Log.Info( "[TC_TEST] TestSuite spawned by SceneStarter" );
 	}
 
 	private void EnsureSelfTest()
@@ -174,6 +251,14 @@ public sealed class SceneStarter : Component
 		rb.MassOverride = 70f;
 		rb.LinearDamping = 1.2f;
 		rb.AngularDamping = 6f;
+		// Lock pitch + roll so a falling trunk (mass 240) can't tip the beaver
+		// onto its side. Yaw stays free — BeaverController drives WorldRotation
+		// via slerp from camera yaw, and a Yaw lock would prevent that write.
+		// Without these locks the player often gets stuck after the first chop:
+		// the falling tree's contact bounces them sideways, their 32×32×72
+		// collider ends up horizontal, and the now-wider footprint wedges
+		// between the static stump and the landed log.
+		rb.Locking = new PhysicsLock { Pitch = true, Roll = true };
 
 		var beaver = go.AddComponent<BeaverController>();
 
@@ -186,7 +271,7 @@ public sealed class SceneStarter : Component
 			cam.IsMainCamera = true;
 			cam.ZNear = 4f;
 			cam.ZFar = 8000f;
-			cam.FieldOfView = 70f;
+			cam.FieldOfView = 75f;
 			cam.BackgroundColor = new Color( 0.40f, 0.55f, 0.65f, 1f );
 		}
 		beaver.Camera = cam;
@@ -197,149 +282,79 @@ public sealed class SceneStarter : Component
 
 	private void SpawnForest()
 	{
-		// 3 bands matching the Godot proto distribution. Banks span |X| ∈ [200, 1200]
-		// in s&box units; trees plant on top of bank (Z = Tunables.BankTopZ).
-		// Riverside (close to creek edge) — ~30% of trees.
-		// Mid — ~40%.
-		// Outer (toward map edge) — ~30%.
+		// Chaotic forest: uniform disk sample + 2D value-noise density gate.
+		// Where noise > threshold → cluster (denser spacing); where noise <
+		// threshold → clearing (rejection). Strategy: the player picks the
+		// fattest cluster to maximize cascade chain.
 		var rng = new Random( Seed );
 		var placed = new List<Vector3>();
-
-		int riverside = MathX.CeilToInt( TreeCount * 0.30f );
-		int mid = MathX.CeilToInt( TreeCount * 0.40f );
-		int outer = TreeCount - riverside - mid;
-
-		PlaceBand( rng, placed, riverside, Tunables.BankRiversideMinX, Tunables.BankRiversideMaxX );
-		PlaceBand( rng, placed, mid, Tunables.BankMidMinX, Tunables.BankMidMaxX );
-		PlaceBand( rng, placed, outer, Tunables.BankOuterMinX, Tunables.BankOuterMaxX );
-	}
-
-	private void PlaceBand( Random rng, List<Vector3> placed, int count, float minAbsX, float maxAbsX )
-	{
 		int attempts = 0;
 		int spawned = 0;
-		while ( spawned < count && attempts < count * 40 )
+		int maxAttempts = TreeCount * 80;
+
+		// Spawn pad keepout autour du beaver — pas d'arbre planté sur sa tête.
+		float padXY_X = BeaverSpawn.x;
+		float padXY_Y = BeaverSpawn.y;
+		float padRSq = SpawnPadRadius * SpawnPadRadius;
+
+		while ( spawned < TreeCount && attempts < maxAttempts )
 		{
 			attempts++;
-			float absX = MathX.Lerp( minAbsX, maxAbsX, (float)rng.NextDouble() );
-			float sideSign = rng.NextDouble() < 0.5 ? -1f : 1f;
-			float x = absX * sideSign;
-			float y = MathX.Lerp( Tunables.MapZMinDownstream, Tunables.MapZMaxUpstream, (float)rng.NextDouble() );
-			var pos = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
-			if ( placed.Any( p => p.Distance( pos ) < MinSpacing ) ) continue;
+			// √u for uniform disc sampling — without it density biases toward center.
+			float r = MathF.Sqrt( (float)rng.NextDouble() ) * Tunables.ArenaRadius;
+			if ( r < Tunables.ArenaCenterKeepout ) continue;
+			float angle = (float)(rng.NextDouble() * MathF.Tau);
+			float x = MathF.Cos( angle ) * r;
+			float y = MathF.Sin( angle ) * r;
+
+			// Spawn pad : pas d'arbre dans SpawnPadRadius autour du beaver.
+			float dxPad = x - padXY_X;
+			float dyPad = y - padXY_Y;
+			if ( dxPad * dxPad + dyPad * dyPad < padRSq ) continue;
+
+			float density = ValueNoise2D( x / Tunables.ArenaNoiseScale, y / Tunables.ArenaNoiseScale, Seed );
+			if ( density < Tunables.ArenaDensityThreshold ) continue;
+
+			// Adaptive spacing: dense clusters can pack at 0.7× base, clearings
+			// fall back to 1.4× base (forces the placement to spread out where
+			// it does spawn). MinSpacing default 140u.
+			float spacing = MathX.Lerp( MinSpacing * 1.4f, MinSpacing * 0.7f, density );
+			// Slope: trees follow the +X downhill plane (beaver looks +X by
+			// default, so the slope drops in front of them and is symmetric
+			// left↔right). Silhouettes step downhill in the player's view.
+			var pos = new Vector3( x, y, Tunables.GroundZ - x * Tunables.ArenaSlope );
+			if ( placed.Any( p => p.Distance( pos ) < spacing ) ) continue;
+
 			placed.Add( pos );
 			SpawnTree( pos );
 			spawned++;
 		}
 	}
 
-	private void EnsureSdfWorld()
+	// Deterministic 2D value noise (smoothstep-blended bilinear of hash-per-corner).
+	// Output is in [0, 1]; sample at (x/scale, y/scale) where scale controls cluster
+	// size. Same seed → same forest, which makes the layout reproducible across runs.
+	private static float ValueNoise2D( float x, float y, int seed )
 	{
-		if ( RockVolume == null )
-		{
-			Log.Info( "[SceneStarter] SDF wiring skipped — drop a .sdfvol asset on SceneStarter.RockVolume to enable Pickaxe voxel dig." );
-			return;
-		}
-
-		try
-		{
-			var go = Scene.CreateObject();
-			go.Name = "SdfWorld";
-			go.WorldPosition = SdfWorldOrigin;
-			var world = go.AddComponent<Sdf3DWorld>();
-			world.IsFinite = true;
-			world.Size = SdfWorldSize;
-			// Solid fill spanning the world's local bounds — Pickaxe carves into it.
-			_ = world.AddAsync( new BoxSdf3D( Vector3.Zero, SdfWorldSize ), RockVolume );
-			Log.Info( $"[SceneStarter] Sdf3DWorld ready: origin={SdfWorldOrigin} size={SdfWorldSize}, volume={RockVolume.ResourcePath}" );
-		}
-		catch ( System.Exception ex )
-		{
-			Log.Warning( $"[SceneStarter] SDF init failed: {ex.Message}" );
-		}
+		int xi = (int)MathF.Floor( x );
+		int yi = (int)MathF.Floor( y );
+		float xf = x - xi;
+		float yf = y - yi;
+		float u = xf * xf * (3f - 2f * xf);
+		float v = yf * yf * (3f - 2f * yf);
+		float a = Hash2D( xi, yi, seed );
+		float b = Hash2D( xi + 1, yi, seed );
+		float c = Hash2D( xi, yi + 1, seed );
+		float d = Hash2D( xi + 1, yi + 1, seed );
+		return MathX.Lerp( MathX.Lerp( a, b, u ), MathX.Lerp( c, d, u ), v );
 	}
 
-	private void SpawnRocks()
+	private static float Hash2D( int x, int y, int seed )
 	{
-		// Rocks share the riverside band with trees but use their own placement list
-		// so they can sit between trees. A tighter min-spacing keeps them packed.
-		var rng = new Random( Seed ^ 0x5101D );
-		var placed = new List<Vector3>();
-		int attempts = 0;
-		int spawned = 0;
-		float spacing = Tunables.RockRadius * 2.5f;
-		while ( spawned < RockCount && attempts < RockCount * 50 )
-		{
-			attempts++;
-			float absX = MathX.Lerp( Tunables.BankRiversideMinX, Tunables.BankRiversideMaxX, (float)rng.NextDouble() );
-			float sideSign = rng.NextDouble() < 0.5 ? -1f : 1f;
-			float x = absX * sideSign;
-			float y = MathX.Lerp( Tunables.MapZMinDownstream, Tunables.MapZMaxUpstream, (float)rng.NextDouble() );
-			var foot = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
-			if ( placed.Any( p => p.Distance( foot ) < spacing ) ) continue;
-			placed.Add( foot );
-			SpawnRock( foot );
-			spawned++;
-		}
-	}
-
-	private int SpawnBorderBoulders()
-	{
-		// Visual fence at the upstream/downstream map ends. Static rigidbodies
-		// (no Rock component) so the pickaxe ignores them — these read as
-		// terrain, not loot. Spread X across the full playable width so the
-		// row reads continuous from a distance, with small Y/X jitter to
-		// avoid a perfect grid.
-		const int Count = 30;
-		const float MinSize = 80f;
-		const float MaxSize = 140f;
-		const float YJitter = 90f; // staggers the line so silhouettes overlap
-		const float EndInset = 60f; // sit just inside the map limits, not exactly on them
-		const int Seed = 0xB0DEF;
-
-		var rng = new Random( Seed );
-		int spawned = 0;
-		int perEnd = Count / 2;
-
-		for ( int end = 0; end < 2; end++ )
-		{
-			// end 0 = downstream (-Y), end 1 = upstream (+Y).
-			float baseY = end == 0
-				? Tunables.MapZMinDownstream + EndInset
-				: Tunables.MapZMaxUpstream - EndInset;
-
-			int rowCount = (end == 0) ? perEnd : (Count - perEnd);
-
-			for ( int i = 0; i < rowCount; i++ )
-			{
-				// Evenly distribute X across the full bank width, side-to-side.
-				float t = (i + 0.5f) / rowCount;
-				float x = MathX.Lerp( -Tunables.BankOuterMaxX, Tunables.BankOuterMaxX, t );
-				// Small jitter so the row doesn't look surveyed.
-				x += MathX.Lerp( -40f, 40f, (float)rng.NextDouble() );
-				float y = baseY + MathX.Lerp( -YJitter, YJitter, (float)rng.NextDouble() );
-
-				float sx = MathX.Lerp( MinSize, MaxSize, (float)rng.NextDouble() );
-				float sy = MathX.Lerp( MinSize, MaxSize, (float)rng.NextDouble() );
-				float sz = MathX.Lerp( MinSize, MaxSize, (float)rng.NextDouble() );
-
-				// Foot sits on the sloped bank surface; lift by half-height so
-				// the box rests on top rather than half-sunk.
-				var foot = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
-				var pos = foot + Vector3.Up * (sz * 0.5f);
-
-				// Random yaw + small tilt → varied silhouettes without
-				// collider weirdness from extreme orientations.
-				var rot = Rotation.FromYaw( (float)(rng.NextDouble() * 360.0) )
-					* Rotation.FromPitch( MathX.Lerp( -15f, 15f, (float)rng.NextDouble() ) )
-					* Rotation.FromRoll( MathX.Lerp( -15f, 15f, (float)rng.NextDouble() ) );
-
-				SpawnBorderBoulder( pos, rot, new Vector3( sx, sy, sz ) );
-				spawned++;
-			}
-		}
-
-		return spawned;
+		uint h = (uint)(x * 374761393 ^ y * 668265263 ^ seed * 1274126177);
+		h = (h ^ (h >> 13)) * 1274126177u;
+		h ^= h >> 16;
+		return (h & 0xFFFFFF) / (float)0x1000000;
 	}
 
 	private int SpawnGrassTufts()
@@ -365,14 +380,13 @@ public sealed class SceneStarter : Component
 
 		for ( int i = 0; i < Count; i++ )
 		{
-			// Sample on the same |X|∈[BankRiversideMinX, BankOuterMaxX] band
-			// used by trees/rocks, mirrored across the creek; Y across the
-			// full upstream/downstream span. Z follows the slope plane so
-			// tufts sit on the bank surface, not floating.
-			float absX = MathX.Lerp( Tunables.BankRiversideMinX, Tunables.BankOuterMaxX, (float)rng.NextDouble() );
-			float sideSign = rng.NextDouble() < 0.5 ? -1f : 1f;
-			float x = absX * sideSign;
-			float y = MathX.Lerp( Tunables.MapZMinDownstream, Tunables.MapZMaxUpstream, (float)rng.NextDouble() );
+			// Uniform disc sample inside the arena. √u correction so density
+			// isn't biased toward the center, * 0.97 to keep tufts inside the
+			// playable boundary instead of right on the edge.
+			float r = MathF.Sqrt( (float)rng.NextDouble() ) * Tunables.ArenaRadius * 0.97f;
+			float angle = (float)(rng.NextDouble() * MathF.Tau);
+			float x = MathF.Cos( angle ) * r;
+			float y = MathF.Sin( angle ) * r;
 
 			float w = MathX.Lerp( MinWidth, MaxWidth, (float)rng.NextDouble() );
 			float h = MathX.Lerp( MinHeight, MaxHeight, (float)rng.NextDouble() );
@@ -381,8 +395,8 @@ public sealed class SceneStarter : Component
 			float sy = w * jitter;
 			float sz = h * jitter;
 
-			// Lift by half-height so the cube sits ON the slope, not buried.
-			var foot = new Vector3( x, y, Tunables.BankTopZ + y * Tunables.SlopeRatio );
+			// Lift by half-height so the cube sits ON the ground, not buried.
+			var foot = new Vector3( x, y, Tunables.GroundZ );
 			var pos = foot + Vector3.Up * (sz * 0.5f);
 
 			float yaw = (float)(rng.NextDouble() * 360.0);
@@ -410,10 +424,7 @@ public sealed class SceneStarter : Component
 		go.WorldRotation = rotation;
 		go.Tags.Add( "grass_tuft" );
 
-		// Variant chosen from a stable hash so the scatter looks varied but
-		// hotload-stable. Kenney grass/bush GLBs are ~0.5-1m scale; uniform
-		// scale plus the per-instance size jitter from caller reads naturally.
-		go.WorldScale = Vector3.One * MathX.Lerp( 0.7f, 1.3f, size.x / 12f );
+		go.WorldScale = size / Tunables.CubeBase;
 
 		var model = go.AddComponent<ModelRenderer>();
 		model.Model = Models.GrassVariant( Math.Abs( position.GetHashCode() ) );
@@ -422,70 +433,61 @@ public sealed class SceneStarter : Component
 		// Intentionally no collider / no rigidbody — purely decorative.
 	}
 
-	private void SpawnBorderBoulder( Vector3 position, Rotation rotation, Vector3 size )
+	// Scatter low_poly_rock.vmdl props across the arena floor for visual variety.
+	// Same cosmetic strategy as SpawnGrassTufts — no collider, no physics, just
+	// drawn meshes. Tinted with neutral gray-brown jitter so they read as stones.
+	private int SpawnRocks()
 	{
-		var go = Scene.CreateObject();
-		go.Name = "BorderBoulder";
-		go.WorldPosition = position;
-		go.WorldRotation = rotation;
-		go.Tags.Add( "border_boulder" );
-
-		// Scale derived from the requested 80-140u silhouette band. Kenney
-		// rocks sit at ~1m intrinsic; divide by ~2 to land in our target
-		// inch range. The Rock spawn path uses the same trick at 30x.
-		float bulk = size.x / 4f;
-		go.WorldScale = new Vector3( bulk );
-
-		var model = go.AddComponent<ModelRenderer>();
-		// Bigger variants (E/F/G have more mass) for boulder silhouettes —
-		// rock_smallA-D are reserved for the minable rocks per Rock.SpawnAt.
-		model.Model = Models.RockVariant( 4 + (Math.Abs( position.GetHashCode() ) % 3) );
-		// Desaturated grey-brown vs Rock's cooler grey (0.55,0.55,0.58) —
-		// reads as background terrain, not as a minable target.
-		model.Tint = new Color( 0.45f, 0.43f, 0.40f, 1f );
-
-		var col = go.AddComponent<BoxCollider>();
-		col.Scale = new Vector3( Tunables.CubeBase );
-
-		// Static-feeling body: high mass, asleep on spawn so the physics engine
-		// never wakes them. No Rock component → IChoppable picks ignore them.
-		var rb = go.AddComponent<Rigidbody>();
-		rb.MassOverride = 5000f;
-		rb.LinearDamping = 4f;
-		rb.AngularDamping = 8f;
-		rb.StartAsleep = true;
-	}
-
-	private void SpawnRock( Vector3 footPosition )
-	{
-		var go = Scene.CreateObject();
-		go.Name = "Rock";
-		go.WorldPosition = footPosition + Vector3.Up * (Tunables.RockHeight * 0.5f);
-		go.Tags.Add( "rock" );
-
-		go.WorldScale = new Vector3( Tunables.RockRadius * 2f, Tunables.RockRadius * 2f, Tunables.RockHeight ) / Tunables.CubeBase;
-
-		var model = go.AddComponent<ModelRenderer>();
-		model.Model = Model.Cube;
-		model.Tint = new Color( 0.55f, 0.55f, 0.58f, 1f );
-
-		var col = go.AddComponent<BoxCollider>();
-		col.Scale = new Vector3( Tunables.CubeBase );
-
-		var rb = go.AddComponent<Rigidbody>();
-		rb.MassOverride = Tunables.RockMass;
-		rb.AngularDamping = 2f;
-		rb.LinearDamping = 0.6f;
-		rb.StartAsleep = true;
-
-		var rock = go.AddComponent<Rock>();
-		rock.Body = rb;
+		const int Count = 120;
+		const float MinScale = 0.6f;
+		const float MaxScale = 1.6f;
+		const int RockSeed = 0x80CC5;
+		var rng = new Random( RockSeed );
+		int spawned = 0;
+		for ( int i = 0; i < Count; i++ )
+		{
+			float r = MathF.Sqrt( (float)rng.NextDouble() ) * Tunables.ArenaRadius * 0.95f;
+			float angle = (float)(rng.NextDouble() * MathF.Tau);
+			float x = MathF.Cos( angle ) * r;
+			float y = MathF.Sin( angle ) * r;
+			float scale = MathX.Lerp( MinScale, MaxScale, (float)rng.NextDouble() );
+			float yaw = (float)(rng.NextDouble() * 360.0);
+			// Ground slope follows main.scene rotation (12° around X downhill +X).
+			// Rest the rock visually on the inclined plane.
+			float z = Tunables.GroundZ - x * Tunables.ArenaSlope;
+			float t = (float)rng.NextDouble();
+			var tint = new Color(
+				MathX.Lerp( 0.55f, 0.78f, t ),
+				MathX.Lerp( 0.50f, 0.72f, t ),
+				MathX.Lerp( 0.45f, 0.66f, t ),
+				1f );
+			var go = Scene.CreateObject();
+			go.Name = "Rock";
+			go.WorldPosition = new Vector3( x, y, z );
+			go.WorldRotation = Rotation.FromYaw( yaw );
+			go.WorldScale = new Vector3( scale );
+			go.Tags.Add( "rock_decor" );
+			var mr = go.AddComponent<ModelRenderer>();
+			mr.Model = Models.RockVariant( i );
+			mr.Tint = tint;
+			spawned++;
+		}
+		return spawned;
 	}
 
 	private void SpawnTree( Vector3 footPosition )
 	{
 		var biome = BiomeManager.Get( Scene );
 		var tint = biome.IsValid() ? biome.TrunkTintForNewTree() : new Color( 0.42f, 0.30f, 0.18f, 1f );
-		Tree.SpawnAt( Scene, footPosition, tint );
+		// Mix species per biome bias so the forest reads as varied silhouettes
+		// rather than one trunk size + tint. Deterministic via Seed-derived RNG
+		// so the same Seed reproduces the same forest layout AND distribution.
+		_speciesRng ??= new Random( Seed ^ 0x57EC1E5 );
+		var species = biome.IsValid() ? biome.SpeciesForNewTree( _speciesRng ) : TreeSpecies.Beech;
+		// Mythic roll — Noita-style golden target. 1 in MythicSpawnRatio.
+		bool mythic = _speciesRng.Next( Tunables.MythicSpawnRatio ) == 0;
+		Tree.SpawnAt( Scene, footPosition, tint, species, mythic );
 	}
+
+	private Random _speciesRng;
 }
