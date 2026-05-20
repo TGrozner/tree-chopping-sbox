@@ -277,14 +277,16 @@ public sealed class SceneStarter : Component
 	// at the new boundary.
 	public void OnGateBroken()
 	{
-		float oldOuter = Tunables.InitialOuterRadius
-			+ (Math.Max( 0, (GameState.Get( Scene )?.GatesBroken ?? 1 ) - 1 )) * Tunables.GateRingWidth;
+		int gates = GameState.Get( Scene )?.GatesBroken ?? 1;
+		float oldOuter = Tunables.InitialOuterRadius + Math.Max( 0, gates - 1 ) * Tunables.GateRingWidth;
 		float newOuter = CurrentOuterRadius();
 		DestroyRemainingGates();
 		int budget = (int)(TreeCount * (newOuter - oldOuter) / Tunables.ArenaRadius);
 		SpawnForestBand( oldOuter, newOuter, budget );
 		if ( newOuter < Tunables.ArenaRadius ) SpawnGateAtBoundary( newOuter );
 		Log.Info( $"[SceneStarter] Ring expanded {oldOuter:0}u → {newOuter:0}u, +{budget} trees" );
+		var hud = Scene.GetAllComponents<WoodHud>().FirstOrDefault();
+		if ( hud.IsValid() ) hud.ShowRingBanner( gates );
 	}
 
 	private void SpawnGateAtBoundary( float radius )

@@ -26,19 +26,26 @@ public sealed class ShopArea : Component
 		// for casual play. Slot1..Slot4 target specific upgrades for
 		// players who want to allocate manually.
 		bool bought = false;
+		// Per-upgrade SFX pitch lets the player distinguish what they just
+		// bought without looking at the HUD. Axe = lowest-pitched chop ;
+		// Speed = whoosh-style high ; Luck = mid bright ; Power = bass
+		// thump ; Pet = sparkle high. Prestige uses FirePrestigeBurst's
+		// double-stack which is already distinctive.
+		float pitchMin = 1.2f, pitchMax = 1.4f;
+		string sfx = "sounds/log_break.sound";
 		if ( Input.Pressed( "Use" ) ) bought = BuyCheapest();
-		else if ( Input.Pressed( "Slot1" ) ) bought = _state.TryUpgradeAxe();
-		else if ( Input.Pressed( "Slot2" ) ) bought = _state.TryUpgradeSpeed();
-		else if ( Input.Pressed( "Slot3" ) ) bought = _state.TryUpgradeLuck();
-		else if ( Input.Pressed( "Slot4" ) ) bought = _state.TryUpgradePower();
-		else if ( Input.Pressed( "Slot5" ) ) bought = _state.TryUpgradePet();
+		else if ( Input.Pressed( "Slot1" ) ) { bought = _state.TryUpgradeAxe();   sfx = "sounds/chop_wood.sound"; pitchMin = 0.95f; pitchMax = 1.10f; }
+		else if ( Input.Pressed( "Slot2" ) ) { bought = _state.TryUpgradeSpeed(); sfx = "sounds/swing.sound";     pitchMin = 1.30f; pitchMax = 1.55f; }
+		else if ( Input.Pressed( "Slot3" ) ) { bought = _state.TryUpgradeLuck();  sfx = "sounds/log_break.sound"; pitchMin = 1.50f; pitchMax = 1.70f; }
+		else if ( Input.Pressed( "Slot4" ) ) { bought = _state.TryUpgradePower(); sfx = "sounds/log_break.sound"; pitchMin = 0.70f; pitchMax = 0.90f; }
+		else if ( Input.Pressed( "Slot5" ) ) { bought = _state.TryUpgradePet();   sfx = "sounds/log_break.sound"; pitchMin = 1.80f; pitchMax = 2.10f; }
 		else if ( Input.Pressed( "Slot6" ) )
 		{
 			int before = _state.Spirits;
 			bought = _state.TryPrestige();
 			if ( bought ) FirePrestigeBurst( _state.Spirits - before );
 		}
-		if ( bought ) Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.7f, pitchMin: 1.2f, pitchMax: 1.4f );
+		if ( bought ) Sfx.Play( sfx, WorldPosition, volume: 0.75f, pitchMin: pitchMin, pitchMax: pitchMax );
 	}
 
 	// Public for AutoPlay's bridge-driven shopping loop. Takes prestige

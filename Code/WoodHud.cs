@@ -19,6 +19,8 @@ public sealed class WoodHud : Component
 	private bool _woodWasSpent;
 	private TimeSince _prestigeBannerTime = 999f;
 	private int _prestigeBannerSpirits;
+	private TimeSince _ringBannerTime = 999f;
+	private int _ringBannerNumber;
 
 	// Called by ShopArea after a successful TryPrestige() so the player gets
 	// a clear "you just earned N Spirits" beat on top of the chip burst.
@@ -26,6 +28,14 @@ public sealed class WoodHud : Component
 	{
 		_prestigeBannerTime = 0f;
 		_prestigeBannerSpirits = spiritsGained;
+	}
+
+	// Called by SceneStarter.OnGateBroken so the ring expansion gets a HUD
+	// acknowledgement matching the chip burst at the gate site.
+	public void ShowRingBanner( int ringNumber )
+	{
+		_ringBannerTime = 0f;
+		_ringBannerNumber = ringNumber;
 	}
 
 	protected override void OnUpdate()
@@ -44,6 +54,7 @@ public sealed class WoodHud : Component
 		DrawShopHint( hud );
 		DrawTeleportHint( hud );
 		DrawPrestigeBanner( hud );
+		DrawRingBanner( hud );
 
 		if ( DebugVisible ) DrawDebugBlock( hud );
 	}
@@ -209,6 +220,23 @@ public sealed class WoodHud : Component
 			new Color( 0f, 0f, 0f, 0.55f * alpha ) );
 		hud.DrawText( new TextRendering.Scope( title, Tunables.MythicCanopyTint.WithAlpha( alpha ), fontSize ),
 			new Rect( 0, h * 0.30f, w, fontSize * 1.8f ), TextFlag.Center );
+	}
+
+	private void DrawRingBanner( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 2.0f;
+		float t = (float)_ringBannerTime / duration;
+		if ( t >= 1f ) return;
+		float w = Screen.Width;
+		float h = Screen.Height;
+		float alpha = t < 0.12f ? (t / 0.12f) : (1f - (t - 0.12f) / 0.88f);
+		alpha = alpha.Clamp( 0f, 1f );
+		float fontSize = 44f;
+		var title = $"RING {_ringBannerNumber} UNLOCKED";
+		hud.DrawRect( new Rect( 0, h * 0.22f, w, fontSize * 1.6f ),
+			new Color( 0f, 0f, 0f, 0.50f * alpha ) );
+		hud.DrawText( new TextRendering.Scope( title, HotColor.WithAlpha( alpha ), fontSize ),
+			new Rect( 0, h * 0.22f, w, fontSize * 1.6f ), TextFlag.Center );
 	}
 
 	private void DrawTeleportHint( Sandbox.Rendering.HudPainter hud )
