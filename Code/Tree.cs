@@ -408,6 +408,13 @@ public sealed class Tree : Component, IChoppable
 		// Gates trigger a forest-ring expansion instead of paying wood.
 		if ( IsGate )
 		{
+			// Triple-sized chip + leaf burst at the gate base so the
+			// "barrier shattered, new ring unlocked" beat reads on-screen.
+			var burstPos = WorldPosition + Vector3.Up * 80f;
+			ChipBurst.Spawn( Scene, burstPos, _fellDir, Tunables.ChipBurstCount * 3 );
+			ChipBurst.SpawnLeaves( Scene, burstPos, _fellDir, 32, _canopyTint );
+			Sfx.Play( "sounds/log_break.sound", burstPos, volume: 1.20f, pitchMin: 0.55f, pitchMax: 0.75f );
+
 			gs.OnGateBroken();
 			var starter = Scene.GetAllComponents<SceneStarter>().FirstOrDefault();
 			if ( starter.IsValid() ) starter.OnGateBroken();

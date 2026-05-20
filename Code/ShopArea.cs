@@ -32,12 +32,35 @@ public sealed class ShopArea : Component
 		else if ( Input.Pressed( "Slot3" ) ) bought = _state.TryUpgradeLuck();
 		else if ( Input.Pressed( "Slot4" ) ) bought = _state.TryUpgradePower();
 		else if ( Input.Pressed( "Slot5" ) ) bought = _state.TryUpgradePet();
-		else if ( Input.Pressed( "Slot6" ) ) bought = _state.TryPrestige();
+		else if ( Input.Pressed( "Slot6" ) )
+		{
+			bought = _state.TryPrestige();
+			if ( bought ) FirePrestigeBurst();
+		}
 		if ( bought ) Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.7f, pitchMin: 1.2f, pitchMax: 1.4f );
 	}
 
 	// Public for AutoPlay's bridge-driven shopping loop.
 	public bool BuyCheapestAffordable() => BuyCheapest();
+
+	// Cookie-Clicker / AdVenture-Capitalist-style "you just prestiged" cue :
+	// big golden leaf burst at the player + a louder triple log_break pitch
+	// stack so it reads as a real event instead of a silent reset.
+	private void FirePrestigeBurst()
+	{
+		var beaver = Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
+		var pos = beaver.IsValid()
+			? beaver.WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f)
+			: WorldPosition;
+		// Three concentric leaf bursts in cardinal sweeps so the gold cloud
+		// fills the space around the player rather than blowing in one
+		// direction like a chop hit.
+		ChipBurst.SpawnLeaves( Scene, pos, Vector3.Forward,  28, Tunables.MythicCanopyTint );
+		ChipBurst.SpawnLeaves( Scene, pos, Vector3.Backward, 24, Tunables.MythicTrunkTint );
+		ChipBurst.SpawnLeaves( Scene, pos, Vector3.Up,       20, Tunables.MythicCanopyTint );
+		Sfx.Play( "sounds/log_break.sound", pos, volume: 1.10f, pitchMin: 0.65f, pitchMax: 0.85f );
+		Sfx.Play( "sounds/log_break.sound", pos, volume: 0.90f, pitchMin: 1.30f, pitchMax: 1.50f );
+	}
 
 	private bool BuyCheapest()
 	{
