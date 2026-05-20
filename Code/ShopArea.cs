@@ -41,8 +41,22 @@ public sealed class ShopArea : Component
 		if ( bought ) Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.7f, pitchMin: 1.2f, pitchMax: 1.4f );
 	}
 
-	// Public for AutoPlay's bridge-driven shopping loop.
-	public bool BuyCheapestAffordable() => BuyCheapest();
+	// Public for AutoPlay's bridge-driven shopping loop. Takes prestige
+	// first when available (long-term win), then falls back to the cheapest
+	// affordable next-tier purchase.
+	public bool BuyCheapestAffordable()
+	{
+		if ( _state.IsValid() && _state.CanPrestige() )
+		{
+			int before = _state.Spirits;
+			if ( _state.TryPrestige() )
+			{
+				FirePrestigeBurst( _state.Spirits - before );
+				return true;
+			}
+		}
+		return BuyCheapest();
+	}
 
 	// Cookie-Clicker / AdVenture-Capitalist-style "you just prestiged" cue :
 	// big golden leaf burst at the player + a louder triple log_break pitch

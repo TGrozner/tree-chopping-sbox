@@ -62,13 +62,19 @@ public sealed class AutoPlay : Component
 
 	private void TickPickTarget()
 	{
-		// Full-loop driver : if we have enough wood for the next axe upgrade,
-		// detour to the shop before continuing to chop.
+		// Full-loop driver : if prestige is available, detour to the shop and
+		// take it (resets tiers but +1%/spirit wood is the long-term win).
+		// Otherwise, detour to buy the cheapest affordable upgrade.
 		var gs = GameState.Get( Scene );
-		if ( gs.IsValid() && gs.AxeTier < Tunables.MaxAxeTier
-			&& gs.Wood >= Tunables.AxeTierCosts[gs.AxeTier + 1] )
+		if ( gs.IsValid() && gs.CanPrestige() )
 		{
-			CurrentAction = $"have {gs.Wood} wood — heading to shop for T{gs.AxeTier + 1}";
+			CurrentAction = $"prestige ready ({gs.SpiritsFromPrestige - gs.Spirits} new spirits) — heading to shop";
+			_step = StepGoShop;
+			return;
+		}
+		if ( gs.IsValid() && AnyUpgradeAffordable( gs ) )
+		{
+			CurrentAction = $"have {gs.Wood} wood — heading to shop";
 			_step = StepGoShop;
 			return;
 		}
@@ -134,6 +140,16 @@ public sealed class AutoPlay : Component
 				: "bought upgrade";
 		}
 		_step = StepPickTarget;
+	}
+
+	private static bool AnyUpgradeAffordable( GameState gs )
+	{
+		if ( gs.AxeTier   < Tunables.MaxAxeTier  && gs.Wood >= Tunables.AxeTierCosts[gs.AxeTier + 1] ) return true;
+		if ( gs.SpeedTier < Tunables.MaxStatTier && gs.Wood >= Tunables.SpeedCosts[gs.SpeedTier + 1] ) return true;
+		if ( gs.LuckTier  < Tunables.MaxStatTier && gs.Wood >= Tunables.LuckCosts[gs.LuckTier + 1] )   return true;
+		if ( gs.PowerTier < Tunables.MaxStatTier && gs.Wood >= Tunables.PowerCosts[gs.PowerTier + 1] ) return true;
+		if ( gs.PetTier   < Tunables.MaxPetTier  && gs.Wood >= Tunables.PetCosts[gs.PetTier + 1] )     return true;
+		return false;
 	}
 
 	private Tree PickNearestStandingTree()

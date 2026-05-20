@@ -16,6 +16,7 @@ public sealed class WoodHud : Component
 	private int _lastShownWood;
 	private bool _woodSynced;
 	private TimeSince _woodChangedTime = 999f;
+	private bool _woodWasSpent;
 	private TimeSince _prestigeBannerTime = 999f;
 	private int _prestigeBannerSpirits;
 
@@ -72,12 +73,14 @@ public sealed class WoodHud : Component
 		if ( !_woodSynced ) { _lastShownWood = _state.Wood; _woodSynced = true; }
 		if ( _state.Wood != _lastShownWood )
 		{
+			_woodWasSpent = _state.Wood < _lastShownWood;
 			_lastShownWood = _state.Wood;
 			_woodChangedTime = 0f;
 		}
 		const float PulseDuration = 0.35f;
 		float pulseT = (float)_woodChangedTime / PulseDuration;
 		float scale = pulseT < 1f ? MathX.Lerp( 1.25f, 1.0f, pulseT * pulseT ) : 1f;
+		var pulseColor = pulseT < 1f && _woodWasSpent ? HotColor : TextColor;
 
 		float padL = 36f, padT = 28f;
 		float labelSize = 14f;
@@ -87,7 +90,7 @@ public sealed class WoodHud : Component
 		hud.DrawText( new TextRendering.Scope( "WOOD", TextColor.WithAlpha( 0.55f ), labelSize ),
 			labelRect, TextFlag.LeftCenter );
 		var valueRect = new Rect( padL, padT + labelSize, boxW, valueSize * 1.3f );
-		hud.DrawText( new TextRendering.Scope( _state.Wood.ToString(), TextColor, valueSize ),
+		hud.DrawText( new TextRendering.Scope( _state.Wood.ToString(), pulseColor, valueSize ),
 			valueRect, TextFlag.LeftCenter );
 	}
 
