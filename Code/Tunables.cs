@@ -75,11 +75,11 @@ public static class Tunables
 	// muted blue-green to warm autumn yellow-brown for visual variety.
 	public static readonly Color[] CanopyTints =
 	{
-		new( 0.26f, 0.38f, 0.20f, 1f ), // moss green
-		new( 0.32f, 0.44f, 0.22f, 1f ), // bright pine
-		new( 0.22f, 0.34f, 0.28f, 1f ), // teal pine
-		new( 0.40f, 0.42f, 0.18f, 1f ), // olive
-		new( 0.48f, 0.36f, 0.16f, 1f ), // autumn ochre
+		new( 0.34f, 0.50f, 0.26f, 1f ), // moss green (brightened 0.26/0.38/0.20)
+		new( 0.42f, 0.58f, 0.28f, 1f ), // bright pine
+		new( 0.30f, 0.46f, 0.38f, 1f ), // teal pine
+		new( 0.52f, 0.54f, 0.22f, 1f ), // olive
+		new( 0.62f, 0.46f, 0.20f, 1f ), // autumn ochre
 	};
 
 	// Fell physics. Slow-tip ramp = first 0.32s of the topple, scaled torque

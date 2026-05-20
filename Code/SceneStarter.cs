@@ -72,9 +72,12 @@ public sealed class SceneStarter : Component
 			sun.LightColor = new Color( 1.00f, 0.78f, 0.48f, 1f ) * 1.7f;
 			sun.SkyColor = new Color( 0.44f, 0.58f, 0.78f, 1f );
 			sun.Shadows = true;
+			// Softer shadow edges = less crisp banding on big trees casting on
+			// terrain. Default ~1.0, drop to 0.5 for ~PCF-ish softness.
+			sun.ShadowHardness = 0.5f;
 			sun.FogMode = DirectionalLight.FogInfluence.Enabled;
 			sun.FogStrength = 1.1f;
-			Log.Info( "[SceneStarter] Sun warm sunset intensity ×1.7, sky fill ×2" );
+			Log.Info( "[SceneStarter] Sun warm sunset intensity ×1.7, sky fill ×2, soft shadows" );
 		}
 	}
 
