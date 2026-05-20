@@ -14,7 +14,13 @@ public sealed class AutoPlay : Component
 	private BeaverController _beaver;
 	private Tree _target;
 	private TimeSince _sinceLastSwing = 999f;
+	private TimeSince _sinceShopArrived = 999f;
 	private int _step;
+	private const int StepPickTarget = 0;
+	private const int StepApproach = 1;
+	private const int StepSwing = 2;
+	private const int StepGoShop = 3;
+	private const int StepBuyShop = 4;
 
 	protected override void OnUpdate()
 	{
@@ -46,18 +52,30 @@ public sealed class AutoPlay : Component
 
 		switch ( _step )
 		{
-			case 0: TickPickTarget(); break;
-			case 1: TickApproach(); break;
-			case 2: TickSwing(); break;
+			case StepPickTarget: TickPickTarget(); break;
+			case StepApproach: TickApproach(); break;
+			case StepSwing: TickSwing(); break;
+			case StepGoShop: TickGoShop(); break;
+			case StepBuyShop: TickBuyShop(); break;
 		}
 	}
 
 	private void TickPickTarget()
 	{
+		// Full-loop driver : if we have enough wood for the next axe upgrade,
+		// detour to the shop before continuing to chop.
+		var gs = GameState.Get( Scene );
+		if ( gs.IsValid() && gs.AxeTier < Tunables.MaxAxeTier
+			&& gs.Wood >= Tunables.AxeTierCosts[gs.AxeTier + 1] )
+		{
+			CurrentAction = $"have {gs.Wood} wood — heading to shop for T{gs.AxeTier + 1}";
+			_step = StepGoShop;
+			return;
+		}
 		_target = PickNearestStandingTree();
 		if ( !_target.IsValid() ) { CurrentAction = "no standing trees in range"; return; }
 		CurrentAction = $"targeted tree at {_target.WorldPosition}";
-		_step = 1;
+		_step = StepApproach;
 	}
 
 	private void TickApproach()
@@ -90,6 +108,27 @@ public sealed class AutoPlay : Component
 		_beaver.DebugSwing();
 		_sinceLastSwing = 0f;
 		CurrentAction = $"swing — chops left {_target.ChopsRemaining}";
+	}
+
+	private void TickGoShop()
+	{
+		var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn ?? Vector3.Zero;
+		_beaver.TeleportTo( spawn, 0f );
+		_sinceShopArrived = 0f;
+		CurrentAction = "arrived at shop";
+		_step = StepBuyShop;
+	}
+
+	private void TickBuyShop()
+	{
+		// Pause 1s on the shop disk so the upgrade transition reads in the
+		// gameplay video — without the wait the screenshot capture would
+		// catch the beaver still mid-teleport.
+		if ( (float)_sinceShopArrived < 1f ) return;
+		var gs = GameState.Get( Scene );
+		if ( gs.IsValid() && gs.TryUpgradeAxe() )
+			CurrentAction = $"upgraded to T{gs.AxeTier}";
+		_step = StepPickTarget;
 	}
 
 	private Tree PickNearestStandingTree()
