@@ -54,12 +54,10 @@ public sealed class SceneStarter : Component
 		}
 	}
 
-	// Warm sun + brighter ambient so shaded trunks read as brown instead of
-	// silhouettes. The original Sun was directional-only ; the result was
-	// strong direct light + near-zero fill, which clipped any geometry that
-	// faced away from the light to black. We bump the Sun's intensity + warm
-	// tint and either upgrade the existing DirectionalLight or add a
-	// SkyLight (ambient cube) — whichever is missing.
+	// Warm sun + brighter ambient SkyColor so shaded trunks read as brown
+	// instead of silhouettes. The scene's original Sun was warm-orange but
+	// dim, with a cool-blue SkyColor at 0.22/0.32/0.48 — directional-strong
+	// + fill-weak = sun-facing faces bright, away-faces black. Bump both.
 	private void SetupLighting()
 	{
 		var sun = Scene.GetAllComponents<DirectionalLight>().FirstOrDefault();
@@ -207,11 +205,8 @@ public sealed class SceneStarter : Component
 		go.Name = "ShopArea";
 		go.WorldPosition = ResolvedBeaverSpawn;
 		go.AddComponent<ShopArea>();
-		// Small visual marker — a flat-disc cube on the ground so the player
-		// can find the shop spot. Tinted warm wood-amber.
-		// Compact wooden disk under the shop — 120u radius (was 250u which
-		// dominated the camera foreground and made the green terrain
-		// invisible from a third-person view).
+		// Compact wooden disk under the shop — 120u radius (was 250u and
+		// dominated the camera foreground, hiding the green terrain).
 		var disk = Scene.CreateObject();
 		disk.Name = "ShopDisk";
 		disk.SetParent( go );
@@ -259,7 +254,6 @@ public sealed class SceneStarter : Component
 			float dxPad = x - padXY_X;
 			float dyPad = y - padXY_Y;
 			if ( dxPad * dxPad + dyPad * dyPad < padRSq ) continue;
-			if ( x < ResolvedBeaverSpawn.x + SpawnPadRadius ) continue;
 
 			float density = ValueNoise2D( x / Tunables.ArenaNoiseScale, y / Tunables.ArenaNoiseScale, Seed );
 			if ( density < Tunables.ArenaDensityThreshold ) continue;

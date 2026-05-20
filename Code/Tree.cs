@@ -243,7 +243,10 @@ public sealed class Tree : Component, IChoppable
 				_fellDir * Tunables.FellPush );
 		}
 		var upDot = WorldRotation.Up.Dot( Vector3.Up );
-		if ( upDot < Tunables.TreeFallenUpDotMax )
+		// Land naturally once tilted past the threshold, OR force-land if the
+		// tree is stuck against a neighbour (>5s falling without reaching the
+		// threshold). Without the timeout, a stuck trunk never pays out wood.
+		if ( upDot < Tunables.TreeFallenUpDotMax || _slowTipElapsed > 5f )
 			BecomeLandedLog();
 	}
 
