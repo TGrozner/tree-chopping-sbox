@@ -95,6 +95,19 @@ public sealed class WoodHud : Component
 		var valueRect = new Rect( x, padT + labelSize, boxW, valueSize * 1.3f );
 		hud.DrawText( new TextRendering.Scope( $"T{_state.AxeTier}", TextColor, valueSize ),
 			valueRect, TextFlag.RightCenter );
+
+		// Pip row : ● for each unlocked tier, ○ for each remaining. T0 = ●○○○.
+		float pipSize = 8f;
+		float pipGap = 4f;
+		float pipsY = padT + labelSize + valueSize * 1.4f;
+		int total = Tunables.MaxAxeTier + 1;
+		float pipsW = total * pipSize + (total - 1) * pipGap;
+		float pipsX = Screen.Width - padR - pipsW;
+		for ( int i = 0; i < total; i++ )
+		{
+			var pipColor = i <= _state.AxeTier ? TextColor : TextColor.WithAlpha( 0.20f );
+			hud.DrawRect( new Rect( pipsX + i * (pipSize + pipGap), pipsY, pipSize, pipSize ), pipColor );
+		}
 	}
 
 	// Shop hint when the player is inside the shop trigger zone.
