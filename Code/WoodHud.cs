@@ -21,6 +21,8 @@ public sealed class WoodHud : Component
 	private int _prestigeBannerSpirits;
 	private TimeSince _ringBannerTime = 999f;
 	private int _ringBannerNumber;
+	private TimeSince _upgradeBannerTime = 999f;
+	private string _upgradeBannerText = "";
 
 	// Called by ShopArea after a successful TryPrestige() so the player gets
 	// a clear "you just earned N Spirits" beat on top of the chip burst.
@@ -36,6 +38,15 @@ public sealed class WoodHud : Component
 	{
 		_ringBannerTime = 0f;
 		_ringBannerNumber = ringNumber;
+	}
+
+	// Small toast for every shop purchase — "AXE → IRON" / "SPEED +1" /
+	// "PET → YELLOW FINCH" / etc. Lower-priority than the ring / prestige
+	// banners so it can co-exist without fighting for the same eye-space.
+	public void ShowUpgradeBanner( string text )
+	{
+		_upgradeBannerTime = 0f;
+		_upgradeBannerText = text;
 	}
 
 	protected override void OnUpdate()
@@ -55,6 +66,7 @@ public sealed class WoodHud : Component
 		DrawTeleportHint( hud );
 		DrawPrestigeBanner( hud );
 		DrawRingBanner( hud );
+		DrawUpgradeBanner( hud );
 
 		if ( DebugVisible ) DrawDebugBlock( hud );
 	}
@@ -220,6 +232,22 @@ public sealed class WoodHud : Component
 			new Color( 0f, 0f, 0f, 0.55f * alpha ) );
 		hud.DrawText( new TextRendering.Scope( title, Tunables.MythicCanopyTint.WithAlpha( alpha ), fontSize ),
 			new Rect( 0, h * 0.30f, w, fontSize * 1.8f ), TextFlag.Center );
+	}
+
+	private void DrawUpgradeBanner( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 1.4f;
+		float t = (float)_upgradeBannerTime / duration;
+		if ( t >= 1f || string.IsNullOrEmpty( _upgradeBannerText ) ) return;
+		float w = Screen.Width;
+		float h = Screen.Height;
+		float alpha = t < 0.10f ? (t / 0.10f) : (1f - (t - 0.10f) / 0.90f);
+		alpha = alpha.Clamp( 0f, 1f );
+		float fontSize = 28f;
+		hud.DrawRect( new Rect( 0, h * 0.74f, w, fontSize * 1.6f ),
+			new Color( 0f, 0f, 0f, 0.45f * alpha ) );
+		hud.DrawText( new TextRendering.Scope( _upgradeBannerText, TextColor.WithAlpha( alpha ), fontSize ),
+			new Rect( 0, h * 0.74f, w, fontSize * 1.6f ), TextFlag.Center );
 	}
 
 	private void DrawRingBanner( Sandbox.Rendering.HudPainter hud )
