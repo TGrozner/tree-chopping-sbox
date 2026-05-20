@@ -37,6 +37,11 @@ public sealed class GameState : Component
 
 	private void Save()
 	{
+		// Skip persistence when the headless selftest is running — its
+		// AddWood / ResetForTest calls would otherwise clobber the user's
+		// real progress.json (the FileSystem.Data dir is shared between
+		// selftest and human play).
+		if ( SelfTest.IsActiveRequest() ) return;
 		try
 		{
 			FileSystem.Data.WriteJson( PersistFile, new SaveData
@@ -73,11 +78,14 @@ public sealed class GameState : Component
 	// Wood gain multiplier per tier — better tools harvest more.
 	public float WoodMultiplier => Tunables.AxeTierWoodMul[AxeTier];
 
-	// Test-only : wipe back to defaults.
+	// Test-only : wipe back to defaults IN MEMORY ONLY. Do not Save() — that
+	// would overwrite the user's real progress.json (FileSystem.Data is the
+	// same directory for selftest and human play). The selftest runs for ~12s
+	// and exits ; the disk file is untouched, so the next human play loads
+	// the real progress.
 	public void ResetForTest()
 	{
 		Wood = 0;
 		AxeTier = 0;
-		Save();
 	}
 }
