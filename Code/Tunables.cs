@@ -64,6 +64,15 @@ public static class Tunables
 
 	// Per-kind chops required at T0 — multiplied UP for tier-gating.
 	public static readonly int[] TreeKindChopsBase = { 3, 1, 8, 2 };
+	// Per-kind respawn delay : seconds the landed log lingers before the
+	// position grows a new tree. Order matches TreeKind enum
+	// {Normal, Sapling, Veteran, Brittle}. Forager/Mow-The-Lawn pattern :
+	// chopping is sustainable, the forest regrows on a timer that scales
+	// with how much wood the kind drops.
+	public static readonly float[] TreeKindRespawnDelay = { 90f, 30f, 300f, 60f };
+	// Mythic respawn is an extra-long timer on top of the kind base — a
+	// mythic Veteran (300+600=900s = 15 min) is a "weekend visit" reward.
+	public const float MythicRespawnExtra = 600f;
 	public static readonly Color MythicTrunkTint = new( 0.78f, 0.55f, 0.18f, 1f );
 	public static readonly Color MythicCanopyTint = new( 1.00f, 0.78f, 0.22f, 1f );
 

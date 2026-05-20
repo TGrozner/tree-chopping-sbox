@@ -22,6 +22,8 @@ public sealed class Tree : Component, IChoppable
 	private Color _canopyTint;
 	private bool _highlighted;
 	private bool _woodGiven;
+	private Vector3 _spawnFootPos;
+	private float _biomeDifficulty;
 
 	public static Tree SpawnAt( Scene scene, Vector3 footPosition, float biomeDifficulty = 0.5f )
 	{
@@ -121,6 +123,8 @@ public sealed class Tree : Component, IChoppable
 		tree.ChopsRemaining = Math.Max( 1, (int)(Tunables.TreeKindChopsBase[kindIdx] * (0.7f + scaleNorm * 0.6f)) );
 		tree._primaryCanopy = primaryCanopy;
 		tree._canopyTint = canopyTint;
+		tree._spawnFootPos = footPosition;
+		tree._biomeDifficulty = biomeDifficulty;
 		return tree;
 	}
 
@@ -329,6 +333,14 @@ public sealed class Tree : Component, IChoppable
 		if ( !Body.IsValid() ) return;
 		if ( _timeSinceLanded < 0.6f ) return;
 		Body.Sleeping = Body.Velocity.LengthSquared < 4f && Body.AngularVelocity.LengthSquared < 0.5f;
+
+		float respawnDelay = Tunables.TreeKindRespawnDelay[(int)Kind];
+		if ( IsMythic ) respawnDelay += Tunables.MythicRespawnExtra;
+		if ( (float)_timeSinceLanded > respawnDelay )
+		{
+			Tree.SpawnAt( Scene, _spawnFootPos, _biomeDifficulty );
+			GameObject.Destroy();
+		}
 	}
 }
 
