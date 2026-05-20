@@ -151,31 +151,49 @@ public sealed class Tree : Component, IChoppable
 	private static GameObject SpawnSpeciesCanopy( Scene scene, GameObject parent, int species, float scaleMul, float trunkH, Color tint )
 	{
 		float r = Tunables.TreeRadius * scaleMul;
+		// Foliage tinting trick : a slightly darker bottom layer (shaded
+		// under-canopy) + the base tint on top reads volumetric vs a single
+		// flat cube. Same scheme as the trunk root + base + upper.
+		var shade = new Color( tint.r * 0.78f, tint.g * 0.78f, tint.b * 0.78f, 1f );
+		var sunlit = new Color( MathF.Min( 1f, tint.r * 1.08f ), MathF.Min( 1f, tint.g * 1.08f ), MathF.Min( 1f, tint.b * 1.08f ), 1f );
 		switch ( species )
 		{
 			default:
 			case 0:
+			{
+				// Round broadleaf : shadow layer at the bottom, lit dome on top.
+				MakeCanopyCube( scene, parent, "TreeCanopyShade",
+					new Vector3( 0f, 0f, trunkH * 0.74f ),
+					new Vector3( r * 4.0f, r * 4.0f, trunkH * 0.18f ), shade );
 				return MakeCanopyCube( scene, parent, "TreeCanopy",
-					new Vector3( 0f, 0f, trunkH * 0.80f ),
-					new Vector3( r * 4.0f, r * 4.0f, trunkH * 0.45f ), tint );
+					new Vector3( 0f, 0f, trunkH * 0.88f ),
+					new Vector3( r * 3.6f, r * 3.6f, trunkH * 0.30f ), sunlit );
+			}
 			case 1:
 			{
+				// Pine : 3 tapered tiers with progressive sun-lit gradient.
 				float baseW = r * 3.4f;
 				MakeCanopyCube( scene, parent, "PineLow",
 					new Vector3( 0f, 0f, trunkH * 0.62f ),
-					new Vector3( baseW, baseW, trunkH * 0.22f ), tint );
+					new Vector3( baseW, baseW, trunkH * 0.22f ), shade );
 				var mid = MakeCanopyCube( scene, parent, "PineMid",
 					new Vector3( 0f, 0f, trunkH * 0.80f ),
 					new Vector3( baseW * 0.75f, baseW * 0.75f, trunkH * 0.20f ), tint );
 				MakeCanopyCube( scene, parent, "PineTop",
 					new Vector3( 0f, 0f, trunkH * 0.95f ),
-					new Vector3( baseW * 0.48f, baseW * 0.48f, trunkH * 0.18f ), tint );
+					new Vector3( baseW * 0.48f, baseW * 0.48f, trunkH * 0.18f ), sunlit );
 				return mid;
 			}
 			case 2:
+			{
+				// Tall narrow conifer : a slim shaded bottom half + bright apex.
+				MakeCanopyCube( scene, parent, "TreeCanopyShade",
+					new Vector3( 0f, 0f, trunkH * 0.66f ),
+					new Vector3( r * 2.8f, r * 2.8f, trunkH * 0.32f ), shade );
 				return MakeCanopyCube( scene, parent, "TreeCanopy",
-					new Vector3( 0f, 0f, trunkH * 0.78f ),
-					new Vector3( r * 2.8f, r * 2.8f, trunkH * 0.62f ), tint );
+					new Vector3( 0f, 0f, trunkH * 0.88f ),
+					new Vector3( r * 2.4f, r * 2.4f, trunkH * 0.32f ), sunlit );
+			}
 		}
 	}
 
