@@ -106,9 +106,10 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		// Throttle swings ~ once per 0.25s so the chop pipeline state machine
-		// (WindUp 0.16s + Recovery 0.18s = 0.34s natural cooldown) has time
-		// to cycle back to Idle.
+		// Throttle swings ~ once per 0.45s. DebugSwingVerbose bypasses the
+		// swing state machine and calls Chop() direct, so the natural
+		// WindUp+Recovery cooldown doesn't apply — this gap just gives the
+		// trunk a tick to register the chop before we hit it again.
 		if ( (float)_lastSwingTime < 0.45f ) return;
 		_lastSwingTime = 0f;
 

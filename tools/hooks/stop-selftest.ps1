@@ -1,11 +1,11 @@
 # Claude Code Stop hook
 # Fires when Claude tries to end the turn. If any of the critical runtime
-# files (Tree / RunManager / SceneStarter / BeaverController) have been
-# modified vs HEAD, run tools\selftest.ps1. Failure -> exit 2, blocks the
-# stop and forces Claude to keep working.
+# files (Tree / SceneStarter / BeaverController / GameState / ShopArea)
+# have been modified vs HEAD, run tools\selftest.ps1. Failure -> exit 2,
+# blocks the stop and forces Claude to keep working.
 #
 # Enforces CLAUDE.md non-negotiable #2 ("relance le selftest apres TOUT
-# changement dans Tree / RunManager / SceneStarter.SpawnForest /
+# changement dans Tree / GameState / SceneStarter.SpawnForest /
 # BeaverController swing path") automatically.
 #
 # Escape hatch: stop_hook_active=true on the second Stop attempt -- after
@@ -37,7 +37,7 @@ if ( -not $projectDir ) { $projectDir = "C:\dev\tree-chopping-sbox" }
 $gitStatus = & git -C $projectDir status --porcelain 2>$null
 if ( -not $gitStatus ) { exit 0 }
 
-$critical = @('Tree.cs', 'RunManager.cs', 'SceneStarter.cs', 'BeaverController.cs')
+$critical = @('Tree.cs', 'SceneStarter.cs', 'BeaverController.cs', 'GameState.cs', 'ShopArea.cs')
 $touched = $null
 foreach ( $line in $gitStatus ) {
     foreach ( $f in $critical ) {
