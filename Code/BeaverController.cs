@@ -19,6 +19,9 @@ public sealed class BeaverController : Component
 	private float _fovOffset;
 	private int _hitstopFramesLeft;
 	private Tree _previewTree;
+	private TimeSince _shakeStart = 999f;
+	private float _shakeAmplitude;
+	private int _shakeSeed;
 
 	// Bridge / autopilot hooks.
 	[Property] public bool DebugRequestSwing { get; set; }
@@ -87,6 +90,35 @@ public sealed class BeaverController : Component
 				Camera.WorldPosition = trace.EndPosition + (head - camPos).Normal * 6f;
 			}
 		}
+		ApplyCameraShake();
+	}
+
+	// Per-hit positional camera shake. Sin-based decaying jitter, applied
+	// AFTER the anti-clip pullback so the shake doesn't push the camera back
+	// inside a trunk we just dodged.
+	private void ApplyCameraShake()
+	{
+		float t = (float)_shakeStart;
+		const float duration = 0.18f;
+		if ( t >= duration || _shakeAmplitude < 0.05f ) return;
+		float decay = 1f - (t / duration);
+		float amp = _shakeAmplitude * decay * decay;
+		// Two out-of-phase sin axes for a quick "rattle" rather than a smooth
+		// orbit. Seed shifts the phase so back-to-back hits don't beat
+		// constructively.
+		float phase = _shakeSeed * 0.31f;
+		float fx = MathF.Sin( (t * 47f) + phase );
+		float fy = MathF.Sin( (t * 53f) + phase * 1.4f + 1.2f );
+		var right = Camera.WorldRotation.Right;
+		var up = Camera.WorldRotation.Up;
+		Camera.WorldPosition += right * (fx * amp) + up * (fy * amp);
+	}
+
+	public void AddCameraShake( float amplitudeUnits )
+	{
+		_shakeStart = 0f;
+		_shakeAmplitude = MathF.Max( _shakeAmplitude, amplitudeUnits );
+		_shakeSeed = (_shakeSeed + 1) & 0xFF;
 	}
 
 	private void TickHitstop()
@@ -235,7 +267,15 @@ public sealed class BeaverController : Component
 		_fovOffset += Tunables.SwingFovPunch;
 		Scene.TimeScale = Tunables.HitstopTimeScale;
 		_hitstopFramesLeft = Tunables.HitstopFrames;
+		// Valheim-style audio layering : primary thunk + higher-pitched crack
+		// stacked so the impact reads as a real wood-vs-axe hit instead of
+		// one flat sample.
 		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: 0.95f, pitchMin: 0.85f, pitchMax: 1.15f );
+		Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.45f, pitchMin: 1.45f, pitchMax: 1.75f );
+		// Positional camera shake — amplitude scales gently with chop power
+		// so a Chainsaw hit feels heavier than a Hands hit.
+		int power = GameState.Get( Scene )?.ChopPower ?? 1;
+		AddCameraShake( 1.6f + MathF.Min( power * 0.20f, 1.6f ) );
 	}
 
 	private void TriggerAttackAnim()

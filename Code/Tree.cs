@@ -25,6 +25,11 @@ public sealed class Tree : Component, IChoppable
 	private bool _woodGiven;
 	private Vector3 _spawnFootPos;
 	private float _biomeDifficulty;
+	private Rotation _baseRotation;
+	private bool _baseRotCached;
+	private TimeSince _wobbleStart = 999f;
+	private Vector3 _wobbleAxis = Vector3.Right;
+	private float _wobbleAmplitudeDeg;
 
 	public static Tree SpawnAt( Scene scene, Vector3 footPosition, float biomeDifficulty = 0.5f )
 	{
@@ -331,6 +336,37 @@ public sealed class Tree : Component, IChoppable
 		if ( _chopped ) return;
 		ChopsRemaining -= chopPower;
 		if ( ChopsRemaining <= 0 ) StartFell( direction );
+		else KickWobble( direction );
+	}
+
+	// Per-hit visible reaction : the standing trunk leans + bounces against
+	// the chop direction, decaying over ~0.6s. Valheim-style "tree reacts to
+	// being hit". Because the Rigidbody is kinematic (MotionEnabled=false)
+	// while standing, we can drive WorldRotation directly without fighting
+	// physics ; on StartFell we restore _baseRotation so the unblocked fall
+	// starts from the pristine upright pose.
+	private void KickWobble( Vector3 fromDirection )
+	{
+		if ( !_baseRotCached ) { _baseRotation = WorldRotation; _baseRotCached = true; }
+		var flat = fromDirection.WithZ( 0f );
+		if ( flat.LengthSquared < 0.001f ) flat = Vector3.Forward;
+		_wobbleAxis = Vector3.Cross( Vector3.Up, flat.Normal ).Normal;
+		_wobbleStart = 0f;
+		// Stack hits a bit but cap so a rapid spam doesn't snap to grotesque
+		// angles.
+		_wobbleAmplitudeDeg = MathF.Min( _wobbleAmplitudeDeg + 4.5f, 9f );
+	}
+
+	private void TickWobble()
+	{
+		if ( _chopped || _wobbleAmplitudeDeg < 0.05f ) return;
+		float t = (float)_wobbleStart;
+		const float decayPerSec = 4.5f;
+		const float freqHz = 9f;
+		float decay = MathF.Exp( -t * decayPerSec );
+		if ( decay < 0.02f ) { _wobbleAmplitudeDeg = 0f; WorldRotation = _baseRotation; return; }
+		float angle = _wobbleAmplitudeDeg * decay * MathF.Sin( t * freqHz * MathF.PI * 2f );
+		WorldRotation = _baseRotation * Rotation.FromAxis( _wobbleAxis, angle );
 	}
 
 	private void StartFell( Vector3 direction )
@@ -339,6 +375,12 @@ public sealed class Tree : Component, IChoppable
 		_fellDir = direction.WithZ( 0f ).Normal;
 		if ( _fellDir.LengthSquared < 0.001f ) _fellDir = Vector3.Forward;
 		_slowTipElapsed = 0f;
+
+		// Reset the wobble lean before unfreezing the rigidbody, otherwise
+		// the fall starts from a tilted pose and physics fights the leftover
+		// rotation transient.
+		if ( _baseRotCached ) WorldRotation = _baseRotation;
+		_wobbleAmplitudeDeg = 0f;
 
 		if ( Body.IsValid() )
 		{
@@ -355,6 +397,11 @@ public sealed class Tree : Component, IChoppable
 	{
 		if ( _chopped && !_landed ) TickFall();
 		else if ( _landed ) TickLandedDecay();
+	}
+
+	protected override void OnUpdate()
+	{
+		if ( !_chopped ) TickWobble();
 	}
 
 	private void TickFall()
