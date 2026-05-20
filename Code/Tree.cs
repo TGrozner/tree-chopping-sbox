@@ -20,7 +20,12 @@ public sealed class Tree : Component, IChoppable
 	private Vector3 _fellDir;
 	private TimeSince _timeSinceLanded;
 	private GameObject _primaryCanopy;
+	private GameObject _rootStump;
+	private ModelRenderer _trunkLowerMr;
+	private ModelRenderer _trunkUpperMr;
+	private ModelRenderer _rootMr;
 	private Color _canopyTint;
+	private float _ambientPhase;
 	private bool _highlighted;
 	private bool _woodGiven;
 	private Vector3 _spawnFootPos;
@@ -78,21 +83,21 @@ public sealed class Tree : Component, IChoppable
 		rootBase.SetParent( go );
 		rootBase.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.04f );
 		rootBase.LocalScale = new Vector3( trunkW * 1.30f, trunkW * 1.30f, trunkH * 0.08f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( rootBase, new Color( tint.r * 0.78f, tint.g * 0.78f, tint.b * 0.78f, 1f ) );
+		var rootMr = Mat.AddTintedCube( rootBase, new Color( tint.r * 0.78f, tint.g * 0.78f, tint.b * 0.78f, 1f ) );
 
 		var lower = scene.CreateObject();
 		lower.Name = "TreeTrunk";
 		lower.SetParent( go );
 		lower.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.32f );
 		lower.LocalScale = new Vector3( trunkW, trunkW, trunkH * 0.56f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( lower, tint );
+		var lowerMr = Mat.AddTintedCube( lower, tint );
 
 		var upper = scene.CreateObject();
 		upper.Name = "TreeTrunkUpper";
 		upper.SetParent( go );
 		upper.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.78f );
 		upper.LocalScale = new Vector3( trunkW * 0.78f, trunkW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( upper, new Color( MathF.Min( 1f, tint.r * 1.08f ), MathF.Min( 1f, tint.g * 1.08f ), MathF.Min( 1f, tint.b * 1.08f ), 1f ) );
+		var upperMr = Mat.AddTintedCube( upper, new Color( MathF.Min( 1f, tint.r * 1.08f ), MathF.Min( 1f, tint.g * 1.08f ), MathF.Min( 1f, tint.b * 1.08f ), 1f ) );
 
 		int canopyHash = (hash >> 16) & 0xFF;
 		var canopyTint = isMythic
@@ -128,9 +133,15 @@ public sealed class Tree : Component, IChoppable
 		// Chops required scales with kind + slight scale jitter.
 		tree.ChopsRemaining = Math.Max( 1, (int)(Tunables.TreeKindChopsBase[kindIdx] * (0.7f + scaleNorm * 0.6f)) );
 		tree._primaryCanopy = primaryCanopy;
+		tree._rootStump = rootBase;
+		tree._trunkLowerMr = lowerMr;
+		tree._trunkUpperMr = upperMr;
+		tree._rootMr = rootMr;
 		tree._canopyTint = canopyTint;
 		tree._spawnFootPos = footPosition;
 		tree._biomeDifficulty = biomeDifficulty;
+		// Stagger ambient sway so adjacent trees don't beat in lockstep.
+		tree._ambientPhase = ((uint)hash & 0xFFFFu) / 65535f * MathF.PI * 2f;
 		return tree;
 	}
 
@@ -336,7 +347,30 @@ public sealed class Tree : Component, IChoppable
 		if ( _chopped ) return;
 		ChopsRemaining -= chopPower;
 		if ( ChopsRemaining <= 0 ) StartFell( direction );
-		else KickWobble( direction );
+		else { KickWobble( direction ); DarkenTrunkOnce(); }
+	}
+
+	// Each hit multiplies trunk renderers' tint by ~0.92 — accumulates so
+	// near-death trees look visibly bruised. Cap at 0.5 of original so
+	// extreme chops don't go pure black.
+	private void DarkenTrunkOnce()
+	{
+		const float factor = 0.92f;
+		const float floor = 0.5f;
+		DarkenRenderer( _trunkLowerMr, factor, floor );
+		DarkenRenderer( _trunkUpperMr, factor, floor );
+		DarkenRenderer( _rootMr,       factor, floor );
+	}
+
+	private static void DarkenRenderer( ModelRenderer mr, float factor, float floor )
+	{
+		if ( !mr.IsValid() ) return;
+		var t = mr.Tint;
+		mr.Tint = new Color(
+			MathF.Max( floor * 0.78f, t.r * factor ),
+			MathF.Max( floor * 0.78f, t.g * factor ),
+			MathF.Max( floor * 0.78f, t.b * factor ),
+			1f );
 	}
 
 	// Per-hit visible reaction : the standing trunk leans + bounces against
@@ -359,14 +393,33 @@ public sealed class Tree : Component, IChoppable
 
 	private void TickWobble()
 	{
-		if ( _chopped || _wobbleAmplitudeDeg < 0.05f ) return;
-		float t = (float)_wobbleStart;
-		const float decayPerSec = 4.5f;
-		const float freqHz = 9f;
-		float decay = MathF.Exp( -t * decayPerSec );
-		if ( decay < 0.02f ) { _wobbleAmplitudeDeg = 0f; WorldRotation = _baseRotation; return; }
-		float angle = _wobbleAmplitudeDeg * decay * MathF.Sin( t * freqHz * MathF.PI * 2f );
-		WorldRotation = _baseRotation * Rotation.FromAxis( _wobbleAxis, angle );
+		if ( _chopped ) return;
+		if ( !_baseRotCached ) { _baseRotation = WorldRotation; _baseRotCached = true; }
+		// Ambient wind sway — slow 0.55Hz oscillation around world-right at
+		// 0.45° peak. Phase staggered per tree so adjacent trees don't beat
+		// in lockstep. Always-on (cheap, single sin) — gives the forest a
+		// resting heartbeat even before any chops.
+		float now = Time.Now;
+		float ambient = MathF.Sin( now * 0.55f * MathF.PI * 2f + _ambientPhase ) * 0.45f;
+		// Hit-driven wobble — overrides ambient with its own axis + decay.
+		float hitAngle = 0f;
+		Vector3 hitAxis = Vector3.Right;
+		if ( _wobbleAmplitudeDeg >= 0.05f )
+		{
+			float t = (float)_wobbleStart;
+			const float decayPerSec = 4.5f;
+			const float freqHz = 9f;
+			float decay = MathF.Exp( -t * decayPerSec );
+			if ( decay < 0.02f ) _wobbleAmplitudeDeg = 0f;
+			else
+			{
+				hitAngle = _wobbleAmplitudeDeg * decay * MathF.Sin( t * freqHz * MathF.PI * 2f );
+				hitAxis = _wobbleAxis;
+			}
+		}
+		WorldRotation = _baseRotation
+			* Rotation.FromAxis( Vector3.Right, ambient )
+			* Rotation.FromAxis( hitAxis, hitAngle );
 	}
 
 	private void StartFell( Vector3 direction )
@@ -381,6 +434,16 @@ public sealed class Tree : Component, IChoppable
 		// rotation transient.
 		if ( _baseRotCached ) WorldRotation = _baseRotation;
 		_wobbleAmplitudeDeg = 0f;
+
+		// Detach the root flare so it stays in the ground as a stump — the
+		// trunk + canopy fall as a free log. SetParent(null) keeps the world
+		// transform so the stump sits exactly where the tree's foot was.
+		if ( _rootStump.IsValid() )
+		{
+			_rootStump.Tags.Add( "stump" );
+			_rootStump.SetParent( null, true );
+			_rootStump = null;
+		}
 
 		if ( Body.IsValid() )
 		{
