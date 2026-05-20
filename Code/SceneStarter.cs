@@ -31,6 +31,7 @@ public sealed class SceneStarter : Component
 			EnsureGameState();
 			EnsureHud();
 			EnsureSingleton<AutoPlay>( "AutoPlay" );
+			EnsureSingleton<PerfProbe>( "PerfProbe" );
 			EnsureSelfTest();
 
 			SetupLighting();
