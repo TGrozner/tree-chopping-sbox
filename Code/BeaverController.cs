@@ -40,6 +40,7 @@ public sealed class BeaverController : Component
 		TickFov();
 		TickAimPreview();
 		TickTeleportHome();
+		TickSpeedStat();
 		switch ( _phase )
 		{
 			case SwingPhase.Idle: TickIdle(); break;
@@ -60,6 +61,18 @@ public sealed class BeaverController : Component
 		if ( _hitstopFramesLeft <= 0 ) return;
 		_hitstopFramesLeft--;
 		if ( _hitstopFramesLeft == 0 ) Scene.TimeScale = 1f;
+	}
+
+	private float _baseWalkSpeed = -1f;
+	private float _baseRunSpeed = -1f;
+	private void TickSpeedStat()
+	{
+		if ( !Player.IsValid() ) return;
+		if ( _baseWalkSpeed <= 0f ) { _baseWalkSpeed = Player.WalkSpeed; _baseRunSpeed = Player.RunSpeed; }
+		var gs = GameState.Get( Scene );
+		float mul = gs.IsValid() ? gs.SpeedMultiplier : 1f;
+		Player.WalkSpeed = _baseWalkSpeed * mul;
+		Player.RunSpeed = _baseRunSpeed * mul;
 	}
 
 	private void TickFov()

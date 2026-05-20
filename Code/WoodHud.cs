@@ -116,26 +116,43 @@ public sealed class WoodHud : Component
 
 		float w = Screen.Width;
 		float h = Screen.Height;
-		bool canUpgrade = _state.AxeTier < Tunables.MaxAxeTier;
-		string line;
-		if ( !canUpgrade ) line = "MAX TIER — no more upgrades";
-		else
-		{
-			int cost = Tunables.AxeTierCosts[_state.AxeTier + 1];
-			bool afford = _state.Wood >= cost;
-			line = afford
-				? $"[E] UPGRADE AXE  ·  T{_state.AxeTier} → T{_state.AxeTier + 1}  ·  costs {cost} wood"
-				: $"need {cost} wood to upgrade  (have {_state.Wood})";
-		}
+		float fontSize = 18f;
+		float lineH = fontSize * 1.6f;
+		float backW = MathF.Min( 720f, w * 0.55f );
+		float backH = lineH * 5f + 12f;
+		float backX = (w - backW) * 0.5f;
+		float backY = h * 0.62f;
+		hud.DrawRect( new Rect( backX, backY, backW, backH ), new Color( 0f, 0f, 0f, 0.62f ) );
 
-		float fontSize = 24f;
-		float backW = MathF.Min( 780f, w * 0.6f );
-		float backH = fontSize * 1.8f;
-		var tint = (canUpgrade && _state.Wood >= Tunables.AxeTierCosts[Math.Min( _state.AxeTier + 1, Tunables.MaxAxeTier )])
-			? HotColor : TextColor.WithAlpha( 0.85f );
-		hud.DrawRect( new Rect( (w - backW) * 0.5f, h * 0.78f, backW, backH ), new Color( 0f, 0f, 0f, 0.55f ) );
-		var rect = new Rect( 0, h * 0.79f, w, fontSize * 1.4f );
-		hud.DrawText( new TextRendering.Scope( line, tint, fontSize ), rect, TextFlag.Center );
+		hud.DrawText( new TextRendering.Scope( "SHOP — [E] auto-buy cheapest",
+			TextColor.WithAlpha( 0.75f ), fontSize * 1.05f ),
+			new Rect( backX, backY + 4f, backW, lineH ), TextFlag.Center );
+
+		DrawShopLine( hud, backX, backY + lineH + 2f, backW, lineH, fontSize, "1",
+			$"Axe T{_state.AxeTier}", AxeNextCost(), "+chop/swing" );
+		DrawShopLine( hud, backX, backY + 2 * lineH + 2f, backW, lineH, fontSize, "2",
+			$"Speed T{_state.SpeedTier}", SpeedNextCost(), $"×{Tunables.SpeedMul[_state.SpeedTier]:0.00} walk" );
+		DrawShopLine( hud, backX, backY + 3 * lineH + 2f, backW, lineH, fontSize, "3",
+			$"Luck T{_state.LuckTier}", LuckNextCost(), $"{(Tunables.LuckChance[_state.LuckTier] * 100):0}% × 2 chance" );
+		DrawShopLine( hud, backX, backY + 4 * lineH + 2f, backW, lineH, fontSize, "4",
+			$"Power T{_state.PowerTier}", PowerNextCost(), $"+{Tunables.PowerBonus[_state.PowerTier]} chop power" );
+	}
+
+	private int AxeNextCost() => _state.AxeTier < Tunables.MaxAxeTier ? Tunables.AxeTierCosts[_state.AxeTier + 1] : -1;
+	private int SpeedNextCost() => _state.SpeedTier < Tunables.MaxStatTier ? Tunables.SpeedCosts[_state.SpeedTier + 1] : -1;
+	private int LuckNextCost() => _state.LuckTier < Tunables.MaxStatTier ? Tunables.LuckCosts[_state.LuckTier + 1] : -1;
+	private int PowerNextCost() => _state.PowerTier < Tunables.MaxStatTier ? Tunables.PowerCosts[_state.PowerTier + 1] : -1;
+
+	private void DrawShopLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font,
+		string key, string label, int cost, string effect )
+	{
+		bool maxed = cost < 0;
+		bool affordable = !maxed && _state.Wood >= cost;
+		var labelColor = maxed ? TextColor.WithAlpha( 0.40f ) : (affordable ? HotColor : TextColor.WithAlpha( 0.85f ));
+		string costStr = maxed ? "MAX" : $"{cost} wood";
+		string line = $"  [{key}]  {label}  ·  {costStr}  ·  {effect}";
+		hud.DrawText( new TextRendering.Scope( line, labelColor, font ),
+			new Rect( x, y, w, h ), TextFlag.LeftCenter );
 	}
 
 	private void DrawTeleportHint( Sandbox.Rendering.HudPainter hud )

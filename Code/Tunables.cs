@@ -50,12 +50,31 @@ public static class Tunables
 	public const float MythicScaleMul = 1.3f;
 
 	// Axe tier ladder. Each upgrade reduces ChopsRemaining drop per swing
-	// (ChopPower) and bumps the wood reward. Costs in wood, front-loaded so
-	// T1 is reachable in a handful of small-tree fells.
-	public const int MaxAxeTier = 3;
-	public static readonly int[] AxeTierCosts = { 0, 8, 28, 80 };
-	public static readonly int[] AxeTierChopPower = { 1, 2, 3, 5 };
-	public static readonly float[] AxeTierWoodMul = { 1.0f, 1.3f, 1.7f, 2.2f };
+	// (ChopPower) and bumps the wood reward. Costs grow ×3.5 then ×3 so
+	// T1 is reachable in a handful of saplings but T6 takes Veteran wood.
+	// Tier names (HUD/lore): Hands, Stone Axe, Bronze, Iron, Steel,
+	// Lumberjack, Chainsaw.
+	public const int MaxAxeTier = 6;
+	public static readonly int[] AxeTierCosts =     {    0,   8,   28,   80,  220,  580, 1400 };
+	public static readonly int[] AxeTierChopPower = {    1,   2,    3,    5,    8,   12,   20 };
+	public static readonly float[] AxeTierWoodMul = { 1.0f, 1.3f, 1.7f, 2.2f, 2.9f, 3.7f, 5.0f };
+	public static readonly string[] AxeTierName =
+	{
+		"Hands", "Stone", "Bronze", "Iron", "Steel", "Lumberjack", "Chainsaw",
+	};
+
+	// Personal stats (Mow-The-Lawn-style separate progression axes) :
+	//   Speed : walk speed multiplier (PlayerController WalkSpeed)
+	//   Luck  : chance per chop to double the wood drop
+	//   Power : extra ChopPower added on top of the axe tier's base
+	// Each costs its own wood ladder ; player picks at shop via Slot1..Slot4.
+	public const int MaxStatTier = 5;
+	public static readonly int[] SpeedCosts =     {    0,   12,    40,   120,   320,   800 };
+	public static readonly float[] SpeedMul =     { 1.0f, 1.15f, 1.30f, 1.50f, 1.75f, 2.10f };
+	public static readonly int[] LuckCosts =      {    0,   15,    50,   140,   380,  1000 };
+	public static readonly float[] LuckChance =   { 0.00f, 0.05f, 0.12f, 0.20f, 0.30f, 0.45f };
+	public static readonly int[] PowerCosts =     {    0,   20,    65,   180,   460,  1100 };
+	public static readonly int[] PowerBonus =     {    0,    1,     2,     3,     5,     8 };
 
 	// Wood reward per tree kind (before tier multiplier). Veterans are
 	// premium, saplings are practice.

@@ -125,9 +125,14 @@ public sealed class AutoPlay : Component
 		// gameplay video — without the wait the screenshot capture would
 		// catch the beaver still mid-teleport.
 		if ( (float)_sinceShopArrived < 1f ) return;
-		var gs = GameState.Get( Scene );
-		if ( gs.IsValid() && gs.TryUpgradeAxe() )
-			CurrentAction = $"upgraded to T{gs.AxeTier}";
+		var shop = Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
+		if ( shop.IsValid() && shop.BuyCheapestAffordable() )
+		{
+			var gs = GameState.Get( Scene );
+			CurrentAction = gs.IsValid()
+				? $"bought : axe T{gs.AxeTier} spd T{gs.SpeedTier} luk T{gs.LuckTier} pwr T{gs.PowerTier}"
+				: "bought upgrade";
+		}
 		_step = StepPickTarget;
 	}
 

@@ -322,9 +322,10 @@ public sealed class Tree : Component, IChoppable
 		int baseWood = Tunables.TreeKindWoodReward[kindIdx];
 		if ( IsMythic ) baseWood += Tunables.MythicWoodBonus;
 		// Ceiling so any multiplier > 1 always gives at least +1 vs the
-		// previous tier. Truncation made T1 Normal pay the same as T0 Normal
-		// (3.9 → 3), which felt like the upgrade did nothing.
+		// previous tier.
 		int gain = Math.Max( 1, (int)Math.Ceiling( baseWood * gs.WoodMultiplier ) );
+		// Luck stat : per-fell chance to double the drop.
+		if ( gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance ) gain *= 2;
 		gs.AddWood( gain );
 	}
 

@@ -7,6 +7,9 @@ public sealed class GameState : Component
 {
 	[Property, ReadOnly] public int Wood { get; private set; }
 	[Property, ReadOnly] public int AxeTier { get; private set; }
+	[Property, ReadOnly] public int SpeedTier { get; private set; }
+	[Property, ReadOnly] public int LuckTier { get; private set; }
+	[Property, ReadOnly] public int PowerTier { get; private set; }
 
 	public static GameState Get( Scene scene )
 		=> scene?.GetAllComponents<GameState>().FirstOrDefault();
@@ -17,6 +20,9 @@ public sealed class GameState : Component
 	{
 		public int Wood { get; set; }
 		public int AxeTier { get; set; }
+		public int SpeedTier { get; set; }
+		public int LuckTier { get; set; }
+		public int PowerTier { get; set; }
 		public string DateUtc { get; set; }
 	}
 
@@ -28,9 +34,13 @@ public sealed class GameState : Component
 		{
 			if ( !FileSystem.Data.FileExists( PersistFile ) ) return;
 			var d = FileSystem.Data.ReadJsonOrDefault<SaveData>( PersistFile, null );
-			if ( d != null ) { Wood = d.Wood; AxeTier = d.AxeTier; }
-			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh (wood=0 tier=0)" );
-			Log.Info( $"[GameState] Loaded : wood={Wood} tier={AxeTier}" );
+			if ( d != null )
+			{
+				Wood = d.Wood; AxeTier = d.AxeTier;
+				SpeedTier = d.SpeedTier; LuckTier = d.LuckTier; PowerTier = d.PowerTier;
+			}
+			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh" );
+			Log.Info( $"[GameState] Loaded : wood={Wood} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier}" );
 		}
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Load failed: {ex.Message}" ); }
 	}
@@ -46,7 +56,9 @@ public sealed class GameState : Component
 		{
 			FileSystem.Data.WriteJson( PersistFile, new SaveData
 			{
-				Wood = Wood, AxeTier = AxeTier, DateUtc = DateTime.UtcNow.ToString( "yyyy-MM-dd HH:mm" )
+				Wood = Wood, AxeTier = AxeTier,
+				SpeedTier = SpeedTier, LuckTier = LuckTier, PowerTier = PowerTier,
+				DateUtc = DateTime.UtcNow.ToString( "yyyy-MM-dd HH:mm" )
 			} );
 		}
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Save failed: {ex.Message}" ); }
@@ -71,21 +83,53 @@ public sealed class GameState : Component
 		return true;
 	}
 
-	// Per-tier swing power : how many ChopsRemaining the swing removes per
-	// click. T0 = 1 (bare hands feel), T3 = 4 (massive axe).
-	public int ChopPower => Tunables.AxeTierChopPower[AxeTier];
+	public bool TryUpgradeSpeed()
+	{
+		if ( SpeedTier >= Tunables.MaxStatTier ) return false;
+		int cost = Tunables.SpeedCosts[SpeedTier + 1];
+		if ( Wood < cost ) return false;
+		Wood -= cost; SpeedTier++; Save();
+		Log.Info( $"[GameState] Speed upgraded to T{SpeedTier}" );
+		return true;
+	}
 
-	// Wood gain multiplier per tier — better tools harvest more.
+	public bool TryUpgradeLuck()
+	{
+		if ( LuckTier >= Tunables.MaxStatTier ) return false;
+		int cost = Tunables.LuckCosts[LuckTier + 1];
+		if ( Wood < cost ) return false;
+		Wood -= cost; LuckTier++; Save();
+		Log.Info( $"[GameState] Luck upgraded to T{LuckTier}" );
+		return true;
+	}
+
+	public bool TryUpgradePower()
+	{
+		if ( PowerTier >= Tunables.MaxStatTier ) return false;
+		int cost = Tunables.PowerCosts[PowerTier + 1];
+		if ( Wood < cost ) return false;
+		Wood -= cost; PowerTier++; Save();
+		Log.Info( $"[GameState] Power upgraded to T{PowerTier}" );
+		return true;
+	}
+
+	// Per-swing chop damage = axe tier base + power bonus from personal stat.
+	public int ChopPower => Tunables.AxeTierChopPower[AxeTier] + Tunables.PowerBonus[PowerTier];
+	// Wood gain multiplier — axe tier only ; the Luck stat is a separate
+	// roll-for-double check inside Tree.GiveWoodOnce.
 	public float WoodMultiplier => Tunables.AxeTierWoodMul[AxeTier];
+	// Player walk speed multiplier — applied by BeaverController to the
+	// underlying PlayerController.WalkSpeed.
+	public float SpeedMultiplier => Tunables.SpeedMul[SpeedTier];
+	// Chance per chop to double the wood drop (0..1).
+	public float LuckChance => Tunables.LuckChance[LuckTier];
 
-	// Test-only : wipe back to defaults IN MEMORY ONLY. Do not Save() — that
-	// would overwrite the user's real progress.json (FileSystem.Data is the
-	// same directory for selftest and human play). The selftest runs for ~12s
-	// and exits ; the disk file is untouched, so the next human play loads
-	// the real progress.
 	public void ResetForTest()
 	{
 		Wood = 0;
 		AxeTier = 0;
+		SpeedTier = 0;
+		LuckTier = 0;
+		PowerTier = 0;
 	}
 }
