@@ -188,6 +188,7 @@ public sealed class SceneStarter : Component
 		go.Name = "ShopArea";
 		go.WorldPosition = ResolvedBeaverSpawn;
 		go.AddComponent<ShopArea>();
+
 		// Compact wooden disk under the shop — 120u radius (was 250u and
 		// dominated the camera foreground, hiding the green terrain).
 		var disk = Scene.CreateObject();
@@ -196,6 +197,36 @@ public sealed class SceneStarter : Component
 		disk.LocalPosition = new Vector3( 0f, 0f, -65f );
 		disk.LocalScale = new Vector3( 120f, 120f, 14f ) / Tunables.CubeBase;
 		Mat.AddTintedCube( disk, new Color( 0.62f, 0.42f, 0.18f, 1f ) );
+
+		// Vertical totem — tall enough to poke above the canopy from anywhere
+		// on the slope so the player can navigate back to the shop visually.
+		// Average tree top is ~ trunkH * scale * 1.5 (canopy + flag) ~ 900u
+		// at max kind=Veteran scale, our totem reaches 1200u above ground.
+		var pillar = Scene.CreateObject();
+		pillar.Name = "ShopPillar";
+		pillar.SetParent( go );
+		pillar.LocalPosition = new Vector3( 0f, 0f, 600f );
+		pillar.LocalScale = new Vector3( 30f, 30f, 1200f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( pillar, new Color( 0.55f, 0.35f, 0.16f, 1f ) );
+
+		// Gold cap on top of the totem — visible from a distance against the
+		// warm copper fog. Uses the same gold as Mythic trees so the visual
+		// language reads "valuable target = shop".
+		var cap = Scene.CreateObject();
+		cap.Name = "ShopFlag";
+		cap.SetParent( go );
+		cap.LocalPosition = new Vector3( 0f, 0f, 1180f );
+		cap.LocalScale = new Vector3( 90f, 90f, 60f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( cap, Tunables.MythicTrunkTint );
+
+		// Slimmer secondary cap to suggest a lantern silhouette rather than
+		// a flat slab.
+		var capTop = Scene.CreateObject();
+		capTop.Name = "ShopFlagTop";
+		capTop.SetParent( go );
+		capTop.LocalPosition = new Vector3( 0f, 0f, 1230f );
+		capTop.LocalScale = new Vector3( 60f, 60f, 40f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( capTop, Tunables.MythicCanopyTint );
 	}
 
 	public void RegenerateForest()

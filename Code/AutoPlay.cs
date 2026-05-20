@@ -7,6 +7,7 @@ namespace TreeChopping;
 public sealed class AutoPlay : Component
 {
 	[Property] public new bool Active { get; set; }
+	[Property] public bool LookBack { get; set; }
 	[Property, ReadOnly] public string CurrentAction { get; set; } = "idle";
 	[Property, ReadOnly] public int TreesFelled { get; set; }
 
@@ -17,13 +18,30 @@ public sealed class AutoPlay : Component
 
 	protected override void OnUpdate()
 	{
+		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
+
+		if ( LookBack && _beaver.IsValid() )
+		{
+			// One-shot : yaw the beaver in place to face the shop spawn point.
+			// No teleport, no vertical movement — just rotation so the camera
+			// (third-person, follows player yaw) frames the totem behind.
+			var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn ?? Vector3.Zero;
+			var dir = (spawn - _beaver.WorldPosition).WithZ( 0f );
+			if ( dir.LengthSquared > 1f )
+			{
+				float yaw = Rotation.LookAt( dir.Normal ).Yaw();
+				_beaver.TeleportTo( _beaver.WorldPosition, yaw );
+				CurrentAction = "looking back at shop";
+			}
+			LookBack = false;
+		}
+
 		if ( !Active )
 		{
-			CurrentAction = "idle";
+			if ( CurrentAction != "looking back at shop" ) CurrentAction = "idle";
 			return;
 		}
 
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
 		if ( !_beaver.IsValid() ) { CurrentAction = "no beaver"; return; }
 
 		switch ( _step )
