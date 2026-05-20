@@ -22,6 +22,7 @@ public sealed class GameState : Component
 	[Property, ReadOnly] public int TotalWoodEarned { get; private set; }
 	[Property, ReadOnly] public int GatesBroken { get; private set; }
 	[Property, ReadOnly] public int PetTier { get; private set; }
+	[Property, ReadOnly] public int TreesFelledTotal { get; private set; }
 
 	public static GameState Get( Scene scene )
 		=> scene?.GetAllComponents<GameState>().FirstOrDefault();
@@ -45,6 +46,7 @@ public sealed class GameState : Component
 		public int TotalWoodEarned { get; set; }
 		public int GatesBroken { get; set; }
 		public int PetTier { get; set; }
+		public int TreesFelledTotal { get; set; }
 		public string DateUtc { get; set; }
 	}
 
@@ -62,6 +64,7 @@ public sealed class GameState : Component
 				SpeedTier = d.SpeedTier; LuckTier = d.LuckTier; PowerTier = d.PowerTier;
 				Spirits = d.Spirits; TotalWoodEarned = d.TotalWoodEarned;
 				GatesBroken = d.GatesBroken; PetTier = d.PetTier;
+				TreesFelledTotal = d.TreesFelledTotal;
 			}
 			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh" );
 			Log.Info( $"[GameState] Loaded : wood={Wood} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier} spirits={Spirits}" );
@@ -84,6 +87,7 @@ public sealed class GameState : Component
 				SpeedTier = SpeedTier, LuckTier = LuckTier, PowerTier = PowerTier,
 				Spirits = Spirits, TotalWoodEarned = TotalWoodEarned,
 				GatesBroken = GatesBroken, PetTier = PetTier,
+				TreesFelledTotal = TreesFelledTotal,
 				DateUtc = DateTime.UtcNow.ToString( "yyyy-MM-dd HH:mm" )
 			} );
 		}
@@ -95,6 +99,7 @@ public sealed class GameState : Component
 		if ( amount <= 0 ) return;
 		Wood += amount;
 		TotalWoodEarned += amount;
+		TreesFelledTotal++;
 		Save();
 	}
 
@@ -204,5 +209,6 @@ public sealed class GameState : Component
 		TotalWoodEarned = 0;
 		GatesBroken = 0;
 		PetTier = 0;
+		TreesFelledTotal = 0;
 	}
 }

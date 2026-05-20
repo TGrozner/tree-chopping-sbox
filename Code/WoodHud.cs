@@ -49,11 +49,18 @@ public sealed class WoodHud : Component
 		_upgradeBannerText = text;
 	}
 
+	private bool _welcomeShown;
 	protected override void OnUpdate()
 	{
 		_state ??= GameState.Get( Scene );
 		_shop ??= Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
 		if ( Input.Pressed( "DebugToggle" ) ) DebugVisible = !DebugVisible;
+		if ( !_welcomeShown && _state.IsValid() )
+		{
+			_welcomeShown = true;
+			if ( _state.TreesFelledTotal > 0 )
+				ShowUpgradeBanner( $"WELCOME BACK  ·  {_state.TreesFelledTotal} trees · {_state.Spirits} spirits" );
+		}
 
 		var camera = Scene?.Camera;
 		if ( !camera.IsValid() ) return;
