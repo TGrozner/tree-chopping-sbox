@@ -66,6 +66,26 @@ public sealed class BeaverController : Component
 			Camera.WorldPosition = spawn + Vector3.Up * 3500f;
 			Camera.WorldRotation = Rotation.LookAt( Vector3.Down );
 			Camera.FieldOfView = 60f;
+			return;
+		}
+		// Anti-clip : trace from the player head toward the third-person
+		// camera position, pull the cam in if a tree trunk is between. Stops
+		// the "camera inside a wooden cube" frames when the player teleports
+		// (autoplay) or strafes next to a thick trunk.
+		var head = WorldPosition + Vector3.Up * Tunables.BeaverEyeHeight;
+		var camPos = Camera.WorldPosition;
+		var toCam = camPos - head;
+		if ( toCam.LengthSquared > 1f )
+		{
+			var trace = Scene.Trace
+				.Sphere( 10f, head, camPos )
+				.WithAnyTags( "tree" )
+				.IgnoreGameObjectHierarchy( GameObject )
+				.Run();
+			if ( trace.Hit )
+			{
+				Camera.WorldPosition = trace.EndPosition + (head - camPos).Normal * 6f;
+			}
 		}
 	}
 
