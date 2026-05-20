@@ -195,8 +195,9 @@ Tree pipeline (multi-chop + natural cascade) :
     pas de ricochet. Choix 2026-05-20 ("Naturelle uniquement") pour éviter le pinball.
 
 Shop / progression (GameState + ShopArea) :
-  GameState (singleton, persistant via FileSystem.Data/progress_{steamId}.json) :
-    ├─ Wood, TotalWoodEarned (lifetime) : int
+  GameState (singleton, persistant via FileSystem.Data/progress.json — per-Steam
+  variant punted phase6r, TODO when MP wired) :
+    ├─ Wood, TotalWoodEarned, TreesFelledTotal (lifetime, survives prestige)
     ├─ AxeTier : 0..6 (Hands/Stone/Bronze/Iron/Steel/Lumberjack/Chainsaw)
     ├─ SpeedTier / LuckTier / PowerTier : 0..5 (personal stats)
     ├─ PetTier : 0..5 (cosmetic companion, no gameplay effect)
@@ -204,7 +205,8 @@ Shop / progression (GameState + ShopArea) :
     ├─ ChopPower = AxeTierChopPower[axe] + PowerBonus[power]
     ├─ WoodMultiplier = AxeTierWoodMul[axe] × (1 + 0.01·Spirits)
     ├─ SpeedMultiplier (applied to PlayerController.WalkSpeed by BeaverController)
-    └─ LuckChance (per-fell roll in Tree.GiveWoodOnce to ×2 the drop)
+    └─ LuckChance (per-fell roll in Tree.GiveWoodOnce to ×2 the drop +
+        bigger gold puff)
   ShopArea (à BeaverSpawn) :
     ├─ Detect player within Radius=250u
     ├─ HUD 6-line shop menu quand PlayerInside
@@ -228,10 +230,16 @@ Prestige loop (Cookie-Clicker / AdVenture-Capitalist pattern) :
 
 HUD (WoodHud, immediate-mode) :
   ├─ Crosshair + au centre (3-arm gap pour ne pas masquer le aim highlight)
-  ├─ "WOOD" top-left + nombre, pulse à chaque gain (sync au load = no false pulse)
+  ├─ "WOOD" top-left + nombre, pulse gold à chaque gain / orange à chaque dépense
+  │   (sync au load = no false pulse au reboot)
   ├─ "AXE — <Name>" top-right + "T{n}" + 7 pips (lit jusqu'au tier courant)
   ├─ Shop menu 6 lines quand PlayerInside : [1] Axe [2] Speed [3] Luck
   │   [4] Power [5] Pet [6] Replant — affordable lines en HotColor, max en gris
+  ├─ Banners (3 channels, peuvent se chevaucher) :
+  │   • Prestige : "REPLANTED · +N SAPLING SPIRITS" gold 64px @ 30%h (2.5s)
+  │   • Ring unlock : "RING N UNLOCKED" orange 44px @ 22%h (2.0s)
+  │   • Upgrade toast : "AXE → IRON" / "SPEED → T3" / etc 28px @ 74%h (1.4s)
+  │   • Welcome back : ShowUpgradeBanner channel sur first frame post-load
   ├─ "[R] teleport to shop" en bas (hidden quand PlayerInside)
   └─ DebugToggle (B) : FPS overlay + tree counts (standing/falling/landed)
 
