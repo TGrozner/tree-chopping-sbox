@@ -44,12 +44,12 @@
         {
           "__type": "Sandbox.GradientFog",
           "__guid": "e1d2c3b4-a5f6-7890-1234-567890abcdef",
-          "Color": "0.78,0.55,0.42,1",
-          "Height": 200,
-          "VerticalFalloffExponent": 1.6,
-          "StartDistance": 600,
-          "EndDistance": 3200,
-          "FalloffExponent": 1.7
+          "Color": "0.92,0.62,0.42,1",
+          "Height": 350,
+          "VerticalFalloffExponent": 1.4,
+          "StartDistance": 800,
+          "EndDistance": 2400,
+          "FalloffExponent": 1.5
         }
       ]
     },
@@ -111,7 +111,7 @@
           "__guid": "6b2c3d4e-5f60-7182-93a4-b5c6d7e8f9a0",
           "BackgroundColor": "0.30,0.45,0.62,1",
           "ClearFlags": "All",
-          "FieldOfView": 65,
+          "FieldOfView": 72,
           "IsMainCamera": true,
           "Orthographic": false,
           "OrthographicHeight": 1204,

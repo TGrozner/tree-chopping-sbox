@@ -62,12 +62,29 @@ public sealed class Tree : Component, IChoppable
 
 		float trunkW = Tunables.TreeRadius * 1.4f * scaleMul;
 		float trunkH = Tunables.TreeHeight * scaleMul;
-		var part = scene.CreateObject();
-		part.Name = "TreeTrunk";
-		part.SetParent( go );
-		part.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.5f );
-		part.LocalScale = new Vector3( trunkW, trunkW, trunkH ) / Tunables.CubeBase;
-		Mat.AddTintedCube( part, tint );
+		// Trunk silhouette : a slight base flare (root) + main column + a
+		// narrower upper section gives a tapered tree shape from a uniform
+		// cube. Cheap (3 child meshes) and reads as wood not "stack of bricks".
+		var rootBase = scene.CreateObject();
+		rootBase.Name = "TreeRoot";
+		rootBase.SetParent( go );
+		rootBase.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.04f );
+		rootBase.LocalScale = new Vector3( trunkW * 1.30f, trunkW * 1.30f, trunkH * 0.08f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( rootBase, new Color( tint.r * 0.78f, tint.g * 0.78f, tint.b * 0.78f, 1f ) );
+
+		var lower = scene.CreateObject();
+		lower.Name = "TreeTrunk";
+		lower.SetParent( go );
+		lower.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.32f );
+		lower.LocalScale = new Vector3( trunkW, trunkW, trunkH * 0.56f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( lower, tint );
+
+		var upper = scene.CreateObject();
+		upper.Name = "TreeTrunkUpper";
+		upper.SetParent( go );
+		upper.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.78f );
+		upper.LocalScale = new Vector3( trunkW * 0.78f, trunkW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( upper, new Color( MathF.Min( 1f, tint.r * 1.08f ), MathF.Min( 1f, tint.g * 1.08f ), MathF.Min( 1f, tint.b * 1.08f ), 1f ) );
 
 		int canopyHash = (hash >> 16) & 0xFF;
 		var canopyTint = isMythic
