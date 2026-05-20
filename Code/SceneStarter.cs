@@ -10,7 +10,7 @@ public sealed class SceneStarter : Component
 	[Property] public float MinSpacing { get; set; } = 180f;
 	[Property] public int Seed { get; set; } = 0xCA5C;
 	[Property] public Vector3 BeaverSpawn { get; set; } = new( -1000f, 0f, 80f );
-	[Property] public float SpawnPadRadius { get; set; } = 200f;
+	[Property] public float SpawnPadRadius { get; set; } = 180f;
 
 	[ConVar( "tc_selftest_seed", Help = "If >0, overrides SceneStarter.Seed before bootstrap." )]
 	public static int SeedOverride { get; set; }
