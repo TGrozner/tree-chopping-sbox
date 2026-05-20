@@ -3,6 +3,14 @@ namespace TreeChopping;
 // Persistent progression state — wood balance + current tool tier. Persists
 // to disk so closing/reopening the game keeps the player where they were.
 // Mow-the-lawn-like : the player never "loses", just accumulates.
+//
+// MULTIPLAYER TODO : currently a scene-scoped singleton. For 4-player
+// co-op, this would need to be (a) per-Player-GameObject as a Component
+// owned by each Citizen, with (b) Sandbox [Sync] attributes on the
+// persistent fields, and (c) FileSystem.Data persistence keyed by
+// SteamId. The shared world (trees, gates, shop totem, terrain) stays
+// scene-scoped. The sbproj GameNetworkType=Multiplayer flip enables the
+// transport but the per-player partition is still TODO.
 public sealed class GameState : Component
 {
 	[Property, ReadOnly] public int Wood { get; private set; }
