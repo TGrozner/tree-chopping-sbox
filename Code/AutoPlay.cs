@@ -72,7 +72,10 @@ public sealed class AutoPlay : Component
 
 	private void TickSwing()
 	{
-		if ( !_target.IsValid() || !_target.IsStanding )
+		// Tree is "felled" once it's neither standing nor falling — i.e. it
+		// has landed and (probably) paid wood. Counting on !IsStanding alone
+		// over-counts during the fall animation.
+		if ( !_target.IsValid() || (!_target.IsStanding && !_target.IsFalling) )
 		{
 			TreesFelled++;
 			CurrentAction = $"tree fell — total {TreesFelled}";

@@ -26,12 +26,11 @@ public sealed class GameState : Component
 	{
 		try
 		{
-			if ( FileSystem.Data.FileExists( PersistFile ) )
-			{
-				var d = FileSystem.Data.ReadJsonOrDefault<SaveData>( PersistFile, null );
-				if ( d != null ) { Wood = d.Wood; AxeTier = d.AxeTier; }
-				Log.Info( $"[GameState] Loaded : wood={Wood} tier={AxeTier}" );
-			}
+			if ( !FileSystem.Data.FileExists( PersistFile ) ) return;
+			var d = FileSystem.Data.ReadJsonOrDefault<SaveData>( PersistFile, null );
+			if ( d != null ) { Wood = d.Wood; AxeTier = d.AxeTier; }
+			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh (wood=0 tier=0)" );
+			Log.Info( $"[GameState] Loaded : wood={Wood} tier={AxeTier}" );
 		}
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Load failed: {ex.Message}" ); }
 	}

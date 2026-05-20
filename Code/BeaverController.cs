@@ -125,7 +125,7 @@ public sealed class BeaverController : Component
 
 	private void TickIdle()
 	{
-		bool requested = Input.Pressed( "attack1" ) || DebugRequestSwing;
+		bool requested = Input.Pressed( "Attack1" ) || DebugRequestSwing;
 		if ( DebugRequestSwing ) DebugRequestSwing = false;
 		if ( !requested ) return;
 

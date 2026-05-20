@@ -274,6 +274,8 @@ public sealed class SceneStarter : Component
 			Tree.SpawnAt( Scene, pos, diff );
 			spawned++;
 		}
+		if ( spawned < TreeCount )
+			Log.Warning( $"[SceneStarter] Forest shortfall : {spawned}/{TreeCount} trees ({attempts} attempts). Density threshold or MinSpacing too strict ?" );
 	}
 
 	private bool TryGetGroundZ( float x, float y, out float groundZ )

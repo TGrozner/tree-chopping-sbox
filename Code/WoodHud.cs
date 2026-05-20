@@ -17,11 +17,6 @@ public sealed class WoodHud : Component
 	private bool _woodSynced;
 	private TimeSince _woodChangedTime = 999f;
 
-	protected override void OnStart()
-	{
-		DebugVisible = false;
-	}
-
 	protected override void OnUpdate()
 	{
 		_state ??= GameState.Get( Scene );
