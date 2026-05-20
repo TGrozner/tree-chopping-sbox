@@ -69,6 +69,21 @@ public static class Tunables
 	//   Power : extra ChopPower added on top of the axe tier's base
 	// Each costs its own wood ladder ; player picks at shop via Slot1..Slot4.
 	public const int MaxStatTier = 5;
+
+	// Cosmetic pet — purely visual companion. Each tier swaps colour/size
+	// so progression reads at a glance.
+	public const int MaxPetTier = 5;
+	public static readonly int[] PetCosts = { 0, 30, 100, 280, 720, 1800 };
+	public static readonly Color[] PetTints =
+	{
+		new( 0.6f, 0.6f, 0.6f, 1f ),   // T0 unused
+		new( 0.96f, 0.84f, 0.30f, 1f ), // T1 yellow finch
+		new( 0.42f, 0.86f, 0.96f, 1f ), // T2 cyan moth
+		new( 0.96f, 0.32f, 0.42f, 1f ), // T3 crimson sprite
+		new( 0.78f, 0.40f, 1.00f, 1f ), // T4 violet wisp
+		new( 1.00f, 0.78f, 0.18f, 1f ), // T5 mythic gold
+	};
+	public static readonly float[] PetSizes =     { 0f, 9f, 11f, 13f, 16f, 20f };
 	public static readonly int[] SpeedCosts =     {    0,   12,    40,   120,   320,   800 };
 	public static readonly float[] SpeedMul =     { 1.0f, 1.15f, 1.30f, 1.50f, 1.75f, 2.10f };
 	public static readonly int[] LuckCosts =      {    0,   15,    50,   140,   380,  1000 };

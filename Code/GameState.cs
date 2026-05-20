@@ -13,6 +13,7 @@ public sealed class GameState : Component
 	[Property, ReadOnly] public int Spirits { get; private set; }
 	[Property, ReadOnly] public int TotalWoodEarned { get; private set; }
 	[Property, ReadOnly] public int GatesBroken { get; private set; }
+	[Property, ReadOnly] public int PetTier { get; private set; }
 
 	public static GameState Get( Scene scene )
 		=> scene?.GetAllComponents<GameState>().FirstOrDefault();
@@ -29,6 +30,7 @@ public sealed class GameState : Component
 		public int Spirits { get; set; }
 		public int TotalWoodEarned { get; set; }
 		public int GatesBroken { get; set; }
+		public int PetTier { get; set; }
 		public string DateUtc { get; set; }
 	}
 
@@ -45,7 +47,7 @@ public sealed class GameState : Component
 				Wood = d.Wood; AxeTier = d.AxeTier;
 				SpeedTier = d.SpeedTier; LuckTier = d.LuckTier; PowerTier = d.PowerTier;
 				Spirits = d.Spirits; TotalWoodEarned = d.TotalWoodEarned;
-				GatesBroken = d.GatesBroken;
+				GatesBroken = d.GatesBroken; PetTier = d.PetTier;
 			}
 			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh" );
 			Log.Info( $"[GameState] Loaded : wood={Wood} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier} spirits={Spirits}" );
@@ -67,7 +69,7 @@ public sealed class GameState : Component
 				Wood = Wood, AxeTier = AxeTier,
 				SpeedTier = SpeedTier, LuckTier = LuckTier, PowerTier = PowerTier,
 				Spirits = Spirits, TotalWoodEarned = TotalWoodEarned,
-				GatesBroken = GatesBroken,
+				GatesBroken = GatesBroken, PetTier = PetTier,
 				DateUtc = DateTime.UtcNow.ToString( "yyyy-MM-dd HH:mm" )
 			} );
 		}
@@ -101,6 +103,7 @@ public sealed class GameState : Component
 		LuckTier = 0;
 		PowerTier = 0;
 		GatesBroken = 0;
+		PetTier = 0;
 		Save();
 		Log.Info( $"[GameState] Prestige : now have {Spirits} Sapling Spirits (+{Spirits}% wood)" );
 		return true;
@@ -155,6 +158,16 @@ public sealed class GameState : Component
 		return true;
 	}
 
+	public bool TryUpgradePet()
+	{
+		if ( PetTier >= Tunables.MaxPetTier ) return false;
+		int cost = Tunables.PetCosts[PetTier + 1];
+		if ( Wood < cost ) return false;
+		Wood -= cost; PetTier++; Save();
+		Log.Info( $"[GameState] Pet upgraded to T{PetTier}" );
+		return true;
+	}
+
 	// Per-swing chop damage = axe tier base + power bonus from personal stat.
 	public int ChopPower => Tunables.AxeTierChopPower[AxeTier] + Tunables.PowerBonus[PowerTier];
 	// Wood gain multiplier — axe tier × Spirits permanent boost. Luck is a
@@ -176,5 +189,6 @@ public sealed class GameState : Component
 		Spirits = 0;
 		TotalWoodEarned = 0;
 		GatesBroken = 0;
+		PetTier = 0;
 	}
 }

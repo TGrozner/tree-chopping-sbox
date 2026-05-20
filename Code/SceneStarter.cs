@@ -46,6 +46,7 @@ public sealed class SceneStarter : Component
 			var beaver = SpawnBeaver( camera );
 			SpawnShop();
 			SpawnForest();
+			SpawnPet( beaver );
 
 			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
 		}
@@ -182,6 +183,14 @@ public sealed class SceneStarter : Component
 		if ( animHelper.IsValid() ) animHelper.IkLeftHand = null;
 	}
 
+	private void SpawnPet( BeaverController beaver )
+	{
+		var go = Scene.CreateObject();
+		go.Name = "Pet";
+		var pet = go.AddComponent<Pet>();
+		pet.Beaver = beaver;
+	}
+
 	private void SpawnShop()
 	{
 		var go = Scene.CreateObject();
@@ -263,13 +272,15 @@ public sealed class SceneStarter : Component
 		SpawnGateAtBoundary( outerR );
 	}
 
-	// Spawn the next ring of trees + the new gate at the new boundary.
-	// Called from Tree.GiveWoodOnce when a gate fells.
+	// Called from Tree.GiveWoodOnce when a gate fells. Wipes the other 3
+	// gates on the same ring, spawns the next band of trees + 4 new gates
+	// at the new boundary.
 	public void OnGateBroken()
 	{
 		float oldOuter = Tunables.InitialOuterRadius
 			+ (Math.Max( 0, (GameState.Get( Scene )?.GatesBroken ?? 1 ) - 1 )) * Tunables.GateRingWidth;
 		float newOuter = CurrentOuterRadius();
+		DestroyRemainingGates();
 		int budget = (int)(TreeCount * (newOuter - oldOuter) / Tunables.ArenaRadius);
 		SpawnForestBand( oldOuter, newOuter, budget );
 		if ( newOuter < Tunables.ArenaRadius ) SpawnGateAtBoundary( newOuter );
@@ -278,14 +289,32 @@ public sealed class SceneStarter : Component
 
 	private void SpawnGateAtBoundary( float radius )
 	{
-		// One gate at a time, placed due East (+X) of spawn so the player
-		// can always walk toward it on a straight line.
-		var pos = ResolvedBeaverSpawn + new Vector3( radius, 0f, 0f );
-		if ( !TryGetGroundZ( pos.x, pos.y, out float groundZ ) ) return;
-		pos.z = groundZ;
+		// Four gates per ring at the cardinal directions (E/N/W/S) so the
+		// player can pick which side to expand into. Breaking any one fires
+		// OnGateBroken — the other three are wiped + the next ring spawns
+		// uniformly. Gate yaw is set so its cross-beam axis is tangent to
+		// the ring (the +X face of the cube points outward).
 		int gates = GameState.Get( Scene )?.GatesBroken ?? 0;
 		int chops = (int)MathF.Round( Tunables.GateBaseChops * MathF.Pow( Tunables.GateChopsGrowth, gates ) );
-		Tree.SpawnGate( Scene, pos, chops );
+		float[] anglesDeg = { 0f, 90f, 180f, 270f };
+		foreach ( var aDeg in anglesDeg )
+		{
+			float a = aDeg * MathF.PI / 180f;
+			float x = ResolvedBeaverSpawn.x + MathF.Cos( a ) * radius;
+			float y = ResolvedBeaverSpawn.y + MathF.Sin( a ) * radius;
+			if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
+			Tree.SpawnGate( Scene, new Vector3( x, y, groundZ ), chops, aDeg );
+		}
+	}
+
+	private void DestroyRemainingGates()
+	{
+		foreach ( var t in Scene.GetAllComponents<Tree>().ToList() )
+		{
+			if ( !t.IsValid() || !t.IsGate || !t.IsStanding ) continue;
+			var go = t.GameObject;
+			if ( go.IsValid() ) { go.Enabled = false; go.Destroy(); }
+		}
 	}
 
 	private void SpawnForestBand( float innerR, float outerR, int targetCount )

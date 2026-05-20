@@ -31,7 +31,8 @@ public sealed class ShopArea : Component
 		else if ( Input.Pressed( "Slot2" ) ) bought = _state.TryUpgradeSpeed();
 		else if ( Input.Pressed( "Slot3" ) ) bought = _state.TryUpgradeLuck();
 		else if ( Input.Pressed( "Slot4" ) ) bought = _state.TryUpgradePower();
-		else if ( Input.Pressed( "Slot5" ) ) bought = _state.TryPrestige();
+		else if ( Input.Pressed( "Slot5" ) ) bought = _state.TryUpgradePet();
+		else if ( Input.Pressed( "Slot6" ) ) bought = _state.TryPrestige();
 		if ( bought ) Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.7f, pitchMin: 1.2f, pitchMax: 1.4f );
 	}
 
@@ -46,11 +47,13 @@ public sealed class ShopArea : Component
 		int cSpeed = _state.SpeedTier < Tunables.MaxStatTier ? Tunables.SpeedCosts[_state.SpeedTier + 1]   : int.MaxValue;
 		int cLuck  = _state.LuckTier  < Tunables.MaxStatTier ? Tunables.LuckCosts[_state.LuckTier + 1]     : int.MaxValue;
 		int cPower = _state.PowerTier < Tunables.MaxStatTier ? Tunables.PowerCosts[_state.PowerTier + 1]   : int.MaxValue;
-		int cheapest = Math.Min( Math.Min( cAxe, cSpeed ), Math.Min( cLuck, cPower ) );
+		int cPet   = _state.PetTier   < Tunables.MaxPetTier  ? Tunables.PetCosts[_state.PetTier + 1]       : int.MaxValue;
+		int cheapest = Math.Min( Math.Min( Math.Min( cAxe, cSpeed ), Math.Min( cLuck, cPower ) ), cPet );
 		if ( cheapest == int.MaxValue || _state.Wood < cheapest ) return false;
 		if ( cheapest == cAxe ) return _state.TryUpgradeAxe();
 		if ( cheapest == cSpeed ) return _state.TryUpgradeSpeed();
 		if ( cheapest == cLuck ) return _state.TryUpgradeLuck();
-		return _state.TryUpgradePower();
+		if ( cheapest == cPower ) return _state.TryUpgradePower();
+		return _state.TryUpgradePet();
 	}
 }

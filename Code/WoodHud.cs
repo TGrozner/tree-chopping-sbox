@@ -118,10 +118,10 @@ public sealed class WoodHud : Component
 		float h = Screen.Height;
 		float fontSize = 18f;
 		float lineH = fontSize * 1.6f;
-		float backW = MathF.Min( 760f, w * 0.58f );
-		float backH = lineH * 6f + 12f;
+		float backW = MathF.Min( 780f, w * 0.60f );
+		float backH = lineH * 7f + 12f;
 		float backX = (w - backW) * 0.5f;
-		float backY = h * 0.58f;
+		float backY = h * 0.52f;
 		hud.DrawRect( new Rect( backX, backY, backW, backH ), new Color( 0f, 0f, 0f, 0.62f ) );
 
 		string header = _state.Spirits > 0
@@ -139,7 +139,9 @@ public sealed class WoodHud : Component
 			$"Luck T{_state.LuckTier}", LuckNextCost(), $"{(Tunables.LuckChance[_state.LuckTier] * 100):0}% × 2 chance" );
 		DrawShopLine( hud, backX, backY + 4 * lineH + 2f, backW, lineH, fontSize, "4",
 			$"Power T{_state.PowerTier}", PowerNextCost(), $"+{Tunables.PowerBonus[_state.PowerTier]} chop power" );
-		DrawPrestigeLine( hud, backX, backY + 5 * lineH + 2f, backW, lineH, fontSize );
+		DrawShopLine( hud, backX, backY + 5 * lineH + 2f, backW, lineH, fontSize, "5",
+			$"Pet T{_state.PetTier}", PetNextCost(), "cosmetic companion" );
+		DrawPrestigeLine( hud, backX, backY + 6 * lineH + 2f, backW, lineH, fontSize );
 	}
 
 	private void DrawPrestigeLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font )
@@ -158,6 +160,7 @@ public sealed class WoodHud : Component
 	private int SpeedNextCost() => _state.SpeedTier < Tunables.MaxStatTier ? Tunables.SpeedCosts[_state.SpeedTier + 1] : -1;
 	private int LuckNextCost() => _state.LuckTier < Tunables.MaxStatTier ? Tunables.LuckCosts[_state.LuckTier + 1] : -1;
 	private int PowerNextCost() => _state.PowerTier < Tunables.MaxStatTier ? Tunables.PowerCosts[_state.PowerTier + 1] : -1;
+	private int PetNextCost() => _state.PetTier < Tunables.MaxPetTier ? Tunables.PetCosts[_state.PetTier + 1] : -1;
 
 	private void DrawShopLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font,
 		string key, string label, int cost, string effect )

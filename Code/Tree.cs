@@ -129,27 +129,31 @@ public sealed class Tree : Component, IChoppable
 		return tree;
 	}
 
-	// Gate variant : a thicker, taller Veteran-grade Tree with high ChopsRemaining
-	// that walls off the next forest ring. On landing it triggers SceneStarter
-	// to expand the playable ring instead of paying wood.
-	public static Tree SpawnGate( Scene scene, Vector3 footPosition, int chopsRequired )
+	// Gate variant : a tall ⊥-shaped barrier with horizontal cross-beams so
+	// it reads as a "smashable doorway" rather than a fat red tree. On
+	// landing it triggers SceneStarter to expand the playable ring instead
+	// of paying wood.
+	public static Tree SpawnGate( Scene scene, Vector3 footPosition, int chopsRequired, float yawDeg )
 	{
 		var go = scene.CreateObject();
 		go.Name = "TreeGate";
 		go.WorldPosition = footPosition;
 		go.Tags.Add( "tree" );
-		float yawDeg = Game.Random.Float( 0f, 360f );
 		go.WorldRotation = Rotation.FromYaw( yawDeg );
 
-		// Gates are ~1.5× the size of a Veteran, with a distinctive dark-red
-		// trunk tint so they read as "smashable barrier" rather than "tree".
 		float scaleMul = Tunables.TreeKindScaleMul[(int)TreeKind.Veteran] * 1.5f;
 		float kindMassMul = Tunables.TreeKindMassMul[(int)TreeKind.Veteran] * 1.5f;
 		Color trunkTint = new( 0.42f, 0.18f, 0.18f, 1f );
 		Color capTint   = new( 0.62f, 0.30f, 0.20f, 1f );
+		Color beamTint  = new( 0.34f, 0.14f, 0.14f, 1f );
 
 		float trunkW = Tunables.TreeRadius * 1.4f * scaleMul;
 		float trunkH = Tunables.TreeHeight * scaleMul;
+		// Cross-beams extend perpendicular to the player approach (along
+		// local Y since the gate's local +X points outward from spawn).
+		float beamLen = trunkW * 5.0f;
+		float beamThick = trunkW * 0.55f;
+		float beamHeight = trunkW * 0.6f;
 
 		var rootBase = scene.CreateObject();
 		rootBase.Name = "GateRoot";
@@ -171,6 +175,22 @@ public sealed class Tree : Component, IChoppable
 		upper.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.78f );
 		upper.LocalScale = new Vector3( trunkW * 0.78f, trunkW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
 		Mat.AddTintedCube( upper, capTint );
+
+		// Horizontal cross-beams perpendicular to the radial direction. Two
+		// of them (mid + upper) make the silhouette read as a doorway.
+		var beamMid = scene.CreateObject();
+		beamMid.Name = "GateBeamMid";
+		beamMid.SetParent( go );
+		beamMid.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.42f );
+		beamMid.LocalScale = new Vector3( beamThick, beamLen, beamHeight ) / Tunables.CubeBase;
+		Mat.AddTintedCube( beamMid, beamTint );
+
+		var beamTop = scene.CreateObject();
+		beamTop.Name = "GateBeamTop";
+		beamTop.SetParent( go );
+		beamTop.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.92f );
+		beamTop.LocalScale = new Vector3( beamThick, beamLen, beamHeight ) / Tunables.CubeBase;
+		Mat.AddTintedCube( beamTop, capTint );
 
 		var col = go.AddComponent<BoxCollider>();
 		col.Scale = new Vector3( trunkW, trunkW, trunkH );
