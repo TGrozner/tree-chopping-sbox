@@ -12,6 +12,7 @@ public sealed class Tree : Component, IChoppable
 	[Property] public int ChopsRemaining { get; set; } = 3;
 	[Property] public TreeKind Kind { get; set; } = TreeKind.Normal;
 	[Property] public bool IsMythic { get; set; }
+	[Property] public bool IsGate { get; set; }
 
 	private bool _chopped;
 	private bool _landed;
@@ -125,6 +126,72 @@ public sealed class Tree : Component, IChoppable
 		tree._canopyTint = canopyTint;
 		tree._spawnFootPos = footPosition;
 		tree._biomeDifficulty = biomeDifficulty;
+		return tree;
+	}
+
+	// Gate variant : a thicker, taller Veteran-grade Tree with high ChopsRemaining
+	// that walls off the next forest ring. On landing it triggers SceneStarter
+	// to expand the playable ring instead of paying wood.
+	public static Tree SpawnGate( Scene scene, Vector3 footPosition, int chopsRequired )
+	{
+		var go = scene.CreateObject();
+		go.Name = "TreeGate";
+		go.WorldPosition = footPosition;
+		go.Tags.Add( "tree" );
+		float yawDeg = Game.Random.Float( 0f, 360f );
+		go.WorldRotation = Rotation.FromYaw( yawDeg );
+
+		// Gates are ~1.5× the size of a Veteran, with a distinctive dark-red
+		// trunk tint so they read as "smashable barrier" rather than "tree".
+		float scaleMul = Tunables.TreeKindScaleMul[(int)TreeKind.Veteran] * 1.5f;
+		float kindMassMul = Tunables.TreeKindMassMul[(int)TreeKind.Veteran] * 1.5f;
+		Color trunkTint = new( 0.42f, 0.18f, 0.18f, 1f );
+		Color capTint   = new( 0.62f, 0.30f, 0.20f, 1f );
+
+		float trunkW = Tunables.TreeRadius * 1.4f * scaleMul;
+		float trunkH = Tunables.TreeHeight * scaleMul;
+
+		var rootBase = scene.CreateObject();
+		rootBase.Name = "GateRoot";
+		rootBase.SetParent( go );
+		rootBase.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.04f );
+		rootBase.LocalScale = new Vector3( trunkW * 1.30f, trunkW * 1.30f, trunkH * 0.08f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( rootBase, new Color( trunkTint.r * 0.78f, trunkTint.g * 0.78f, trunkTint.b * 0.78f, 1f ) );
+
+		var lower = scene.CreateObject();
+		lower.Name = "GateTrunk";
+		lower.SetParent( go );
+		lower.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.32f );
+		lower.LocalScale = new Vector3( trunkW, trunkW, trunkH * 0.56f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( lower, trunkTint );
+
+		var upper = scene.CreateObject();
+		upper.Name = "GateTrunkUpper";
+		upper.SetParent( go );
+		upper.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.78f );
+		upper.LocalScale = new Vector3( trunkW * 0.78f, trunkW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
+		Mat.AddTintedCube( upper, capTint );
+
+		var col = go.AddComponent<BoxCollider>();
+		col.Scale = new Vector3( trunkW, trunkW, trunkH );
+		col.Center = new Vector3( 0f, 0f, trunkH * 0.5f );
+
+		var rb = go.AddComponent<Rigidbody>();
+		rb.MassOverride = Tunables.TreeMass * scaleMul * scaleMul * scaleMul * kindMassMul;
+		rb.AngularDamping = 1.2f;
+		rb.LinearDamping = 0.3f;
+		rb.StartAsleep = true;
+		rb.MotionEnabled = false;
+
+		var tree = go.AddComponent<Tree>();
+		tree.Body = rb;
+		tree.Kind = TreeKind.Veteran;
+		tree.IsGate = true;
+		tree.ChopsRemaining = chopsRequired;
+		tree._primaryCanopy = upper;
+		tree._canopyTint = capTint;
+		tree._spawnFootPos = footPosition;
+		tree._biomeDifficulty = 1f;
 		return tree;
 	}
 
@@ -318,13 +385,18 @@ public sealed class Tree : Component, IChoppable
 		_woodGiven = true;
 		var gs = GameState.Get( Scene );
 		if ( !gs.IsValid() ) return;
+		// Gates trigger a forest-ring expansion instead of paying wood.
+		if ( IsGate )
+		{
+			gs.OnGateBroken();
+			var starter = Scene.GetAllComponents<SceneStarter>().FirstOrDefault();
+			if ( starter.IsValid() ) starter.OnGateBroken();
+			return;
+		}
 		int kindIdx = (int)Kind;
 		int baseWood = Tunables.TreeKindWoodReward[kindIdx];
 		if ( IsMythic ) baseWood += Tunables.MythicWoodBonus;
-		// Ceiling so any multiplier > 1 always gives at least +1 vs the
-		// previous tier.
 		int gain = Math.Max( 1, (int)Math.Ceiling( baseWood * gs.WoodMultiplier ) );
-		// Luck stat : per-fell chance to double the drop.
 		if ( gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance ) gain *= 2;
 		gs.AddWood( gain );
 	}

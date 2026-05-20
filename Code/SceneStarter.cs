@@ -244,23 +244,72 @@ public sealed class SceneStarter : Component
 		Log.Info( $"[SceneStarter] Forest regenerated, trees={Scene.GetAllComponents<Tree>().Count()}" );
 	}
 
+	// Forest outer ring is gated : starts at InitialOuterRadius and expands
+	// by GateRingWidth each time OnGateBroken fires.
+	private float CurrentOuterRadius()
+	{
+		var gs = GameState.Get( Scene );
+		int gates = gs.IsValid() ? gs.GatesBroken : 0;
+		float outer = Tunables.InitialOuterRadius + gates * Tunables.GateRingWidth;
+		return MathF.Min( outer, Tunables.ArenaRadius );
+	}
+
 	private void SpawnForest()
 	{
-		var rng = new Random( Seed );
-		var placed = new List<Vector3>();
+		float innerR = SpawnPadRadius;
+		float outerR = CurrentOuterRadius();
+		int budget = (int)(TreeCount * outerR / Tunables.ArenaRadius);
+		SpawnForestBand( innerR, outerR, budget );
+		SpawnGateAtBoundary( outerR );
+	}
+
+	// Spawn the next ring of trees + the new gate at the new boundary.
+	// Called from Tree.GiveWoodOnce when a gate fells.
+	public void OnGateBroken()
+	{
+		float oldOuter = Tunables.InitialOuterRadius
+			+ (Math.Max( 0, (GameState.Get( Scene )?.GatesBroken ?? 1 ) - 1 )) * Tunables.GateRingWidth;
+		float newOuter = CurrentOuterRadius();
+		int budget = (int)(TreeCount * (newOuter - oldOuter) / Tunables.ArenaRadius);
+		SpawnForestBand( oldOuter, newOuter, budget );
+		if ( newOuter < Tunables.ArenaRadius ) SpawnGateAtBoundary( newOuter );
+		Log.Info( $"[SceneStarter] Ring expanded {oldOuter:0}u → {newOuter:0}u, +{budget} trees" );
+	}
+
+	private void SpawnGateAtBoundary( float radius )
+	{
+		// One gate at a time, placed due East (+X) of spawn so the player
+		// can always walk toward it on a straight line.
+		var pos = ResolvedBeaverSpawn + new Vector3( radius, 0f, 0f );
+		if ( !TryGetGroundZ( pos.x, pos.y, out float groundZ ) ) return;
+		pos.z = groundZ;
+		int gates = GameState.Get( Scene )?.GatesBroken ?? 0;
+		int chops = (int)MathF.Round( Tunables.GateBaseChops * MathF.Pow( Tunables.GateChopsGrowth, gates ) );
+		Tree.SpawnGate( Scene, pos, chops );
+	}
+
+	private void SpawnForestBand( float innerR, float outerR, int targetCount )
+	{
+		if ( outerR <= innerR || targetCount <= 0 ) return;
+		var rng = new Random( Seed ^ (innerR.GetHashCode() * 131) );
+		// Re-collect existing tree positions so the new band doesn't overlap.
+		var placed = Scene.GetAllComponents<Tree>()
+			.Where( t => t.IsValid() )
+			.Select( t => t.WorldPosition )
+			.ToList();
 		int attempts = 0;
 		int spawned = 0;
-		int maxAttempts = TreeCount * 80;
-
+		int maxAttempts = targetCount * 80;
+		float padRSq = SpawnPadRadius * SpawnPadRadius;
 		float padXY_X = ResolvedBeaverSpawn.x;
 		float padXY_Y = ResolvedBeaverSpawn.y;
-		float padRSq = SpawnPadRadius * SpawnPadRadius;
+		float bandWidth = outerR - innerR;
 
-		while ( spawned < TreeCount && attempts < maxAttempts )
+		while ( spawned < targetCount && attempts < maxAttempts )
 		{
 			attempts++;
-			float r = MathF.Sqrt( (float)rng.NextDouble() ) * Tunables.ArenaRadius;
-			if ( r < Tunables.ArenaCenterKeepout ) continue;
+			// Uniform area sampling in the band : r² uniform in [innerR², outerR²].
+			float r = MathF.Sqrt( innerR * innerR + (float)rng.NextDouble() * (outerR * outerR - innerR * innerR) );
 			float angle = (float)(rng.NextDouble() * MathF.Tau);
 			float x = MathF.Cos( angle ) * r;
 			float y = MathF.Sin( angle ) * r;
@@ -279,17 +328,13 @@ public sealed class SceneStarter : Component
 			if ( placed.Any( p => p.Distance( pos ) < spacing ) ) continue;
 
 			placed.Add( pos );
-			float dxBeav = x - ResolvedBeaverSpawn.x;
-			float dyBeav = y - ResolvedBeaverSpawn.y;
-			float distBeav = MathF.Sqrt( dxBeav * dxBeav + dyBeav * dyBeav );
-			// Biome difficulty 0..1 by distance to spawn. SpawnPadRadius..Arena
-			// covers the playable annulus ; clamp to that band.
+			float distBeav = MathF.Sqrt( dxPad * dxPad + dyPad * dyPad );
 			float diff = ((distBeav - SpawnPadRadius) / (Tunables.ArenaRadius - SpawnPadRadius)).Clamp( 0f, 1f );
 			Tree.SpawnAt( Scene, pos, diff );
 			spawned++;
 		}
-		if ( spawned < TreeCount )
-			Log.Warning( $"[SceneStarter] Forest shortfall : {spawned}/{TreeCount} trees ({attempts} attempts). Density threshold or MinSpacing too strict ?" );
+		if ( spawned < targetCount )
+			Log.Warning( $"[SceneStarter] Band [{innerR:0}..{outerR:0}] shortfall : {spawned}/{targetCount} trees" );
 	}
 
 	private bool TryGetGroundZ( float x, float y, out float groundZ )

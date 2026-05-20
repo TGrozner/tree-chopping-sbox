@@ -161,6 +161,16 @@ public static class Tunables
 	public const float ArenaNoiseScale = 400f;
 	public const float ArenaDensityThreshold = 0.05f;
 
+	// Gate progression (Mow-The-Lawn pattern) : the player starts with only
+	// the inner ring of forest accessible. Felling a gate at the boundary
+	// expands the playable ring by GateRingWidth and spawns the next gate.
+	// Costs scale ×GateChopsGrowth per gate, so later expansions take a
+	// real tier+stat investment to unlock.
+	public const float InitialOuterRadius = 1200f;
+	public const float GateRingWidth = 350f;
+	public const int GateBaseChops = 20;
+	public const float GateChopsGrowth = 1.5f;
+
 	// Terrain : Sandbox.Terrain generated at bootstrap from a 3-octave FBM
 	// value-noise heightmap. Smooth rolling hills + valleys ; tagged "ground"
 	// so the existing tree-spawn raycast pipeline drops trees onto the
