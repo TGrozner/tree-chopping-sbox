@@ -139,6 +139,7 @@ Sélection biome-biased par `biomeDifficulty ∈ [0, 1]` calculé `(dist - Spawn
 SceneStarter.OnStart()
  ├─ Singletons (créés si absents) : GameState · WoodHud · AutoPlay · PerfProbe
  │   · SelfTest? (gated par tc_selftest)
+ ├─ SetupLighting() — warm sun ×1.7 + sky fill ×2 + soft shadows
  ├─ DisableSceneGround() — la plane par défaut s'efface, le terrain heightmap la remplace
  ├─ TerrainHeightmap.Spawn(scene, seed, BeaverSpawn) — cône radial + 3-octave FBM noise,
  │   plateau au sommet pour le shop, tagged "ground"
@@ -147,16 +148,19 @@ SceneStarter.OnStart()
  ├─ ResolveBeaverSpawnGround() — raycast au point BeaverSpawn pour poser le castor au sol
  ├─ SpawnBeaver(camera) : Player GameObject + Sandbox.PlayerController (third-person,
  │   camera + input + animator owned) + child SkinnedModelRenderer (Citizen vmdl) +
- │   BeaverController (handles swing only) + axe (facepunch.woodaxe) parenté à hand_R
- ├─ SpawnShop() : ShopArea au ResolvedBeaverSpawn + visual disk wood-amber au sol
- └─ SpawnForest() : N Tree dans un disque (Tunables.ArenaRadius=2500), MinSpacing=180
-                    ├─ uniform disc sampling avec √u correction (forêt 360° autour
-                    │  du joueur — l'ancien filtre +X-only-of-beaver de l'ère
-                    │  bowling a été viré phase5f)
-                    ├─ ValueNoise2D + Hash2D gate (densité > ArenaDensityThreshold)
-                    ├─ keepout central + SpawnPadRadius autour du shop
-                    ├─ raycast au sol pour foot Z (terrain contour)
-                    └─ Tree.SpawnAt(scene, pos, biomeDifficulty)
+ │   BeaverController + axe (facepunch.woodaxe) parenté à hand_R
+ ├─ SpawnShop() : ShopArea au ResolvedBeaverSpawn + visual disk + vertical totem 1200u
+ │   avec cap doré (Mythic tint) visible from distance comme nav-marker
+ ├─ SpawnForest() : trees dans la bande [SpawnPadRadius .. InitialOuterRadius=1200u]
+ │   au boot — le reste du arena est verrouillé derrière les gates :
+ │                    ├─ uniform area sampling annulaire (forêt 360° autour du joueur)
+ │                    ├─ ValueNoise2D + Hash2D gate (densité > ArenaDensityThreshold)
+ │                    ├─ keepout central + SpawnPadRadius autour du shop
+ │                    ├─ raycast au sol pour foot Z (terrain contour)
+ │                    └─ Tree.SpawnAt(scene, pos, biomeDifficulty)
+ ├─ SpawnGateAtBoundary(1200u) : 4 Tree.SpawnGate aux cardinaux NSEW (Tree.IsGate=true,
+ │   ChopsRemaining = 20 × 1.5^GatesBroken, cross-beams perpendiculaires au radial)
+ └─ SpawnPet(beaver) : Pet GameObject orbite le castor (auto-sync avec GameState.PetTier)
 
 Player loop (Sandbox.PlayerController + BeaverController) :
   PlayerController : WASD + souris + jump + third-person camera. On ne touche pas.
@@ -191,21 +195,43 @@ Tree pipeline (multi-chop + natural cascade) :
     pas de ricochet. Choix 2026-05-20 ("Naturelle uniquement") pour éviter le pinball.
 
 Shop / progression (GameState + ShopArea) :
-  GameState (singleton, persistant via FileSystem.Data/progress.json) :
-    ├─ Wood : int (gain via Tree.GiveWoodOnce)
-    ├─ AxeTier : int (0..MaxAxeTier=3)
-    ├─ TryUpgradeAxe() : pay AxeTierCosts[tier+1] wood → tier++
-    └─ ChopPower / WoodMultiplier dérivés du tier
+  GameState (singleton, persistant via FileSystem.Data/progress_{steamId}.json) :
+    ├─ Wood, TotalWoodEarned (lifetime) : int
+    ├─ AxeTier : 0..6 (Hands/Stone/Bronze/Iron/Steel/Lumberjack/Chainsaw)
+    ├─ SpeedTier / LuckTier / PowerTier : 0..5 (personal stats)
+    ├─ PetTier : 0..5 (cosmetic companion, no gameplay effect)
+    ├─ Spirits + GatesBroken : prestige + ring-unlock counters
+    ├─ ChopPower = AxeTierChopPower[axe] + PowerBonus[power]
+    ├─ WoodMultiplier = AxeTierWoodMul[axe] × (1 + 0.01·Spirits)
+    ├─ SpeedMultiplier (applied to PlayerController.WalkSpeed by BeaverController)
+    └─ LuckChance (per-fell roll in Tree.GiveWoodOnce to ×2 the drop)
   ShopArea (à BeaverSpawn) :
     ├─ Detect player within Radius=250u
-    ├─ HUD shop hint quand PlayerInside
-    └─ Input "Use" (E) → TryUpgradeAxe + SFX
+    ├─ HUD 6-line shop menu quand PlayerInside
+    └─ Inputs : E auto-buy-cheapest · Slot1=Axe · Slot2=Speed · Slot3=Luck
+               · Slot4=Power · Slot5=Pet · Slot6=Replant (prestige)
+
+Gates / area unlock loop (Tree.IsGate + SceneStarter.OnGateBroken) :
+  ├─ 4 gates aux cardinaux à la boundary du ring courant
+  ├─ Casser un gate : Tree.GiveWoodOnce détecte IsGate → 3× chip burst + ring
+  │   expansion via SceneStarter.OnGateBroken (efface les 3 autres gates, spawn
+  │   la prochaine bande de trees [oldOuter..newOuter], spawn 4 nouveaux gates)
+  └─ Each next gate = ×1.5 chops (20 → 30 → 45 → 67 ...) gating progression
+
+Prestige loop (Cookie-Clicker / AdVenture-Capitalist pattern) :
+  ├─ Player atteint TotalWoodEarned ≥ 500 → CanPrestige=true
+  ├─ Slot6 → TryPrestige : wipe Wood/Axe/Speed/Luck/Power/Pet/Gates, garde
+  │   Spirits + TotalWoodEarned
+  ├─ Spirits gained = floor(sqrt(TotalWoodEarned/50)), capped à pas re-decrease
+  ├─ Each Spirit = +1% permanent wood multiplier
+  └─ ShopArea.FirePrestigeBurst : 3-direction golden leaf burst + double sfx
 
 HUD (WoodHud, immediate-mode) :
-  ├─ Crosshair centre, 3×3 px
-  ├─ "WOOD" top-left + nombre, pulse à chaque gain
-  ├─ "AXE TIER" top-right + "T{n}"
-  ├─ Shop hint quand PlayerInside : "[E] UPGRADE AXE · T0→T1 · costs 8 wood"
+  ├─ Crosshair + au centre (3-arm gap pour ne pas masquer le aim highlight)
+  ├─ "WOOD" top-left + nombre, pulse à chaque gain (sync au load = no false pulse)
+  ├─ "AXE — <Name>" top-right + "T{n}" + 7 pips (lit jusqu'au tier courant)
+  ├─ Shop menu 6 lines quand PlayerInside : [1] Axe [2] Speed [3] Luck
+  │   [4] Power [5] Pet [6] Replant — affordable lines en HotColor, max en gris
   ├─ "[R] teleport to shop" en bas (hidden quand PlayerInside)
   └─ DebugToggle (B) : FPS overlay + tree counts (standing/falling/landed)
 

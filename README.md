@@ -2,16 +2,18 @@
 
 Mow-the-lawn-like (style Plants vs. Zombies' Lawn) avec mécanique d'arbres qui tombent à la Valheim. Tu chop, le bois s'accumule, tu upgrades ta hache au shop sur le sommet, tu redescends, tu chop plus gros.
 
-Singleplayer s&box (Source 2 + C#/.NET). Pas de score, pas de runs : continuous play.
+Multiplayer s&box (Source 2 + C#/.NET, up to 4 players). Pas de score, pas de runs : continuous play.
 
 ## Loop
 
-1. Tu spawn sur un plateau au sommet d'une montagne. Le shop marker est sous tes pieds.
+1. Tu spawn sur un plateau au sommet d'une montagne. Le totem doré + le shop disk sont sous tes pieds.
 2. Tu descends la pente. Forêt biome-biased autour : saplings (1 chop) près du shop, veterans (8 chops) au bord.
-3. Click gauche = swing. Chop multiple selon le tier (T0=1, T1=2, T2=3, T3=5 chops par swing).
-4. Tree fells, le trunk roule, paye du bois (Sapling 1, Normal 3, Veteran 8, Brittle 2, Mythic +12).
-5. R = téléport au shop. E (quand près) = upgrade axe (coûts 8 / 28 / 80 bois).
-6. Wood + tier persistent dans `progress.json` (`FileSystem.Data`).
+3. Click gauche = swing. Chop multiple selon le tier (T0=1 → T6=20 chops par swing).
+4. Tree fells, le trunk roule, paye du bois (Sapling 1, Normal 3, Veteran 8, Brittle 2, Mythic +12). Forêt respawn auto (Sapling 30s → Veteran 5min).
+5. R = téléport au shop. Au shop : E = auto-buy cheapest · Slot1-6 = manuel sur les 6 axes (Axe / Speed / Luck / Power / Pet / Replant).
+6. Boundary ring : 4 dark-red gates aux cardinaux. Casse-en un (20 → 30 → 45 chops chaque tier) → ouvre la prochaine bande de forêt.
+7. Long-term : 500 lifetime wood → Replant prestige. Gain `√(woodEarned/50)` Sapling Spirits = +1% wood perma chacun. Reset tier + ring.
+8. Wood + tiers + spirits persistent dans `progress_{steamId}.json` (`FileSystem.Data`, per-user clé en MP).
 
 Trees tombent en physique naturelle — un trunk qui tombe peut bumper un voisin debout (Valheim soft cascade). Pas de CascadeStrike scripté.
 
@@ -36,7 +38,7 @@ dotnet build Code/tree_chopping.csproj
 | `Code/SceneStarter.cs` | Bootstrap : singletons (GameState, WoodHud, AutoPlay, PerfProbe, SelfTest), terrain procédural, mountain borders, beaver spawn, forêt biome-biased, shop area |
 | `Code/Tree.cs` | Multi-chop + StartFell + force-land timeout + GiveWoodOnce. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
 | `Code/BeaverController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
-| `Code/GameState.cs` | Wood + AxeTier persistence (FileSystem.Data/progress.json). ChopPower + WoodMultiplier derived from tier |
+| `Code/GameState.cs` | Persistence (FileSystem.Data/progress_{steamId}.json) : Wood, AxeTier 0..6, Speed/Luck/Power tiers 0..5, PetTier 0..5, Spirits + TotalWoodEarned (prestige), GatesBroken (ring unlock). Derived : ChopPower, WoodMultiplier, SpeedMultiplier, LuckChance |
 | `Code/ShopArea.cs` | Player-near-shop detect + E to upgrade |
 | `Code/WoodHud.cs` | HUD immediate-mode (crosshair, wood balance pulse, axe tier badge, shop hint, teleport hint) |
 | `Code/AutoPlay.cs` | Autonomous chop-loop in-forest driver (Active=true via MCP bridge). Teleporte le castor vers le tree le plus proche, swing until fell, repeat |
@@ -60,7 +62,13 @@ dotnet build Code/tree_chopping.csproj
 | Espace | Jump |
 | Shift | Sprint |
 | Click gauche | Swing axe |
-| E ("Use") | Acheter axe upgrade (dans ShopArea) |
+| E ("Use") | Shop : auto-buy cheapest affordable upgrade |
+| 1 ("Slot1") | Shop : upgrade Axe |
+| 2 ("Slot2") | Shop : upgrade Speed |
+| 3 ("Slot3") | Shop : upgrade Luck |
+| 4 ("Slot4") | Shop : upgrade Power |
+| 5 ("Slot5") | Shop : buy Pet |
+| 6 ("Slot6") | Shop : Replant Forest (prestige) |
 | R ("Reload") | Téléport au shop |
 | B ("DebugToggle") | FPS + tree counts HUD overlay |
 

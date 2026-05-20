@@ -86,10 +86,13 @@ public sealed class WoodHud : Component
 		float padR = 36f, padT = 28f;
 		float labelSize = 14f;
 		float valueSize = 30f;
-		float boxW = 160f;
+		float boxW = 220f;
 		float x = Screen.Width - padR - boxW;
 		var labelRect = new Rect( x, padT, boxW, labelSize * 1.4f );
-		hud.DrawText( new TextRendering.Scope( "AXE TIER", TextColor.WithAlpha( 0.55f ), labelSize ),
+		string tierName = _state.AxeTier >= 0 && _state.AxeTier < Tunables.AxeTierName.Length
+			? Tunables.AxeTierName[_state.AxeTier]
+			: "Unknown";
+		hud.DrawText( new TextRendering.Scope( $"AXE — {tierName.ToUpper()}", TextColor.WithAlpha( 0.55f ), labelSize ),
 			labelRect, TextFlag.RightCenter );
 		var valueRect = new Rect( x, padT + labelSize, boxW, valueSize * 1.3f );
 		hud.DrawText( new TextRendering.Scope( $"T{_state.AxeTier}", TextColor, valueSize ),
@@ -132,7 +135,8 @@ public sealed class WoodHud : Component
 			new Rect( backX, backY + 4f, backW, lineH ), TextFlag.Center );
 
 		DrawShopLine( hud, backX, backY + lineH + 2f, backW, lineH, fontSize, "1",
-			$"Axe T{_state.AxeTier}", AxeNextCost(), "+chop/swing" );
+			$"Axe T{_state.AxeTier} ({Tunables.AxeTierName[_state.AxeTier]})", AxeNextCost(),
+			_state.AxeTier < Tunables.MaxAxeTier ? $"→ {Tunables.AxeTierName[_state.AxeTier + 1]}" : "+chop/swing" );
 		DrawShopLine( hud, backX, backY + 2 * lineH + 2f, backW, lineH, fontSize, "2",
 			$"Speed T{_state.SpeedTier}", SpeedNextCost(), $"×{Tunables.SpeedMul[_state.SpeedTier]:0.00} walk" );
 		DrawShopLine( hud, backX, backY + 3 * lineH + 2f, backW, lineH, fontSize, "3",

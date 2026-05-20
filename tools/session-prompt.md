@@ -33,17 +33,19 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 
 ## Architecture en cours (rapide)
 
-- **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, beaver, shop, forest)
-- **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog (5s timeout safety) → GiveWoodOnce
-- **`BeaverController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch
-- **`GameState.cs`** : Wood + AxeTier persistence (`FileSystem.Data/progress.json`)
-- **`ShopArea.cs`** : detect player-in-radius + E to upgrade
-- **`WoodHud.cs`** : wood balance pulse + axe tier badge + shop hint + teleport hint
-- **`AutoPlay.cs`** : autonomous gameplay driver — bridge `set_runtime_property` Active/WideShotPose pour capture vidéo/screenshot
-- **`SelfTest.cs`** : Init → Approach → Swing → Verify(Wood>0), wait-on-condition pas time-based
-- **`TerrainHeightmap.cs`** : Sandbox.Terrain procédural + `Assets/materials/ground.vmat` (tinted green via `g_vColorTint` alpha=1)
-- **`MapBorders.cs`** : ring de cubes tagged "border"
+- **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, beaver, shop+totem, forêt initiale, 4 gates, pet)
+- **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog (5s timeout) → GiveWoodOnce. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
+- **`BeaverController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch, applique GameState.SpeedMultiplier sur PlayerController.WalkSpeed, AerialView toggle pour top-down screenshot
+- **`GameState.cs`** : Wood + AxeTier (0..6) + Speed/Luck/Power tiers (0..5) + PetTier (0..5) + Spirits + GatesBroken + TotalWoodEarned persistence (FileSystem.Data/progress_{steamId}.json — per-user clé en MP)
+- **`ShopArea.cs`** : detect player-in-radius, E=auto-buy-cheapest, Slot1-6=Axe/Speed/Luck/Power/Pet/Replant, FirePrestigeBurst sur Replant
+- **`WoodHud.cs`** : wood pulse + axe tier badge avec nom (Hands→Chainsaw) + 7 pips + 6-line shop menu + replant line + teleport hint
+- **`AutoPlay.cs`** : autonomous full-loop driver (chop → shop → upgrade → repeat) + LookBack one-shot
+- **`SelfTest.cs`** : Init → Approach → Swing → Verify(Wood>0), wait-on-condition. GameState.Save short-circuits when active (no clobber)
+- **`TerrainHeightmap.cs`** : Sandbox.Terrain procédural + materials/ground.vmat tinted green
+- **`MapBorders.cs`** : ring de cubes tagged "border" warm earth tones
 - **`ChipBurst.cs`** : chips/leaves/splinters custom-physics (pas de Rigidbody — perf killer)
+- **`Pet.cs`** : cosmetic orb orbitant le castor, auto-sync à GameState.PetTier
+- **`PerfProbe.cs`** : FpsAvg/Min + Renderers/Trees lisibles via bridge sans HUD
 - **`Mat.cs`** + **`Sfx.cs`** : helpers
 
 Architecture détaillée : `CLAUDE.md` section "Architecture gameplay actuelle".
