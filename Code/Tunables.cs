@@ -96,9 +96,9 @@ public static class Tunables
 	// Tree is "landed" once its up-axis tilts past this dot threshold.
 	public const float TreeFallenUpDotMax = 0.6f;
 
-	// Swing range : a real axe-arm reach. The cascade does the rest — you
-	// hit a near tree, it tips downhill, the chain propagates. 350u is
-	// roughly the closest forest ring around the spawn peak's plateau.
+	// Swing range : axe-arm reach — 350u is roughly the closest forest ring
+	// around the spawn peak's plateau. Adjacent trees can topple it further
+	// via natural rigidbody bumps (no scripted cascade).
 	public const float SwingRange = 350f;
 	public const float SwingConeDot = 0.30f;
 	public const float SwingAimSweepRadius = 14f;
