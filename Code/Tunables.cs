@@ -167,8 +167,11 @@ public static class Tunables
 	public const float BorderRadius = 2750f;
 	public const float BorderWallHeight = 900f;
 	public const float BorderWallDepth = 220f;
-	public static readonly Color BorderTintLow = new( 0.38f, 0.44f, 0.50f, 1f );
-	public static readonly Color BorderTintHigh = new( 0.52f, 0.58f, 0.62f, 1f );
+	// Warm earth-tone mountain palette — was cool blue-gray which clashed
+	// against the warm sun + copper fog. Brown silhouettes blend into the
+	// sunset distance instead of standing out as a separate scene.
+	public static readonly Color BorderTintLow = new( 0.42f, 0.36f, 0.30f, 1f );
+	public static readonly Color BorderTintHigh = new( 0.58f, 0.48f, 0.36f, 1f );
 
 	// Mountain shape variants — the boot Seed picks one deterministically.
 	// Cone is the baseline radial peak ; Ridges is a long N-S spine ;
