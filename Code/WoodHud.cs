@@ -53,7 +53,6 @@ public sealed class WoodHud : Component
 		hud.DrawRect( new Rect( cx - armThick * 0.5f, cy + gap, armThick, armLen ), tint );
 	}
 
-	// Wood balance top-left. Pulses on each gain.
 	private void DrawWoodPanel( Sandbox.Rendering.HudPainter hud )
 	{
 		if ( _state is null ) return;
@@ -110,7 +109,6 @@ public sealed class WoodHud : Component
 		}
 	}
 
-	// Shop hint when the player is inside the shop trigger zone.
 	private void DrawShopHint( Sandbox.Rendering.HudPainter hud )
 	{
 		if ( !_shop.IsValid() || !_shop.PlayerInside ) return;

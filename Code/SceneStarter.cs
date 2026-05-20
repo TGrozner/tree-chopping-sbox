@@ -127,12 +127,10 @@ public sealed class SceneStarter : Component
 		var go = Scene.CreateObject();
 		go.Name = "Player";
 		go.WorldPosition = ResolvedBeaverSpawn;
-		go.Tags.Add( "player" );
 
 		var modelGo = Scene.CreateObject();
 		modelGo.Name = "PlayerModel";
 		modelGo.SetParent( go );
-		modelGo.LocalPosition = Vector3.Zero;
 		var renderer = modelGo.AddComponent<SkinnedModelRenderer>();
 		renderer.Model = Model.Load( "models/citizen/citizen.vmdl" );
 		renderer.CreateBoneObjects = true;
@@ -164,40 +162,24 @@ public sealed class SceneStarter : Component
 	{
 		if ( !renderer.IsValid() ) return;
 		var hand = renderer.GetBoneObject( "hand_R" );
-		if ( !hand.IsValid() ) hand = renderer.GetBoneObject( "hand_right" );
 		if ( !hand.IsValid() ) return;
 
-		string[] candidates = {
-			"models/props/trim_sheets/tools/woodaxe.vmdl",
-			"models/woodaxe.vmdl",
-		};
-		Model axe = null;
-		string usedPath = null;
-		foreach ( var path in candidates )
-		{
-			try
-			{
-				var m = Model.Load( path );
-				if ( m is not null ) { axe = m; usedPath = path; break; }
-			}
-			catch { }
-		}
+		const string axePath = "models/props/trim_sheets/tools/woodaxe.vmdl";
+		Model axe;
+		try { axe = Model.Load( axePath ); }
+		catch { axe = null; }
 		if ( axe is null )
 		{
-			Log.Info( "[SceneStarter] woodaxe asset not mounted — install facepunch/woodaxe" );
+			Log.Info( $"[SceneStarter] {axePath} not mounted — install facepunch.woodaxe" );
 			return;
 		}
 
 		var axeGo = Scene.CreateObject();
 		axeGo.Name = "Axe";
 		axeGo.SetParent( hand );
-		axeGo.LocalPosition = Vector3.Zero;
-		axeGo.LocalRotation = Rotation.Identity;
-		axeGo.LocalScale = Vector3.One;
 		var mr = axeGo.AddComponent<ModelRenderer>();
 		mr.Model = axe;
 		if ( animHelper.IsValid() ) animHelper.IkLeftHand = null;
-		Log.Info( $"[SceneStarter] Axe asset mounted on hand_R from '{usedPath}' (1H grip)" );
 	}
 
 	private void SpawnShop()

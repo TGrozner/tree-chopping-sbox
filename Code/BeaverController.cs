@@ -212,6 +212,20 @@ public sealed class BeaverController : Component
 
 	// ─── debug / test ────────────────────────────────────────────────────────
 
+	// Silent variant used by AutoPlay. Same chop logic as DebugSwingVerbose
+	// minus the [TC_TEST] log spam (~4 lines/sec at autoplay cadence).
+	public IChoppable DebugSwing()
+	{
+		var origin = WorldPosition + Vector3.Up * Tunables.BeaverEyeHeight;
+		var forward = EyeForwardFlat();
+		var hit = ChooseSwingTarget( origin, forward );
+		if ( hit is null ) return null;
+		int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
+		if ( hit is Tree t ) t.Chop( forward, chopPower );
+		else hit.Chop( forward );
+		return hit;
+	}
+
 	public IChoppable DebugSwingVerbose()
 	{
 		var origin = WorldPosition + Vector3.Up * Tunables.BeaverEyeHeight;

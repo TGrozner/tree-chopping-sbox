@@ -69,7 +69,7 @@ public sealed class AutoPlay : Component
 			return;
 		}
 		if ( (float)_sinceLastSwing < 0.45f ) return;
-		_beaver.DebugSwingVerbose();
+		_beaver.DebugSwing();
 		_sinceLastSwing = 0f;
 		CurrentAction = $"swing — chops left {_target.ChopsRemaining}";
 	}

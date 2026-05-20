@@ -292,7 +292,6 @@ public sealed class Tree : Component, IChoppable
 	{
 		_landed = true;
 		_timeSinceLanded = 0f;
-		Tags.Add( "log" );
 
 		float landingSpeed = Body.IsValid() ? Body.Velocity.Length : 0f;
 		if ( Body.IsValid() )
