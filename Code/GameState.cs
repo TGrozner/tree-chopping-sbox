@@ -26,7 +26,23 @@ public sealed class GameState : Component
 	public static GameState Get( Scene scene )
 		=> scene?.GetAllComponents<GameState>().FirstOrDefault();
 
-	private const string PersistFile = "progress.json";
+	// In SinglePlayer or before a connection establishes, use the generic
+	// file. Once a Steam connection is up, use per-user so two clients on
+	// the same machine don't stomp each other.
+	private static string PersistFile
+	{
+		get
+		{
+			try
+			{
+				var sid = Sandbox.Connection.Local?.SteamId;
+				if ( sid.HasValue && sid.Value != 0 )
+					return $"progress_{sid.Value}.json";
+			}
+			catch { }
+			return "progress.json";
+		}
+	}
 
 	private class SaveData
 	{
