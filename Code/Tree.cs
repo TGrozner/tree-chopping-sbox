@@ -211,7 +211,10 @@ public sealed class Tree : Component, IChoppable
 	public bool IsFalling => _chopped && !_landed;
 	public bool IsStanding => !_chopped;
 
-	bool IChoppable.IsValid() => !IsFalling && this.IsValid();
+	// Only standing trees are valid swing targets — a landed log can't be
+	// re-chopped (Chop() short-circuits on _chopped) and shouldn't show up
+	// in the aim highlight either.
+	bool IChoppable.IsValid() => IsStanding && this.IsValid();
 	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Axe;
 
 	public void SetAimHighlight( bool on )
