@@ -12,7 +12,9 @@ public sealed class WoodHud : Component
 	public static bool DebugVisible { get; private set; }
 
 	private GameState _state;
+	private ShopArea _shop;
 	private int _lastShownWood;
+	private bool _woodSynced;
 	private TimeSince _woodChangedTime = 999f;
 
 	protected override void OnStart()
@@ -23,6 +25,7 @@ public sealed class WoodHud : Component
 	protected override void OnUpdate()
 	{
 		_state ??= GameState.Get( Scene );
+		_shop ??= Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
 		if ( Input.Pressed( "DebugToggle" ) ) DebugVisible = !DebugVisible;
 
 		var camera = Scene?.Camera;
@@ -50,6 +53,9 @@ public sealed class WoodHud : Component
 	private void DrawWoodPanel( Sandbox.Rendering.HudPainter hud )
 	{
 		if ( _state is null ) return;
+		// First sync after GameState loads : initialise without firing the
+		// gain pulse (Wood may be non-zero from progress.json).
+		if ( !_woodSynced ) { _lastShownWood = _state.Wood; _woodSynced = true; }
 		if ( _state.Wood != _lastShownWood )
 		{
 			_lastShownWood = _state.Wood;
@@ -90,8 +96,7 @@ public sealed class WoodHud : Component
 	// Shop hint when the player is inside the shop trigger zone.
 	private void DrawShopHint( Sandbox.Rendering.HudPainter hud )
 	{
-		var shop = Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
-		if ( !shop.IsValid() || !shop.PlayerInside ) return;
+		if ( !_shop.IsValid() || !_shop.PlayerInside ) return;
 		if ( _state is null ) return;
 
 		float w = Screen.Width;
@@ -120,9 +125,8 @@ public sealed class WoodHud : Component
 
 	private void DrawTeleportHint( Sandbox.Rendering.HudPainter hud )
 	{
-		var shop = Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
 		// Hide the hint when player is inside shop (shop hint is more important).
-		if ( shop.IsValid() && shop.PlayerInside ) return;
+		if ( _shop.IsValid() && _shop.PlayerInside ) return;
 		float fontSize = 16f;
 		var tint = TextColor.WithAlpha( 0.40f );
 		var rect = new Rect( 0, Screen.Height * 0.92f, Screen.Width, fontSize * 1.4f );

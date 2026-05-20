@@ -14,7 +14,6 @@ public sealed class AutoPlay : Component
 	private BeaverController _beaver;
 	private Tree _target;
 	private TimeSince _sinceLastSwing = 999f;
-	private TimeSince _sinceTeleport = 999f;
 	private int _step;
 
 	protected override void OnUpdate()
@@ -66,7 +65,6 @@ public sealed class AutoPlay : Component
 		var pos = _target.WorldPosition - dir * 60f + Vector3.Up * 40f;
 		float yaw = Rotation.LookAt( dir ).Yaw();
 		_beaver.TeleportTo( pos, yaw );
-		_sinceTeleport = 0f;
 		_sinceLastSwing = 999f;
 		CurrentAction = "approached";
 		_step = 2;

@@ -55,19 +55,12 @@ public sealed class GameState : Component
 		Save();
 	}
 
-	public bool TrySpendWood( int amount )
-	{
-		if ( Wood < amount ) return false;
-		Wood -= amount;
-		Save();
-		return true;
-	}
-
 	public bool TryUpgradeAxe()
 	{
 		if ( AxeTier >= Tunables.MaxAxeTier ) return false;
 		int cost = Tunables.AxeTierCosts[AxeTier + 1];
-		if ( !TrySpendWood( cost ) ) return false;
+		if ( Wood < cost ) return false;
+		Wood -= cost;
 		AxeTier++;
 		Save();
 		Log.Info( $"[GameState] Axe upgraded to T{AxeTier}" );
