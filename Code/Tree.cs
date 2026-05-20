@@ -442,6 +442,21 @@ public sealed class Tree : Component, IChoppable
 		{
 			_rootStump.Tags.Add( "stump" );
 			_rootStump.SetParent( null, true );
+			// Add a small fresh-cut surface cap on top — light wood tint so
+			// the stump reads as "just chopped" rather than "rotting root".
+			// Anchored in world space so it stays on the stationary stump.
+			var cap = Scene.CreateObject();
+			cap.Name = "StumpCutFace";
+			cap.SetParent( _rootStump );
+			var stumpScale = _rootStump.LocalScale * Tunables.CubeBase;
+			cap.LocalPosition = new Vector3( 0f, 0f, stumpScale.z * 0.55f );
+			cap.LocalScale = new Vector3( stumpScale.x * 0.95f, stumpScale.y * 0.95f, stumpScale.z * 0.15f ) / Tunables.CubeBase;
+			var liveBase = _trunkLowerMr.IsValid() ? _trunkLowerMr.Tint : new Color( 0.55f, 0.40f, 0.28f, 1f );
+			Mat.AddTintedCube( cap, new Color(
+				MathF.Min( 1f, liveBase.r * 1.30f + 0.18f ),
+				MathF.Min( 1f, liveBase.g * 1.25f + 0.14f ),
+				MathF.Min( 1f, liveBase.b * 1.20f + 0.08f ),
+				1f ) );
 			_rootStump = null;
 		}
 
