@@ -38,10 +38,19 @@ public sealed class WoodHud : Component
 
 	private void DrawCrosshair( Sandbox.Rendering.HudPainter hud )
 	{
+		// Small "+" with a gap in the middle. Reads as a reticle, not a fly
+		// stuck on the screen. Stays subtle (alpha 0.55) so it doesn't fight
+		// the chop preview highlight on the targeted tree.
 		float cx = Screen.Width * 0.5f;
 		float cy = Screen.Height * 0.5f;
-		var tint = new Color( 0.92f, 0.92f, 0.92f, 0.65f );
-		hud.DrawRect( new Rect( cx - 1.5f, cy - 1.5f, 3f, 3f ), tint );
+		var tint = new Color( 0.95f, 0.95f, 0.95f, 0.55f );
+		const float armLen = 7f;
+		const float armThick = 2f;
+		const float gap = 3f;
+		hud.DrawRect( new Rect( cx - armLen - gap, cy - armThick * 0.5f, armLen, armThick ), tint );
+		hud.DrawRect( new Rect( cx + gap, cy - armThick * 0.5f, armLen, armThick ), tint );
+		hud.DrawRect( new Rect( cx - armThick * 0.5f, cy - armLen - gap, armThick, armLen ), tint );
+		hud.DrawRect( new Rect( cx - armThick * 0.5f, cy + gap, armThick, armLen ), tint );
 	}
 
 	// Wood balance top-left. Pulses on each gain.

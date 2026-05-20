@@ -7,7 +7,6 @@ namespace TreeChopping;
 public sealed class AutoPlay : Component
 {
 	[Property] public new bool Active { get; set; }
-	[Property] public bool WideShotPose { get; set; }
 	[Property, ReadOnly] public string CurrentAction { get; set; } = "idle";
 	[Property, ReadOnly] public int TreesFelled { get; set; }
 
@@ -18,26 +17,13 @@ public sealed class AutoPlay : Component
 
 	protected override void OnUpdate()
 	{
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-
-		if ( WideShotPose && _beaver.IsValid() )
-		{
-			// High vantage point looking down at the forest. Position the
-			// beaver way up above the spawn peak and pitch the camera down
-			// so the cone of mountain + ring of trees fills the frame.
-			var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn ?? Vector3.Zero;
-			var pos = spawn + new Vector3( -800f, 0f, 1400f );
-			_beaver.TeleportTo( pos, 0f, 45f ); // face +X toward forest, pitch 45° down
-			WideShotPose = false;
-			CurrentAction = "wide shot posed";
-		}
-
 		if ( !Active )
 		{
-			if ( CurrentAction != "wide shot posed" ) CurrentAction = "idle";
+			CurrentAction = "idle";
 			return;
 		}
 
+		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
 		if ( !_beaver.IsValid() ) { CurrentAction = "no beaver"; return; }
 
 		switch ( _step )

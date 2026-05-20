@@ -103,7 +103,7 @@ public sealed class BeaverController : Component
 		Log.Info( "[Beaver] Teleport home" );
 	}
 
-	public void TeleportTo( Vector3 pos, float yawDeg, float pitchDeg = 0f )
+	public void TeleportTo( Vector3 pos, float yawDeg )
 	{
 		var rb = Components.Get<Rigidbody>();
 		if ( rb.IsValid() && rb.PhysicsBody.IsValid() )
@@ -117,7 +117,7 @@ public sealed class BeaverController : Component
 		{
 			var ang = Player.EyeAngles;
 			ang.yaw = yawDeg;
-			ang.pitch = pitchDeg;
+			ang.pitch = 0f;
 			ang.roll = 0f;
 			Player.EyeAngles = ang;
 		}
