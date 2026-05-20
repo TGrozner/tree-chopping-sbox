@@ -519,8 +519,35 @@ public sealed class Tree : Component, IChoppable
 		Sfx.Play( "sounds/log_break.sound", WorldPosition,
 			volume: 0.7f * speedFrac,
 			pitchMin: 0.78f * speedFrac, pitchMax: 1.05f * speedFrac );
+		SnapTrunkOnImpact();
 
 		GiveWoodOnce();
+	}
+
+	// Valheim-style "the trunk broke on impact" : rotate the upper trunk
+	// section + primary canopy by 12-22° around a random horizontal axis so
+	// the landed log visibly reads as two misaligned segments instead of one
+	// pristine cylinder. Cheap (just 2 LocalRotation sets, no physics or
+	// renderer changes).
+	private void SnapTrunkOnImpact()
+	{
+		if ( _trunkUpperMr.IsValid() )
+		{
+			float ang = 12f + Game.Random.Float( 0f, 10f );
+			float sign = Game.Random.Float() < 0.5f ? -1f : 1f;
+			var axis = new Vector3( Game.Random.Float( -1f, 1f ), Game.Random.Float( -1f, 1f ), 0f ).Normal;
+			_trunkUpperMr.GameObject.LocalRotation = Rotation.FromAxis( axis, ang * sign );
+			// Slight outward offset so the snap visually separates from the
+			// lower trunk instead of just rotating in place.
+			var origPos = _trunkUpperMr.GameObject.LocalPosition;
+			_trunkUpperMr.GameObject.LocalPosition = origPos + new Vector3( 0f, 0f, 6f );
+		}
+		if ( _primaryCanopy.IsValid() )
+		{
+			float ang = Game.Random.Float( -18f, 18f );
+			var axis = new Vector3( Game.Random.Float( -1f, 1f ), Game.Random.Float( -1f, 1f ), 0f ).Normal;
+			_primaryCanopy.LocalRotation *= Rotation.FromAxis( axis, ang );
+		}
 	}
 
 	// Award wood only once even if the trunk lands, rolls, lands again.
