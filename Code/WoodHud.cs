@@ -16,6 +16,16 @@ public sealed class WoodHud : Component
 	private int _lastShownWood;
 	private bool _woodSynced;
 	private TimeSince _woodChangedTime = 999f;
+	private TimeSince _prestigeBannerTime = 999f;
+	private int _prestigeBannerSpirits;
+
+	// Called by ShopArea after a successful TryPrestige() so the player gets
+	// a clear "you just earned N Spirits" beat on top of the chip burst.
+	public void ShowPrestigeBanner( int spiritsGained )
+	{
+		_prestigeBannerTime = 0f;
+		_prestigeBannerSpirits = spiritsGained;
+	}
 
 	protected override void OnUpdate()
 	{
@@ -32,6 +42,7 @@ public sealed class WoodHud : Component
 		DrawTierBadge( hud );
 		DrawShopHint( hud );
 		DrawTeleportHint( hud );
+		DrawPrestigeBanner( hud );
 
 		if ( DebugVisible ) DrawDebugBlock( hud );
 	}
@@ -176,6 +187,25 @@ public sealed class WoodHud : Component
 		string line = $"  [{key}]  {label}  ·  {costStr}  ·  {effect}";
 		hud.DrawText( new TextRendering.Scope( line, labelColor, font ),
 			new Rect( x, y, w, h ), TextFlag.LeftCenter );
+	}
+
+	private void DrawPrestigeBanner( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 2.5f;
+		float t = (float)_prestigeBannerTime / duration;
+		if ( t >= 1f ) return;
+		float w = Screen.Width;
+		float h = Screen.Height;
+		// Fade in fast, hold, fade out smoothly.
+		float alpha = t < 0.15f ? (t / 0.15f) : (1f - (t - 0.15f) / 0.85f);
+		alpha = alpha.Clamp( 0f, 1f );
+		float fontSize = 64f;
+		var title = $"REPLANTED  ·  +{_prestigeBannerSpirits} SAPLING SPIRITS";
+		// Black backdrop strip behind the text.
+		hud.DrawRect( new Rect( 0, h * 0.30f, w, fontSize * 1.8f ),
+			new Color( 0f, 0f, 0f, 0.55f * alpha ) );
+		hud.DrawText( new TextRendering.Scope( title, Tunables.MythicCanopyTint.WithAlpha( alpha ), fontSize ),
+			new Rect( 0, h * 0.30f, w, fontSize * 1.8f ), TextFlag.Center );
 	}
 
 	private void DrawTeleportHint( Sandbox.Rendering.HudPainter hud )
