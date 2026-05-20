@@ -1,15 +1,18 @@
 namespace TreeChopping;
 
 // Headless test of the mow-the-lawn loop. Phases :
-//   Init       — locate beaver + tree + game state
-//   Approach   — park beaver in front of a target tree
-//   Swing      — call DebugSwingVerbose until target tree fells
-//   Verify     — assert : GameState.Wood increased, target tree is no longer standing
+//   Init           — locate beaver + tree + game state
+//   Approach       — park beaver in front of a target tree
+//   Swing          — call DebugSwingVerbose until target tree fells
+//   Verify         — assert : GameState.Wood increased, target tree felled
+//   TestStats      — assert : TryUpgradeSpeed pays wood + bumps tier
+//   TestPrestige   — assert : prestige formula + tier reset + lifetime kept
+//   Done
 //
 // ConVar tc_selftest=1 to enable. PowerShell harness greps [TC_TEST] markers.
 public sealed class SelfTest : Component
 {
-	enum Phase { Init, Approach, Swing, Verify, Done }
+	enum Phase { Init, Approach, Swing, Verify, TestStats, TestPrestige, Done }
 
 	private Phase _phase = Phase.Init;
 	private TimeSince _phaseTime;
@@ -42,6 +45,8 @@ public sealed class SelfTest : Component
 			case Phase.Approach: TickApproach(); break;
 			case Phase.Swing: TickSwing(); break;
 			case Phase.Verify: TickVerify(); break;
+			case Phase.TestStats: TickTestStats(); break;
+			case Phase.TestPrestige: TickTestPrestige(); break;
 			case Phase.Done: break;
 		}
 	}
@@ -149,7 +154,107 @@ public sealed class SelfTest : Component
 		if ( ok )
 		{
 			Log.Info( $"[TC_TEST] PASS  swings={_swingsFired}  wood {_woodBeforeSwings}→{_state.Wood}" );
-			PhaseOk( Phase.Verify );
+			Transition( Phase.TestStats );
+		}
+		else
+		{
+			Finish();
+		}
+	}
+
+	private void TickTestStats()
+	{
+		// Pump wood to comfortably afford Speed T1 (cost 12) and Power T1
+		// (cost 20). Both Save calls are no-ops during selftest so the disk
+		// stays untouched. Then exercise both upgrade paths and assert the
+		// tier + wood deltas.
+		int speedCost = Tunables.SpeedCosts[1];
+		int powerCost = Tunables.PowerCosts[1];
+		int totalCost = speedCost + powerCost;
+		_state.AddWood( totalCost );
+		int woodBefore = _state.Wood;
+
+		if ( !_state.TryUpgradeSpeed() || _state.SpeedTier != 1 || _state.Wood != woodBefore - speedCost )
+		{
+			Log.Error( $"[TC_TEST] FAIL: TryUpgradeSpeed didn't apply (tier={_state.SpeedTier} wood {woodBefore}→{_state.Wood} expected {woodBefore - speedCost})" );
+			Finish();
+			return;
+		}
+		int afterSpeed = _state.Wood;
+		if ( !_state.TryUpgradePower() || _state.PowerTier != 1 || _state.Wood != afterSpeed - powerCost )
+		{
+			Log.Error( $"[TC_TEST] FAIL: TryUpgradePower didn't apply (tier={_state.PowerTier} wood {afterSpeed}→{_state.Wood})" );
+			Finish();
+			return;
+		}
+		// Sanity-check the derived multipliers wired into BeaverController +
+		// Tree paths.
+		if ( !(_state.SpeedMultiplier > 1f) )
+		{
+			Log.Error( $"[TC_TEST] FAIL: SpeedMultiplier didn't increase past 1.0 ({_state.SpeedMultiplier})" );
+			Finish();
+			return;
+		}
+		if ( _state.ChopPower <= Tunables.AxeTierChopPower[_state.AxeTier] )
+		{
+			Log.Error( $"[TC_TEST] FAIL: ChopPower didn't get +1 from Power T1 (got {_state.ChopPower})" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] STATS PASS  speed=T{_state.SpeedTier}×{_state.SpeedMultiplier:0.00}  power=T{_state.PowerTier}+{Tunables.PowerBonus[_state.PowerTier]}chop  wood={_state.Wood}" );
+		Transition( Phase.TestPrestige );
+	}
+
+	private void TickTestPrestige()
+	{
+		// Pump TotalWoodEarned past the 500 threshold so CanPrestige flips
+		// true, snapshot the lifetime + expected spirits, prestige, assert
+		// reset + spirit gain + lifetime kept.
+		int needed = Math.Max( 0, 500 - _state.TotalWoodEarned );
+		if ( needed > 0 ) _state.AddWood( needed );
+		if ( !_state.CanPrestige() )
+		{
+			Log.Error( $"[TC_TEST] FAIL: CanPrestige false despite TotalWood {_state.TotalWoodEarned} >= 500" );
+			Finish();
+			return;
+		}
+		int expectedSpirits = _state.SpiritsFromPrestige;
+		int totalBefore = _state.TotalWoodEarned;
+		int speedBefore = _state.SpeedTier;
+		int powerBefore = _state.PowerTier;
+		if ( !_state.TryPrestige() )
+		{
+			Log.Error( $"[TC_TEST] FAIL: TryPrestige returned false despite CanPrestige true" );
+			Finish();
+			return;
+		}
+		bool ok = true;
+		if ( _state.Spirits != expectedSpirits )
+		{
+			Log.Error( $"[TC_TEST] FAIL: spirits {_state.Spirits} != expected {expectedSpirits}" );
+			ok = false;
+		}
+		if ( _state.Wood != 0 || _state.AxeTier != 0 || _state.SpeedTier != 0 || _state.PowerTier != 0 || _state.PetTier != 0 || _state.GatesBroken != 0 )
+		{
+			Log.Error( $"[TC_TEST] FAIL: tiers not reset (wood={_state.Wood} axe={_state.AxeTier} spd={_state.SpeedTier} pwr={_state.PowerTier} pet={_state.PetTier} gates={_state.GatesBroken})" );
+			ok = false;
+		}
+		if ( _state.TotalWoodEarned != totalBefore )
+		{
+			Log.Error( $"[TC_TEST] FAIL: TotalWoodEarned not preserved across prestige ({totalBefore} → {_state.TotalWoodEarned})" );
+			ok = false;
+		}
+		// Sanity : speed/power had been bumped in TestStats ; prestige
+		// should have wiped them. The condition above covers that.
+		if ( speedBefore == 0 || powerBefore == 0 )
+		{
+			Log.Error( $"[TC_TEST] FAIL: pre-prestige snapshot looked already-reset (speed={speedBefore} power={powerBefore}) — TestStats may not have run" );
+			ok = false;
+		}
+		if ( ok )
+		{
+			Log.Info( $"[TC_TEST] PRESTIGE PASS  spirits 0→{_state.Spirits}  lifetime kept at {_state.TotalWoodEarned}" );
+			PhaseOk( Phase.TestPrestige );
 		}
 		Finish();
 	}

@@ -24,7 +24,7 @@ $ErrorActionPreference = "Stop"
 if ( -not (Test-Path $Sbox) )    { Write-Error "sbox-server.exe missing at $Sbox"; exit 2 }
 if ( -not (Test-Path $Project) ) { Write-Error "sbproj missing at $Project"; exit 2 }
 
-$expectedPhases = @( 'Init', 'Approach', 'Swing', 'Verify' )
+$expectedPhases = @( 'Init', 'Approach', 'Swing', 'Verify', 'TestStats', 'TestPrestige' )
 $expectedPassCount = 1
 
 $stderrNoiseAllowlist = @(
