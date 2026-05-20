@@ -347,7 +347,30 @@ public sealed class Tree : Component, IChoppable
 		if ( _chopped ) return;
 		ChopsRemaining -= chopPower;
 		if ( ChopsRemaining <= 0 ) StartFell( direction );
-		else { KickWobble( direction ); DarkenTrunkOnce(); }
+		else { KickWobble( direction ); DarkenTrunkOnce(); SpawnChopNotch(); }
+	}
+
+	// Small dark cube stuck on the trunk's side at chop height — accumulates
+	// per hit so a near-felled tree has visible damage scars instead of just
+	// a global darkening. Parented to the lower-trunk renderer so it inherits
+	// the trunk's scale and the wobble/fell rotations.
+	private void SpawnChopNotch()
+	{
+		if ( !_trunkLowerMr.IsValid() ) return;
+		var trunkGO = _trunkLowerMr.GameObject;
+		var notch = Scene.CreateObject();
+		notch.Name = "ChopNotch";
+		notch.SetParent( trunkGO );
+		// Trunk is a normalised [-0.5,0.5] cube scaled by LocalScale ; child
+		// LocalPosition is in the same normalised space. Angle = random ring
+		// around the trunk so chops stack visually across the circumference.
+		float angle = Game.Random.Float( 0f, MathF.PI * 2f );
+		notch.LocalPosition = new Vector3(
+			MathF.Cos( angle ) * 0.55f,
+			MathF.Sin( angle ) * 0.55f,
+			Game.Random.Float( -0.30f, 0.25f ) );
+		notch.LocalScale = new Vector3( 0.28f, 0.28f, 0.14f );
+		Mat.AddTintedCube( notch, new Color( 0.08f, 0.04f, 0.02f, 1f ) );
 	}
 
 	// Each hit multiplies trunk renderers' tint by ~0.92 — accumulates so
