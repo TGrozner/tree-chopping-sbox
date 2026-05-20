@@ -469,6 +469,11 @@ public sealed class Tree : Component, IChoppable
 
 		if ( _primaryCanopy.IsValid() )
 			ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, _fellDir, 14, _canopyTint );
+		// Tree-falling groan : low-pitched stretched log_break at the trunk
+		// base. Gives the player "TIMBER" feedback the moment a tree
+		// commits to falling, distinct from the impact crash on landing.
+		Sfx.Play( "sounds/log_break.sound", WorldPosition + Vector3.Up * 40f,
+			volume: 0.85f, pitchMin: 0.48f, pitchMax: 0.62f );
 	}
 
 	protected override void OnFixedUpdate()
