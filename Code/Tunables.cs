@@ -28,14 +28,14 @@ public static class Tunables
 	public static readonly int[] TreeKindWeightsEasy  = {  20,   65,     5,    10 };
 	public static readonly int[] TreeKindWeightsHard  = {  35,    5,    50,    10 };
 	public static readonly float[] TreeKindScaleMul   = { 1.0f, 0.55f, 1.6f,    1.0f };
-	// Veteran mass dropped 4.0→2.2 — was generating ridiculous impulses on
-	// contact that sent neighbors flying off the map.
+	// Veteran mass capped at 2.2× — higher values send neighbors flying on
+	// trunk-on-trunk impact (rigid-body impulse goes superlinear).
 	public static readonly float[] TreeKindMassMul    = { 1.0f, 0.30f, 2.2f,    0.8f };
 	public static readonly Color[] TreeKindTrunkTint  =
 	{
-		new( 0.58f, 0.40f, 0.26f, 1f ), // Normal — default brown (brightened from 0.46/0.32/0.22)
+		new( 0.58f, 0.40f, 0.26f, 1f ), // Normal — default brown
 		new( 0.68f, 0.52f, 0.30f, 1f ), // Sapling — lighter, warmer
-		new( 0.42f, 0.28f, 0.20f, 1f ), // Veteran — darker, ancient bark (brightened from 0.32/0.22/0.16)
+		new( 0.42f, 0.28f, 0.20f, 1f ), // Veteran — darker, ancient bark
 		new( 0.74f, 0.62f, 0.36f, 1f ), // Brittle — pale yellow-brown, dried out
 	};
 	// Per-tree multiplicative jitter on RGB — each tree picks one of these in
@@ -84,8 +84,6 @@ public static class Tunables
 
 	// Fell physics. Slow-tip ramp = first 0.32s of the topple, scaled torque
 	// going from 5% to 42% of max so trees don't snap-flat instantly.
-	// Tone-downed after "trees flying everywhere" feedback. Stronger
-	// dissipation = cleaner chains, less rogue logs.
 	public const float FellTorque = 110000f;
 	public const float FellPush = 2400f;
 	public const float SlowTipInitialFrac = 0.05f;
