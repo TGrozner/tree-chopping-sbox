@@ -10,6 +10,8 @@ public sealed class GameState : Component
 	[Property, ReadOnly] public int SpeedTier { get; private set; }
 	[Property, ReadOnly] public int LuckTier { get; private set; }
 	[Property, ReadOnly] public int PowerTier { get; private set; }
+	[Property, ReadOnly] public int Spirits { get; private set; }
+	[Property, ReadOnly] public int TotalWoodEarned { get; private set; }
 
 	public static GameState Get( Scene scene )
 		=> scene?.GetAllComponents<GameState>().FirstOrDefault();
@@ -23,6 +25,8 @@ public sealed class GameState : Component
 		public int SpeedTier { get; set; }
 		public int LuckTier { get; set; }
 		public int PowerTier { get; set; }
+		public int Spirits { get; set; }
+		public int TotalWoodEarned { get; set; }
 		public string DateUtc { get; set; }
 	}
 
@@ -38,9 +42,10 @@ public sealed class GameState : Component
 			{
 				Wood = d.Wood; AxeTier = d.AxeTier;
 				SpeedTier = d.SpeedTier; LuckTier = d.LuckTier; PowerTier = d.PowerTier;
+				Spirits = d.Spirits; TotalWoodEarned = d.TotalWoodEarned;
 			}
 			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh" );
-			Log.Info( $"[GameState] Loaded : wood={Wood} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier}" );
+			Log.Info( $"[GameState] Loaded : wood={Wood} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier} spirits={Spirits}" );
 		}
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Load failed: {ex.Message}" ); }
 	}
@@ -58,6 +63,7 @@ public sealed class GameState : Component
 			{
 				Wood = Wood, AxeTier = AxeTier,
 				SpeedTier = SpeedTier, LuckTier = LuckTier, PowerTier = PowerTier,
+				Spirits = Spirits, TotalWoodEarned = TotalWoodEarned,
 				DateUtc = DateTime.UtcNow.ToString( "yyyy-MM-dd HH:mm" )
 			} );
 		}
@@ -68,7 +74,31 @@ public sealed class GameState : Component
 	{
 		if ( amount <= 0 ) return;
 		Wood += amount;
+		TotalWoodEarned += amount;
 		Save();
+	}
+
+	// Prestige : replant the forest. Resets wood + all tiers, awards
+	// Sapling Spirits = floor(sqrt(TotalWoodEarned / 50)) on top of any
+	// previously earned. Each Spirit gives +1% permanent wood multiplier.
+	// Minimum 500 lifetime wood before the first prestige is allowed
+	// (yields 3 spirits) — keeps the reset feeling like a real commitment.
+	public int SpiritsFromPrestige => (int)MathF.Floor( MathF.Sqrt( TotalWoodEarned / 50f ) );
+
+	public bool CanPrestige() => TotalWoodEarned >= 500 && SpiritsFromPrestige > Spirits;
+
+	public bool TryPrestige()
+	{
+		if ( !CanPrestige() ) return false;
+		Spirits = SpiritsFromPrestige;
+		Wood = 0;
+		AxeTier = 0;
+		SpeedTier = 0;
+		LuckTier = 0;
+		PowerTier = 0;
+		Save();
+		Log.Info( $"[GameState] Prestige : now have {Spirits} Sapling Spirits (+{Spirits}% wood)" );
+		return true;
 	}
 
 	public bool TryUpgradeAxe()
@@ -115,9 +145,9 @@ public sealed class GameState : Component
 
 	// Per-swing chop damage = axe tier base + power bonus from personal stat.
 	public int ChopPower => Tunables.AxeTierChopPower[AxeTier] + Tunables.PowerBonus[PowerTier];
-	// Wood gain multiplier — axe tier only ; the Luck stat is a separate
-	// roll-for-double check inside Tree.GiveWoodOnce.
-	public float WoodMultiplier => Tunables.AxeTierWoodMul[AxeTier];
+	// Wood gain multiplier — axe tier × Spirits permanent boost. Luck is a
+	// separate roll-for-double check inside Tree.GiveWoodOnce.
+	public float WoodMultiplier => Tunables.AxeTierWoodMul[AxeTier] * (1f + Spirits * 0.01f);
 	// Player walk speed multiplier — applied by BeaverController to the
 	// underlying PlayerController.WalkSpeed.
 	public float SpeedMultiplier => Tunables.SpeedMul[SpeedTier];
@@ -131,5 +161,7 @@ public sealed class GameState : Component
 		SpeedTier = 0;
 		LuckTier = 0;
 		PowerTier = 0;
+		Spirits = 0;
+		TotalWoodEarned = 0;
 	}
 }

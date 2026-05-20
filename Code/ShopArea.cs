@@ -31,6 +31,7 @@ public sealed class ShopArea : Component
 		else if ( Input.Pressed( "Slot2" ) ) bought = _state.TryUpgradeSpeed();
 		else if ( Input.Pressed( "Slot3" ) ) bought = _state.TryUpgradeLuck();
 		else if ( Input.Pressed( "Slot4" ) ) bought = _state.TryUpgradePower();
+		else if ( Input.Pressed( "Slot5" ) ) bought = _state.TryPrestige();
 		if ( bought ) Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.7f, pitchMin: 1.2f, pitchMax: 1.4f );
 	}
 

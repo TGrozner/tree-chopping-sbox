@@ -118,13 +118,16 @@ public sealed class WoodHud : Component
 		float h = Screen.Height;
 		float fontSize = 18f;
 		float lineH = fontSize * 1.6f;
-		float backW = MathF.Min( 720f, w * 0.55f );
-		float backH = lineH * 5f + 12f;
+		float backW = MathF.Min( 760f, w * 0.58f );
+		float backH = lineH * 6f + 12f;
 		float backX = (w - backW) * 0.5f;
-		float backY = h * 0.62f;
+		float backY = h * 0.58f;
 		hud.DrawRect( new Rect( backX, backY, backW, backH ), new Color( 0f, 0f, 0f, 0.62f ) );
 
-		hud.DrawText( new TextRendering.Scope( "SHOP — [E] auto-buy cheapest",
+		string header = _state.Spirits > 0
+			? $"SHOP — [E] auto-buy cheapest    ✦ {_state.Spirits} Spirits (+{_state.Spirits}% wood)"
+			: "SHOP — [E] auto-buy cheapest";
+		hud.DrawText( new TextRendering.Scope( header,
 			TextColor.WithAlpha( 0.75f ), fontSize * 1.05f ),
 			new Rect( backX, backY + 4f, backW, lineH ), TextFlag.Center );
 
@@ -136,6 +139,19 @@ public sealed class WoodHud : Component
 			$"Luck T{_state.LuckTier}", LuckNextCost(), $"{(Tunables.LuckChance[_state.LuckTier] * 100):0}% × 2 chance" );
 		DrawShopLine( hud, backX, backY + 4 * lineH + 2f, backW, lineH, fontSize, "4",
 			$"Power T{_state.PowerTier}", PowerNextCost(), $"+{Tunables.PowerBonus[_state.PowerTier]} chop power" );
+		DrawPrestigeLine( hud, backX, backY + 5 * lineH + 2f, backW, lineH, fontSize );
+	}
+
+	private void DrawPrestigeLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font )
+	{
+		bool can = _state.CanPrestige();
+		int wouldGet = _state.SpiritsFromPrestige - _state.Spirits;
+		string line = can
+			? $"  [5]  REPLANT FOREST  ·  gain {wouldGet} Sapling Spirits (+{wouldGet}% wood, perma)"
+			: $"  [5]  Replant locked  ·  need 500 lifetime wood (have {_state.TotalWoodEarned})";
+		var tint = can ? HotColor : TextColor.WithAlpha( 0.40f );
+		hud.DrawText( new TextRendering.Scope( line, tint, font ),
+			new Rect( x, y, w, h ), TextFlag.LeftCenter );
 	}
 
 	private int AxeNextCost() => _state.AxeTier < Tunables.MaxAxeTier ? Tunables.AxeTierCosts[_state.AxeTier + 1] : -1;
