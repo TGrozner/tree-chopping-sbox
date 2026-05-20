@@ -9,7 +9,6 @@ public enum TreeKind { Normal, Sapling, Veteran, Brittle }
 public sealed class Tree : Component, IChoppable
 {
 	[Property] public Rigidbody Body { get; set; }
-	[Property] public Color TrunkTint { get; set; } = new( 0.46f, 0.32f, 0.22f, 1f );
 	[Property] public int ChopsRemaining { get; set; } = 3;
 	[Property] public TreeKind Kind { get; set; } = TreeKind.Normal;
 	[Property] public bool IsMythic { get; set; }
@@ -99,7 +98,6 @@ public sealed class Tree : Component, IChoppable
 
 		var tree = go.AddComponent<Tree>();
 		tree.Body = rb;
-		tree.TrunkTint = tint;
 		tree.IsMythic = isMythic;
 		tree.Kind = kind;
 		// Chops required scales with kind + slight scale jitter.
