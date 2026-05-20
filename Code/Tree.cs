@@ -519,6 +519,14 @@ public sealed class Tree : Component, IChoppable
 		Sfx.Play( "sounds/log_break.sound", WorldPosition,
 			volume: 0.7f * speedFrac,
 			pitchMin: 0.78f * speedFrac, pitchMax: 1.05f * speedFrac );
+		// Dust puff at impact — heavy trunk hitting the ground kicks dirt up.
+		// Two horizontal bursts on either side of the landed log + one
+		// vertical so the cloud forms a small ground-hugging mushroom.
+		var dustTint = new Color( 0.62f, 0.48f, 0.35f, 1f );
+		int dustCount = (int)(10 + speedFrac * 8f);
+		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 8f, Vector3.Up,       dustCount, dustTint );
+		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Right,    dustCount / 2, dustTint );
+		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Left,     dustCount / 2, dustTint );
 		SnapTrunkOnImpact();
 
 		GiveWoodOnce();
