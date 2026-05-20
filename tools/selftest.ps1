@@ -1,18 +1,21 @@
-# Headless self-test runner.
+﻿# Headless self-test runner — parallèle par défaut.
 #
-# Spawns sbox-server.exe with TREE_CHOPPING_SELFTEST=1; SceneStarter spawns a
-# SelfTest Component which drives the full chop → log → chunk → wood pipeline
-# without any input. We tail stdout, grep for [TC_TEST] lines, kill the process
-# once we see DONE (or hit the timeout), and exit 0/1.
+# Spawns sbox-server.exe per seed with +tc_selftest 1. Chaque process redirect
+# stdout/stderr en fichier. Poll periodically pour DONE marker.
 #
-# Use this any time you change Tree / LogPiece / WoodChunk / WoodInventory /
-# BeaverController-collection logic to confirm nothing regressed end-to-end.
+# Validations par iteration :
+#   1. Phase contract — chaque phase emit [TC_TEST] PHASE_OK <name>.
+#   2. FAIL markers — toute ligne [TC_TEST] *FAIL* ou [TC_INV] FAIL.
+#   3. Exception watchdog — Exception/FATAL/Unhandled hors allowlist.
+#   4. PASS count — 1 ([TC_TEST] PASS au Verify).
 
 [CmdletBinding()]
 param(
     [string]$Sbox    = "C:\Program Files (x86)\Steam\steamapps\common\sbox\sbox-server.exe",
     [string]$Project = "C:\dev\tree-chopping-sbox\tree_chopping.sbproj",
     [int]   $TimeoutSeconds = 75,
+    [int]   $Seeds = 1,
+    [switch]$Sequential,
     [switch]$KeepLog
 )
 
@@ -21,120 +24,222 @@ $ErrorActionPreference = "Stop"
 if ( -not (Test-Path $Sbox) )    { Write-Error "sbox-server.exe missing at $Sbox"; exit 2 }
 if ( -not (Test-Path $Project) ) { Write-Error "sbproj missing at $Project"; exit 2 }
 
-$stamp  = (Get-Date).ToString("yyyyMMdd-HHmmss")
-$logOut = Join-Path $env:TEMP "tc-selftest-$stamp.stdout.log"
-$logErr = Join-Path $env:TEMP "tc-selftest-$stamp.stderr.log"
-Remove-Item $logOut,$logErr -ErrorAction SilentlyContinue
+$expectedPhases = @( 'Init', 'Approach', 'Swing', 'Verify' )
+$expectedPassCount = 1
 
-# SelfTest is enabled via the engine ConVar "tc_selftest" — set on the command
-# line. System.Environment.* is on s&box's compiler whitelist deny-list, so env
-# vars can't be read from game code; ConVar is the sandbox-friendly equivalent.
-Write-Host "[harness] launching sbox-server (timeout ${TimeoutSeconds}s)"
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName  = $Sbox
-$psi.Arguments = "+game `"$Project`" +maxplayers 1 +tc_selftest 1"
-$psi.UseShellExecute        = $false
-$psi.RedirectStandardOutput = $true
-$psi.RedirectStandardError  = $true
-$psi.CreateNoWindow         = $true
+$stderrNoiseAllowlist = @(
+    'ERROR_FILEOPEN',
+    'engine/R Error loading resource file',
+    '^\s*$'
+)
 
-$proc = New-Object System.Diagnostics.Process
-$proc.StartInfo = $psi
+function Start-SelftestProcess {
+    param([int]$Seed)
 
-# Hook both streams to file + buffer in memory so we can grep.
-$collectedOut = New-Object System.Collections.Generic.List[string]
-$collectedErr = New-Object System.Collections.Generic.List[string]
-$outAction = {
-    if ( $EventArgs.Data -ne $null ) {
-        $line = [string]$EventArgs.Data
-        Add-Content -Path $Event.MessageData.LogPath -Value $line
-        $Event.MessageData.Buffer.Add($line) | Out-Null
+    $stamp = (Get-Date).ToString("yyyyMMdd-HHmmss-fff")
+    $logOut = Join-Path $env:TEMP "tc-selftest-$stamp-s${Seed}.stdout.log"
+    $logErr = Join-Path $env:TEMP "tc-selftest-$stamp-s${Seed}.stderr.log"
+    Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
+
+    $argList = @( '+game', "`"$Project`"", '+maxplayers', '1', '+tc_selftest', '1', '+tc_selftest_quick', '1' )
+    if ( $Seed -gt 0 ) { $argList += @( '+tc_selftest_seed', "$Seed" ) }
+
+    $proc = Start-Process -FilePath $Sbox -ArgumentList $argList -PassThru -NoNewWindow `
+        -RedirectStandardOutput $logOut -RedirectStandardError $logErr
+
+    [pscustomobject]@{
+        Seed = $Seed
+        Process = $proc
+        StdoutPath = $logOut
+        StderrPath = $logErr
+        SawDone = $false
+        Started = (Get-Date)
+        DoneAt = $null
     }
 }
-$errAction = $outAction
-$null = Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived `
-    -Action $outAction `
-    -MessageData ([pscustomobject]@{ LogPath = $logOut; Buffer = $collectedOut })
-$null = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived `
-    -Action $errAction `
-    -MessageData ([pscustomobject]@{ LogPath = $logErr; Buffer = $collectedErr })
 
-[void]$proc.Start()
-$proc.BeginOutputReadLine()
-$proc.BeginErrorReadLine()
+function Wait-AllForDone {
+    param([array]$Procs, [int]$TimeoutSeconds)
 
-$deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-$sawDone  = $false
-$sawSpawn = $false
-$cursor   = 0
-while ( (Get-Date) -lt $deadline -and -not $proc.HasExited ) {
-    Start-Sleep -Milliseconds 250
-    # Snapshot to avoid "Collection was modified" while the event handler appends.
-    $snapshot = @($collectedOut)
-    for ( $i = $cursor; $i -lt $snapshot.Count; $i++ ) {
-        $line = $snapshot[$i]
-        if ( -not $sawSpawn -and $line -match '\[TC_TEST\] SelfTest spawned' ) {
-            $sawSpawn = $true
-            Write-Host "[harness] SelfTest spawned, watching for DONE"
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ( (Get-Date) -lt $deadline ) {
+        $allDone = $true
+        foreach ( $p in $Procs ) {
+            if ( $p.SawDone ) { continue }
+            if ( $p.Process.HasExited ) {
+                $p.SawDone = $true
+                $p.DoneAt = (Get-Date)
+                continue
+            }
+            if ( Test-Path $p.StdoutPath ) {
+                # sbox-server holds the stdout file open in write mode — we need
+                # explicit FileShare.ReadWrite to read it concurrently. ReadAllText
+                # uses FileShare.Read which would IOException here.
+                $content = $null
+                try {
+                    $fs = [System.IO.File]::Open( $p.StdoutPath, [System.IO.FileMode]::Open,
+                        [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite )
+                    $reader = New-Object System.IO.StreamReader( $fs )
+                    $content = $reader.ReadToEnd()
+                    $reader.Close()
+                    $fs.Close()
+                } catch {}
+                if ( $content -and $content -match '\[TC_TEST\] DONE' ) {
+                    $p.SawDone = $true
+                    $p.DoneAt = (Get-Date)
+                    try { $p.Process.CloseMainWindow() | Out-Null } catch {}
+                }
+            }
+            if ( -not $p.SawDone ) { $allDone = $false }
         }
-        if ( $line -match '\[TC_TEST\] DONE' ) {
-            $sawDone = $true
-            break
+        if ( $allDone ) { break }
+        Start-Sleep -Milliseconds 400
+    }
+
+    # Force-kill anything still running.
+    foreach ( $p in $Procs ) {
+        if ( -not $p.Process.HasExited ) {
+            try { Stop-Process -Id $p.Process.Id -Force -ErrorAction SilentlyContinue } catch {}
         }
     }
-    $cursor = $snapshot.Count
-    if ( $sawDone ) { break }
+
+    # Give the kill a beat to flush stdout/stderr to file.
+    Start-Sleep -Milliseconds 200
 }
 
-# Polite shutdown first, force after a beat.
-if ( -not $proc.HasExited ) {
-    try { $proc.CloseMainWindow() | Out-Null } catch { }
-    Start-Sleep -Milliseconds 300
-    if ( -not $proc.HasExited ) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+function Test-SelftestIteration {
+    param([pscustomobject]$Proc)
+
+    $stdout = @()
+    $stderr = @()
+    if ( Test-Path $Proc.StdoutPath ) { $stdout = Get-Content $Proc.StdoutPath -ErrorAction SilentlyContinue }
+    if ( Test-Path $Proc.StderrPath ) { $stderr = Get-Content $Proc.StderrPath -ErrorAction SilentlyContinue }
+    $merged = @($stdout) + @($stderr)
+    $tcLines = $merged | Where-Object { $_ -match '\[TC_TEST\]' -or $_ -match '\[SceneStarter\]' -or $_ -match '\[TC_INV\]' }
+
+    $observedPhases = @()
+    foreach ( $line in $tcLines ) {
+        if ( $line -match '\[TC_TEST\] PHASE_OK (\w+)' ) {
+            $observedPhases += $Matches[1]
+        }
+    }
+    $missingPhases = @( $expectedPhases | Where-Object { $observedPhases -notcontains $_ } )
+    $phaseContractOk = ($missingPhases.Count -eq 0)
+
+    $tcFails = @( $tcLines | Where-Object { $_ -match '\[TC_TEST\].*FAIL' } )
+    $invFails = @( $tcLines | Where-Object { $_ -match '\[TC_INV\] FAIL' } )
+
+    $allowRegex = ($stderrNoiseAllowlist -join '|')
+    $exceptionLines = @( $stderr | Where-Object { $_ -notmatch $allowRegex } |
+        Where-Object { $_ -match 'Exception|Unhandled|FATAL|StackTrace|System\.NullReferenceException|InvalidOperationException' } )
+
+    $passCount = @( $tcLines | Where-Object { $_ -match '\[TC_TEST\] PASS' } ).Count
+
+    $elapsed = if ( $Proc.DoneAt ) { ($Proc.DoneAt - $Proc.Started).TotalSeconds } else { -1 }
+
+    $ok = $Proc.SawDone -and $phaseContractOk -and ($tcFails.Count -eq 0) `
+        -and ($invFails.Count -eq 0) -and ($exceptionLines.Count -eq 0) `
+        -and ($passCount -ge $expectedPassCount)
+
+    [pscustomobject]@{
+        Seed = $Proc.Seed
+        Ok = $ok
+        SawDone = $Proc.SawDone
+        PhaseContractOk = $phaseContractOk
+        MissingPhases = $missingPhases
+        TcFailCount = $tcFails.Count
+        InvFailCount = $invFails.Count
+        ExceptionCount = $exceptionLines.Count
+        PassCount = $passCount
+        ElapsedSeconds = $elapsed
+        StdoutPath = $Proc.StdoutPath
+        StderrPath = $Proc.StderrPath
+        TcLines = $tcLines
+        FirstException = if ( $exceptionLines.Count -gt 0 ) { $exceptionLines[0] } else { '' }
+    }
 }
 
-# Drain a moment so any tail-end events flush.
-Start-Sleep -Milliseconds 200
-Get-EventSubscriber | Unregister-Event
+# Seed list — same convention que l'ancienne version.
+$seedList = @()
+if ( $Seeds -le 1 ) {
+    $seedList = @(0)
+} else {
+    for ( $i = 0; $i -lt $Seeds; $i++ ) {
+        $seedList += (51800 + $i)
+    }
+}
 
-# Merge stdout + stderr — Log.Error lands on stderr and previously hid Run2
-# failures from the PASS/FAIL gate. Filter to the structured tags only; raw
-# stderr noise (asset loader misses, etc.) stays in the log file.
-$mergedLines = @($collectedOut) + @($collectedErr)
-$tcLines = $mergedLines | Where-Object { $_ -match '\[TC_TEST\]' -or $_ -match '\[SceneStarter\]' }
+$parallelLabel = if ( $Sequential -or $seedList.Count -eq 1 ) { 'sequential' } else { 'parallel' }
+Write-Host "[harness] sbox-server: $Sbox"
+Write-Host "[harness] project:     $Project"
+Write-Host "[harness] mode:        $parallelLabel, $($seedList.Count) iter, $TimeoutSeconds`s timeout each"
+Write-Host "[harness] seeds:       $($seedList -join ', ')"
+
+$globalStart = (Get-Date)
+$results = @()
+
+if ( $Sequential -or $seedList.Count -eq 1 ) {
+    foreach ( $seed in $seedList ) {
+        $proc = Start-SelftestProcess -Seed $seed
+        Wait-AllForDone -Procs @($proc) -TimeoutSeconds $TimeoutSeconds
+        $results += (Test-SelftestIteration -Proc $proc)
+    }
+} else {
+    # Parallel : spawn all, wait all, analyze all.
+    Write-Host "[harness] spawning $($seedList.Count) processes in parallel..."
+    $procs = @()
+    foreach ( $seed in $seedList ) {
+        $procs += (Start-SelftestProcess -Seed $seed)
+    }
+    Wait-AllForDone -Procs $procs -TimeoutSeconds $TimeoutSeconds
+    foreach ( $p in $procs ) {
+        $results += (Test-SelftestIteration -Proc $p)
+    }
+}
+
+$globalElapsed = ((Get-Date) - $globalStart).TotalSeconds
+
+# Per-iter dump.
+foreach ( $r in $results ) {
+    Write-Host ""
+    Write-Host "================ [harness] seed=$($r.Seed) ================"
+    if ( $r.TcLines.Count -gt 0 ) {
+        $r.TcLines | ForEach-Object { Write-Host $_ }
+    } else {
+        Write-Host "(no [TC_TEST]/[TC_INV]/[SceneStarter] lines — check stdout : $($r.StdoutPath))"
+    }
+    Write-Host "---------------------------------------------------------"
+    Write-Host "[harness] seed=$($r.Seed) summary:"
+    Write-Host "  saw DONE          : $($r.SawDone)"
+    Write-Host "  elapsed (s)       : $($r.ElapsedSeconds.ToString('F1'))"
+    Write-Host "  phase contract    : $(if ($r.PhaseContractOk) { 'OK' } else { 'MISSING ' + ($r.MissingPhases -join ',') })"
+    Write-Host "  TC_TEST FAILs     : $($r.TcFailCount)"
+    Write-Host "  TC_INV  FAILs     : $($r.InvFailCount)"
+    Write-Host "  exception lines   : $($r.ExceptionCount)"
+    Write-Host "  PASS markers      : $($r.PassCount) (need $expectedPassCount)"
+    if ( $r.FirstException ) { Write-Host "  first exception   : $($r.FirstException)" }
+    Write-Host "  stdout log        : $($r.StdoutPath)"
+}
 
 Write-Host ""
-Write-Host "------ [TC_TEST] / [SceneStarter] lines ------"
-$tcLines | ForEach-Object { Write-Host $_ }
-Write-Host "-----------------------------------------------"
-
-# FAIL marker can appear as "FAIL", "RUN2_FAIL_*", "_FAIL_*" — any token
-# containing FAIL on a [TC_TEST] line should fail the run. PASS stays strict
-# ("[TC_TEST] PASS ...") so an informational mention of "pass" doesn't flip
-# the result.
-$pass = ($tcLines | Where-Object { $_ -match '\[TC_TEST\] PASS' }).Count -gt 0
-$fail = ($tcLines | Where-Object { $_ -match '\[TC_TEST\].*FAIL' }).Count -gt 0
-
-if ( -not $KeepLog ) {
-    Write-Host "[harness] full stdout: $logOut"
-} else {
-    Write-Host "[harness] keep --> $logOut"
+Write-Host "================ [harness] overall result ================"
+foreach ( $r in $results ) {
+    $tag = if ( $r.Ok ) { 'PASS' } else { 'FAIL' }
+    Write-Host ("  seed={0,-6} {1}  ({2:F1}s)" -f $r.Seed, $tag, $r.ElapsedSeconds)
 }
+Write-Host ("[harness] wall time: {0:F1}s ({1})" -f $globalElapsed, $parallelLabel)
 
-if ( $pass -and -not $fail ) {
-    Write-Host "[harness] RESULT: PASS"
+$allOk = ($results | Where-Object { -not $_.Ok }).Count -eq 0
+if ( $allOk ) {
+    Write-Host "[harness] RESULT: PASS ($($results.Count) iterations)"
     exit 0
 }
 
-if ( $fail ) {
-    Write-Host "[harness] RESULT: FAIL"
-    exit 1
-}
-
-if ( -not $sawDone ) {
-    Write-Host "[harness] RESULT: TIMEOUT after ${TimeoutSeconds}s (DONE not seen)"
+$timeoutOnly = ($results | Where-Object { -not $_.Ok -and -not $_.SawDone }).Count -eq $results.Count
+if ( $timeoutOnly ) {
+    Write-Host "[harness] RESULT: TIMEOUT (no iteration reached DONE within ${TimeoutSeconds}s)"
     exit 3
 }
 
-Write-Host "[harness] RESULT: INDETERMINATE (DONE seen but no PASS/FAIL)"
-exit 4
+Write-Host "[harness] RESULT: FAIL"
+exit 1
