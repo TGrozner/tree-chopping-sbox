@@ -26,23 +26,13 @@ public sealed class GameState : Component
 	public static GameState Get( Scene scene )
 		=> scene?.GetAllComponents<GameState>().FirstOrDefault();
 
-	// In SinglePlayer or before a connection establishes, use the generic
-	// file. Once a Steam connection is up, use per-user so two clients on
-	// the same machine don't stomp each other.
-	private static string PersistFile
-	{
-		get
-		{
-			try
-			{
-				var sid = Sandbox.Connection.Local?.SteamId;
-				if ( sid.HasValue && sid.Value != 0 )
-					return $"progress_{sid.Value}.json";
-			}
-			catch { }
-			return "progress.json";
-		}
-	}
+	// Solo persistence. The per-Steam-id variant (phase6k) bounced between
+	// "progress.json" and "progress_{steamId}.json" depending on whether
+	// Connection.Local was resolved at Load/Save time — different files
+	// each session, partial loads. TODO when real MP is wired : resolve
+	// the SteamId-keyed path ONCE at OnStart and cache it on the instance,
+	// then use that same path for the entire session.
+	private const string PersistFile = "progress.json";
 
 	private class SaveData
 	{
