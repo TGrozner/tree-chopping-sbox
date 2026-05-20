@@ -1,75 +1,82 @@
-# Prompt de session — port Godot → s&box
+# Prompt de session — Tree Chopping (s&box, mow-the-lawn)
 
-À copier-coller dans une nouvelle conversation Claude Code pour reprendre proprement.
+À copier-coller en début de nouvelle conversation Claude Code pour reprendre proprement, ou que tu lises en premier si une session démarre cold sur ce repo.
 
 ---
 
-Je suis Thomas, je porte un proto Godot (`C:\dev\tree-chopping\` — référence read-only) vers s&box (`C:\dev\tree-chopping-sbox\` — la copie de travail). Tu vas m'aider à porter une feature spécifique que je te dirai. **Suis le protocole ci-dessous à la lettre — il existe parce qu'on s'est cassé la gueule plusieurs fois sans.**
+Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). Loop : chop arbres → wood → shop sur le sommet de la montagne (E pour upgrade axe T0→T3) → re-chop plus gros. Continuous play, pas de runs. Pivot fait 2026-05-20. Repo GitHub : `https://github.com/TGrozner/tree-chopping-sbox`.
+
+**Suis le protocole ci-dessous à la lettre — chaque ligne a coûté du debug.**
 
 ## Avant de toucher au code
 
-1. **Lis `C:\dev\tree-chopping-sbox\CLAUDE.md`** en entier — règles non-négociables (whitelist, Source 2, AZERTY, F-keys, etc.).
-2. **Lis `C:\Users\thoma\.claude\projects\C--dev-tree-chopping-sbox\memory\MEMORY.md`** — pointeurs vers les notes durables.
-3. **Confirme l'état de départ est vert :**
+1. **Lis `CLAUDE.md`** en entier — non-négociables (whitelist, Source 2, AZERTY, F-keys, MotionEnabled, etc.).
+2. **Lis `Code/CLAUDE.md`** dès que tu touches `Code/**/*.cs` — patterns Component lifecycle / Property attrs / hotload / spawn par code / HUD / Source 2 gotchas.
+3. **MEMORY.md** — pointeurs vers les notes durables (1 ligne chacune).
+4. **Confirme l'état de départ est vert** :
    ```powershell
    dotnet build "C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj"
-   & "C:\dev\tree-chopping-sbox\tools\selftest.ps1" -TimeoutSeconds 30
+   & "C:\dev\tree-chopping-sbox\tools\selftest.ps1"
    ```
-   Build = 0 erreur. Selftest = `RESULT: PASS`. Si l'un des deux est rouge, **n'écris pas de code** — diagnose d'abord.
-4. **Demande-moi la feature à porter.** Si je t'ai déjà donné un nom, identifie le fichier Godot source (`grep -r feature_name C:\dev\tree-chopping\`) et lis-le AVANT de proposer un plan s&box.
+   Build = 0 erreur. Selftest = `RESULT: PASS`. Si rouge → **diagnose d'abord**, pas de nouveau code par-dessus.
+5. **Demande-moi la feature** avant de planifier. Plan d'abord, code après.
 
-## Pour chaque feature portée
+## Boucle de travail
 
-Boucle stricte :
+1. **Plan 3-5 puces max.** Quels fichiers tu touches, pourquoi. Attends `ok` ou implicit OK avant code.
+2. **Petits changements.** Pas de refactor opportuniste. Un changement = une intention. Si tu vois autre chose, signale et demande.
+3. **Build automatique** : un PostToolUse hook lance `dotnet build` après chaque Edit/Write sur `Code/**/*.cs`. Échec → blocking message qui te remonte les erreurs. **Tu ne peux pas accumuler 4 fichiers cassés sans le savoir.**
+4. **Selftest automatique** : un Stop hook lance `tools/selftest.ps1` si tu as touché `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `ShopArea.cs`. Échec → bloque le stop. **Couvre le chop pipeline + le wood payout.**
+5. **Play GUI obligatoire** si tu touches rendering / scale / HUD / particles / camera / input / lighting. Le headless ne rend pas. **Dis-le explicitement** quand le headless ne suffit pas, ne réclame jamais "ça marche" sans validation visuelle quand le visuel est en jeu.
+6. **Pas de commit sans demande explicite (`commit ça`, `commit push`, etc.).** Je fais mes propres commits `phase5X:`.
+7. **MCP `sbox` bridge** : si sbox-dev.exe est ouvert + dock Claude Bridge visible, tu peux driver l'éditeur live (start_play, take_screenshot, get_scene_hierarchy, set_runtime_property, etc.). Voir mémoire `sbox-claude-bridge-mcp`.
 
-1. **Plan d'abord, 3-5 puces max.** Dis quels fichiers tu touches (max 2-3) et pourquoi. Attends `ok` avant de commencer.
-2. **Petits changements.** Pas de refactor opportuniste, pas de "tant qu'on y est". Un changement = une intention. Si tu vois un autre truc à fixer, dis-le et **demande** avant.
-3. **Build après chaque édition non triviale.** Pas "j'éditerai 4 fichiers et je build à la fin".
-4. **Selftest si tu touches au pipeline chop** (Tree / LogPiece / WoodChunk / WoodInventory / BeaverController swing). Build vert ≠ pipeline vert.
-5. **Play GUI obligatoire si tu touches rendering / scale / HUD / particles / camera / input.** Le headless valide la logique, pas les pixels. **Dis-le explicitement** quand le headless ne suffit pas — ne réclame jamais "ça marche" si tu n'as pas validé visuellement et que le visuel est en jeu.
-6. **Pas de commit sans `commit ça` explicite de ma part.** Je fais mes propres petits commits `phaseNx:`. Laisse les changements stagés/unstagés.
+## Architecture en cours (rapide)
 
-## Pièges déjà payés (lis avant de t'embourber dedans)
+- **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, beaver, shop, forest)
+- **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog (5s timeout safety) → GiveWoodOnce
+- **`BeaverController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch
+- **`GameState.cs`** : Wood + AxeTier persistence (`FileSystem.Data/progress.json`)
+- **`ShopArea.cs`** : detect player-in-radius + E to upgrade
+- **`WoodHud.cs`** : wood balance pulse + axe tier badge + shop hint + teleport hint
+- **`AutoPlay.cs`** : autonomous gameplay driver — bridge `set_runtime_property` Active/WideShotPose pour capture vidéo/screenshot
+- **`SelfTest.cs`** : Init → Approach → Swing → Verify(Wood>0), wait-on-condition pas time-based
+- **`TerrainHeightmap.cs`** : Sandbox.Terrain procédural + `Assets/materials/ground.vmat` (tinted green via `g_vColorTint` alpha=1)
+- **`MapBorders.cs`** : ring de cubes tagged "border"
+- **`ChipBurst.cs`** : chips/leaves/splinters custom-physics (pas de Rigidbody — perf killer)
+- **`Mat.cs`** + **`Sfx.cs`** : helpers
 
-- **`Model.Load(path)` ment.** Si le `.vmdl_c` n'est pas mounté, l'engine logue `engine/R Error loading resource file "X.vmdl_c" (File not found)` MAIS `Model.Load` retourne quand même un objet non-null, non-`Model.Error`, avec **bounds `(10,100,25)`** (placeholder partagé). Donc `m == null || m == Model.Error` ne détecte rien. **Vraie vérification : `Model.Bounds.Size.Length > 1f && Bounds.Size != (10,100,25)`.** Et surtout : lance `sbox-server.exe +game ... +maxplayers 1` 10s et grep `engine/R Error` dans le stdout — c'est la source de vérité.
-- **`Scene.GetAllComponents<Component>()` renvoie 0.** Toujours query par interface ou type concret.
-- **`System.Environment.*` banni** par la whitelist compiler. Flags de lancement → `[ConVar]`.
-- **F1-F12 banni** pour les bindings — éditeur les intercepte. État courant : `DebugToggle = B`, `PlayShortcut = Ctrl+Shift+P`.
-- **AZERTY** : si tu scripts SendInput, `VK_Z` pour Forward, `VK_Q` pour Left. Dans `Input.config` les noms `W/A/S/D` ciblent les caractères, pas les positions physiques.
-- **Standing rigidbodies (Tree, Rock debout) → `MotionEnabled = false`** sinon le castor les renverse en marchant. `StartFell` flip à true.
-- **Z is up, unités = inches, `Vector3.Forward = +X`.** `UnitsPerMeter = 39.37`.
-- **Scale pour Model.Cube** : `WorldScale = wantedSize / Tunables.CubeBase` (`CubeBase = 50f`), et `BoxCollider.Scale = new Vector3( Tunables.CubeBase )` pour récupérer la taille world. **Toute scale qui ne suit pas ce pattern est suspecte** — phase3 a fait des `WorldScale = 30f` partout qui ont produit des cubes de 1500u une fois retombé sur `Model.Cube`.
-- **Class member name collision** : ne nomme pas un membre `Log` dans une classe (il shadowait `Sandbox.Internal.GlobalGameNamespace.Log` dans le scope). Renomme proactivement si tu vois `class X { ... public static Y Log => ... }`.
-- **Headless ≠ Play GUI.** Le selftest ne valide pas le rendu, ni l'input, ni les particles, ni le son, ni la camera, ni la position relative des choses à l'écran. Si tu touches à ça, dis-le.
-- **SDF dormant** : `Code/BeaverController.TrySdfDig` + `Assets/sdf/rock_volume.sdfvol` + `EnsureSdfWorld()` sont en place mais déconnectés (`main.scene` n'a plus `RockVolume`). Si tu réactives, **refais le design** : `EnsureSdfWorld` rempli toute la map avec un `BoxSdf3D` solide qui mange le creek et les banks. Faut soit localiser à une zone (montagne dans un coin), soit faire des Adds par Rock individuel.
-- **Models actuellement = `Model.Cube` partout** (phase3 reverted, paths asset.party `pr/gta5_*` / `rock_kit/*` / `models/dead*` confirmés non mountés sur cette install). API `Models.TreeFor / RockVariant / etc.` préservée, callers inchangés.
+Architecture détaillée : `CLAUDE.md` section "Architecture gameplay actuelle".
 
-## Pour le port de modèles 3D — protocole strict
+## Pièges déjà payés
 
-Si je te demande de réimporter des modèles 3D (style **Valheim-like / low-poly / stylized**) :
+- **`Model.Cube` ignore `Tint`** sauf `MaterialOverride = materials/default.vmat`. Mémoire : `sbox-model-cube-ignores-tint`. Pattern dans `Code/Mat.cs`.
+- **Standing rigidbodies (Tree) → `MotionEnabled = false`** sinon le castor les renverse en marchant. `StartFell` flip à true.
+- **`Scene.GetAllComponents<Component>()` renvoie 0.** Toujours query par interface (`IChoppable`) ou type concret.
+- **`System.Environment.*` banni** par la whitelist. Flags → `[ConVar]`.
+- **F1-F12 banni** pour bindings — éditeur les intercepte. État courant : `DebugToggle=B`, `PlayShortcut=Ctrl+Shift+P`.
+- **AZERTY** : si tu scripts SendInput, VK_Z = Forward (pas VK_W). Mais `Input.config` "W" cible le caractère W.
+- **`SetCursorPos` envoie `Input.AnalogLook`** dans la Play view — chaque move souris pivote la caméra. Préfère le headless selftest pour la logique.
+- **`materials/default.vmat` a `g_vColorTint` alpha=0** = tint désactivé. Pour un terrain green : écris ton propre .vmat avec alpha=1 (voir `Assets/materials/ground.vmat`).
+- **SelfTest = wait-on-condition, pas wait-on-time.** Tree.Wood payout timing varie 5× selon Sapling vs Normal. Fix passe par `_state.Wood > _woodBeforeSwings` + hard timeout 8s. Mémoire : `feedback-selftest-wait-conditions`.
+- **Diagnostics + s'arrêter = vautrage.** Si tu ajoutes des `Log.Info` pour diagnostiquer, **re-run le harness dans le même turn** pour voir les logs. Mémoire : `feedback-no-vautrage`.
+- **Z is up. Unités = inches (1 m ≈ 39.37 u). Vector3.Forward = +X.**
+- **Scale pour Model.Cube** : `WorldScale = wantedSize / Tunables.CubeBase` (`CubeBase = 50f`).
 
-1. **Cherche les packs asset.party d'abord, AVANT d'écrire la moindre ligne.** Utilise WebSearch sur `asset.party low poly nature` / `asset.party stylized trees` / `asset.party valheim` — pas WebFetch sur sbox.game (rendu JS). Cible : tags `nature`, `low-poly`, `stylized`, `painterly`. Préfère les packs avec **plusieurs species** (sapin / chêne / souche) et **rochers low-poly** dans le même style. Reporte-moi les candidats avec leur ident asset.party (genre `username.pack_name`) — **je décide avant qu'on importe.**
-2. **Référence-les via `PackageReferences` dans `tree_chopping.sbproj`.** C'est la SEULE façon fiable de garantir qu'un asset est mounté sur ma machine. **Ne te base PAS sur `pr/...` ou `rock_kit/...` qui ont "marché ailleurs"** — phase3 s'est plantée précisément là-dessus.
-3. **Vérifie le mounting AVANT d'écrire des call sites.** Boot `sbox-server.exe +game ... +maxplayers 1` 10s, grep `engine/R Error.*\.vmdl_c` — chaque path doit être absent de cette liste. Si un path apparaît → il n'est pas mounté, le pack référencé est faux.
-4. **Double-check via bounds.** Pour chaque path, vérifie que `Model.Load(path).Bounds.Size` ≠ `(10,100,25)` (placeholder) et ≠ proche-zéro. Ajoute un helper d'audit (cf. `Models.AuditAllPaths` pattern qu'on avait écrit phase 3 + reverted) — gate-le sur un `[ConVar]` pour ne pas spammer le log normal.
-5. **N'introduis JAMAIS un model dans un call site sans avoir validé son mounting empiriquement.** Code qui compile ≠ asset qui charge.
-6. **Garde le fallback `Model.Cube + tint` dans `Models.cs`** pour chaque entry. Si le pack disparaît ou un path bouge, le jeu redevient lisible immédiatement au lieu de spawner des placeholders fantômes.
-7. **Tune le scale par la mesure, pas l'estimation.** Les low-poly Valheim-like sont typiquement authored à ~1m. Un tree-canopy de 6m (~240u s&box) demande un WorldScale d'environ `240u / model_intrinsic_height`. Lance Play GUI, mesure visuellement contre le castor (72u tall) et le creek (200u wide), itère sur le scale. Ne devine pas.
-8. **Animations / vertex colors / matériaux** : si le pack a des matériaux baked, garde le `Tint` à `Color.White` pour ne pas le multiplier en sombre. Si tu veux le tinter quand même (species coding), teste visuellement — beaucoup de packs stylized partent en bouillie quand tu tint un albedo déjà saturé.
-
-## Outils à ta disposition
+## Outils
 
 - `dotnet build "C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj"` — types OK
-- `& "C:\dev\tree-chopping-sbox\tools\selftest.ps1" -TimeoutSeconds 30` — pipeline chop end-to-end via le vrai swing path, exit 0=PASS / 1=FAIL / 3=TIMEOUT
-- `sbox-server.exe +game tree_chopping.sbproj +maxplayers 1` (avec Register-ObjectEvent harness, cf. `tools/selftest.ps1`) — Component lifecycle + physique + stdout, **PAS le rendu ni l'input**
-- `sbox-dev.exe` (GUI) — Play F5 = Ctrl+Shift+P configuré sur l'éditeur, pour valider visuellement
-- context7 MCP (`/llmstxt/sbox_game_llms_txt` ou `/websites/sbox_game_api`) — doc s&box à jour. **NE FAIS PAS WebFetch sur sbox.game** (rendu JS, renvoie littéralement la string "s&box").
-- XML s&box locaux : `C:\Program Files (x86)\Steam\steamapps\common\sbox\bin\managed\Sandbox.*.xml` — source of truth pour les signatures API.
+- `& "C:\dev\tree-chopping-sbox\tools\selftest.ps1" [-Seeds N]` — mow-the-lawn scenario end-to-end, exit 0/1/3 = PASS/FAIL/TIMEOUT
+- `sbox-server.exe +game ... +maxplayers 1` — Component lifecycle + physique headless (Log.Info → stdout)
+- `sbox-dev.exe` (GUI) — Play F5
+- MCP `sbox` bridge — si sbox-dev ouvert, drive l'éditeur live
+- context7 MCP (`/llmstxt/sbox_game_llms_txt`) — doc s&box à jour (**pas WebFetch sur sbox.game**, rendu JS)
+- XML s&box locaux : `C:\Program Files (x86)\Steam\steamapps\common\sbox\bin\managed\Sandbox.*.xml`
 
-## Style de code
+## Style
 
-Tabs + `if ( foo )` (espaces dans les parens). Default = **zéro commentaire** — un commentaire ne se justifie que quand le *why* est non-évident (contrainte cachée, incident passé, invariant subtil). Pas de wrappers "legacy", pas de stubs pour des besoins hypothétiques. FR OK dans logs/commits/CLAUDE.md, EN pour XML docs sbox-facing.
+Tabs + `if ( foo )` (espaces dans parens). Default zéro commentaire — uniquement quand le *why* est non-évident. Pas de wrappers legacy, pas de stubs hypothétiques. FR OK dans logs/commits/CLAUDE.md ; EN pour XML docs sbox-facing.
 
 ## Si tu hésites
 
-Demande. Le coût d'une question est ~0, le coût d'un revert d'un mauvais refactor est ~1h.
+Demande. Le coût d'une question est ~0, celui d'un revert ~1h.
