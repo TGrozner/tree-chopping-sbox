@@ -8,8 +8,6 @@ public sealed class BeaverController : Component
 {
 	[Property] public PlayerController Player { get; set; }
 	[Property] public CameraComponent Camera { get; set; }
-	[Property] public GameObject CameraRoot { get; set; }
-	[Property] public Sandbox.Citizen.CitizenAnimationHelper AnimHelper { get; set; }
 	[Property] public SkinnedModelRenderer PlayerRenderer { get; set; }
 
 	private enum SwingPhase { Idle, WindUp, Recovery }
@@ -32,7 +30,6 @@ public sealed class BeaverController : Component
 	{
 		Player ??= Components.Get<PlayerController>( FindMode.EverythingInSelfAndDescendants );
 		Camera ??= Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
-		AnimHelper ??= Components.Get<Sandbox.Citizen.CitizenAnimationHelper>( FindMode.EverythingInSelfAndDescendants );
 		PlayerRenderer ??= Components.Get<SkinnedModelRenderer>( FindMode.EverythingInSelfAndDescendants );
 	}
 

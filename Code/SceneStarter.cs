@@ -152,15 +152,10 @@ public sealed class SceneStarter : Component
 
 		var beaver = go.AddComponent<BeaverController>();
 		beaver.Player = player;
-		beaver.AnimHelper = animHelper;
 		beaver.PlayerRenderer = renderer;
 
 		var cam = existingCamera;
-		if ( cam.IsValid() )
-		{
-			beaver.Camera = cam;
-			beaver.CameraRoot = cam.GameObject;
-		}
+		if ( cam.IsValid() ) beaver.Camera = cam;
 
 		AttachAxe( renderer, animHelper );
 		return beaver;
