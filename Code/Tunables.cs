@@ -289,19 +289,12 @@ public static class Tunables
 	// Initial angular velocity injectée au StartFell pour casser l'équilibre
 	// instable (COM pile au-dessus du pivot). Sans ça, l'arbre reste droit
 	// jusqu'à ce que le perso le pousse — la gravité gravity-torque est nulle
-	// exactement à theta=0. ~30°/s de tilt initial = part decisively, le
-	// torque continu de TickFall prend le relais. Mass-independent (omega
+	// exactement à theta=0. A small tilt seed starts the motion, then the high
+	// trunk impulse + continuous TickFall torque take over. Mass-independent (omega
 	// constant) pour que saplings et veterans démarrent au même rythme.
-	public const float InitialFellOmega = 0.55f;
-	// Petit lurch linéaire dans la direction de chute en plus du kick angulaire.
-	// Valheim utilise un AddForceAtPosition haut sur le tronc qui produit
-	// naturellement les deux (rotation + slide subtil) ; nos unités sont trop
-	// grandes pour reproduire le ratio exact avec un seul impulse, donc on set
-	// les deux séparément. ~4 u/s ≈ ce que Valheim donne par rapport à sa
-	// trunkHeight.
+	public const float InitialFellOmega = 0.18f;
 	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
-	public const float InitialFellTopImpulseSpeed = 10f;
-	public const float InitialFellLurchSpeed = 6f;
+	public const float InitialFellTopImpulseSpeed = 16f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.

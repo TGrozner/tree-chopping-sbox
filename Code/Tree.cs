@@ -323,6 +323,22 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		return go;
 	}
 
+	private void DestroyCanopyVisuals()
+	{
+		foreach ( var child in GameObject.Children )
+		{
+			if ( !child.IsValid() ) continue;
+			bool isCanopy =
+				child.Name == "TreeCanopy"
+				|| child.Name == "TreeCanopyShade"
+				|| child.Name == "PineLow"
+				|| child.Name == "PineMid"
+				|| child.Name == "PineTop";
+			if ( isCanopy ) child.Destroy();
+		}
+		_primaryCanopy = null;
+	}
+
 	public bool IsFalling => _chopped && !_landed;
 	public bool IsStanding => !_chopped;
 	public bool IsFallenLog => _landed && !_logSplit;
@@ -814,19 +830,16 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 				var topPoint = WorldPosition + Vector3.Up * (_trunkLen * 0.78f);
 				Body.PhysicsBody.ApplyImpulseAt( topPoint, _fellDir * mass * Tunables.InitialFellTopImpulseSpeed * kindMul * powerScale );
 			}
-			// Lurch linÃ©aire â€” Valheim TreeBase.SpawnLog applique un AddForceAtPosition
-			// haut sur le tronc qui crÃ©e Ã  la fois rotation + slide. On le dÃ©compose
-			// en deux pour avoir le contrÃ´le (nos unitÃ©s sont trop grandes pour
-			// reproduire le ratio exact avec un seul impulse).
-			Body.Velocity = _fellDir * Tunables.InitialFellLurchSpeed * kindMul * powerScale;
 		}
 
 		if ( _primaryCanopy.IsValid() )
 		{
-			ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, _fellDir, 36, _canopyTint );
-			ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, Vector3.Up, 24, _canopyTint );
-			ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, -_fellDir, 18, _canopyTint );
+			var canopyPos = _primaryCanopy.WorldPosition;
+			ChipBurst.SpawnLeaves( Scene, canopyPos, _fellDir, 52, _canopyTint );
+			ChipBurst.SpawnLeaves( Scene, canopyPos, Vector3.Up, 34, _canopyTint );
+			ChipBurst.SpawnLeaves( Scene, canopyPos, -_fellDir, 24, _canopyTint );
 		}
+		DestroyCanopyVisuals();
 		// Per-kind groan : sapling = aigu et net, veteran = profond et lent,
 		// brittle = crack sec. Multiplie autour du range Normal {0.48, 0.62}.
 		float pitchMul = Tunables.TreeKindGroanPitchMul[(int)Kind];

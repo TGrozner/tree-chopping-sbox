@@ -16,7 +16,7 @@ public sealed class SelfTest : Component
 		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestDepositFlush, TestDepositStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
-		TestImpactDamageScaling, TestWindDirRotation, TestRespawnJitterRange, TestWoodTypeDistribution, TestTreeShakeReset, TestCascadeShakeNoFell,
+		TestFellCanopyDestroyed, TestImpactDamageScaling, TestWindDirRotation, TestRespawnJitterRange, TestWoodTypeDistribution, TestTreeShakeReset, TestCascadeShakeNoFell,
 		TestRollingLogsDamping, TestEnvWindDeterministic, TestWoodTypeMixSumsAll, TestHitDataDamage,
 		TestGameStateSanitize, TestStats, TestPrestige, Done
 	}
@@ -62,6 +62,9 @@ public sealed class SelfTest : Component
 	private bool _depositStationEntered;
 	private int _depositStationStockpileBefore;
 	private int _depositStationTotalBefore;
+	private Tree _fellCanopyTree;
+	private bool _fellCanopyStarted;
+	private int _fellCanopyBefore;
 
 	[ConVar( "tc_selftest", Help = "Spawn TreeChopping.SelfTest on bootstrap to run the mow-the-lawn headless scenario." )]
 	public static bool Enable { get; set; }
@@ -109,6 +112,7 @@ public sealed class SelfTest : Component
 			case Phase.TestEnvWindSanity: TickTestEnvWindSanity(); break;
 			case Phase.TestStrictTooHard: TickTestStrictTooHard(); break;
 			case Phase.TestTunablesValheimSanity: TickTestTunablesValheimSanity(); break;
+			case Phase.TestFellCanopyDestroyed: TickTestFellCanopyDestroyed(); break;
 			case Phase.TestImpactDamageScaling: TickTestImpactDamageScaling(); break;
 			case Phase.TestWindDirRotation: TickTestWindDirRotation(); break;
 			case Phase.TestRespawnJitterRange: TickTestRespawnJitterRange(); break;
@@ -1448,7 +1452,60 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		Transition( Phase.TestFellCanopyDestroyed );
+	}
+
+	private void TickTestFellCanopyDestroyed()
+	{
+		if ( !_fellCanopyStarted )
+		{
+			for ( int i = 0; i < 40; i++ )
+			{
+				var pos = new Vector3( -1340f - i * 35f, 940f, 260f );
+				if ( TryGetGroundZ( pos.x, pos.y, out var gz ) ) pos = pos.WithZ( gz );
+				_fellCanopyTree = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Veteran );
+				_fellCanopyBefore = CountCanopyVisuals( _fellCanopyTree );
+				if ( _fellCanopyBefore > 1 ) break;
+				_fellCanopyTree.GameObject.Destroy();
+				_fellCanopyTree = default;
+			}
+
+			if ( !_fellCanopyTree.IsValid() )
+			{
+				Log.Error( "[TC_TEST] FAIL TestFellCanopyDestroyed: no multi-block canopy tree found" );
+				Finish();
+				return;
+			}
+
+			_fellCanopyTree.StartFell( Vector3.Forward, 99, allowComboPush: false );
+			_fellCanopyStarted = true;
+			return;
+		}
+
+		if ( _phaseTime < 0.1f ) return;
+
+		int after = CountCanopyVisuals( _fellCanopyTree );
+		if ( _fellCanopyBefore <= 1 || after != 0 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestFellCanopyDestroyed: canopy count {_fellCanopyBefore}->{after} after StartFell" );
+			Finish();
+			return;
+		}
+
+		Log.Info( $"[TC_TEST] FELL_CANOPY_DESTROYED PASS  canopy blocks {_fellCanopyBefore}->0 on StartFell" );
 		Transition( Phase.TestImpactDamageScaling );
+	}
+
+	private static int CountCanopyVisuals( Tree tree )
+	{
+		if ( !tree.IsValid() ) return 0;
+		return tree.GameObject.Children.Count( child =>
+			child.IsValid()
+			&& (child.Name == "TreeCanopy"
+				|| child.Name == "TreeCanopyShade"
+				|| child.Name == "PineLow"
+				|| child.Name == "PineMid"
+				|| child.Name == "PineTop") );
 	}
 
 	private static bool ResourceIsReachableBeforeRecipe( WoodType type, int recipeTier )
