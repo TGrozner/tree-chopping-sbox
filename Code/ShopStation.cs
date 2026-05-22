@@ -226,7 +226,7 @@ public sealed class ShopStation : Component
 	private void HandleUpgrades()
 	{
 		// Upgrades station = stats + pet. [E] auto-buys cheapest stat.
-		// [1] speed, [2] luck, [3] power, [4] pet — matches the order of
+		// [1] speed, [2] luck, [3] power, [4] backpack, [5] pet — matches the order of
 		// the worldspace mini-menu drawn by WoodHud.
 		bool requested = Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) || Input.Pressed( "Slot2" ) || Input.Pressed( "Slot3" ) || Input.Pressed( "Slot4" ) || Input.Pressed( "Slot5" );
 		bool bought = false;

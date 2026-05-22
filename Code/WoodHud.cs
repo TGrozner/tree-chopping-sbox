@@ -598,8 +598,8 @@ public sealed class WoodHud : Component
 		bool can = _state.CanPrestige();
 		int wouldGet = _state.SpiritsFromPrestige - _state.Spirits;
 		string line = can
-			? $"  [6]  REPLANT FOREST  ·  gain {wouldGet} Sapling Spirits (+{wouldGet}% wood, perma)"
-			: $"  [6]  Replant locked  ·  need 500 lifetime wood (have {_state.TotalWoodEarned})";
+			? $"  [1]  REPLANT FOREST  ·  gain {wouldGet} Sapling Spirits (+{wouldGet}% wood, perma)"
+			: $"  [1]  Replant locked  ·  need 500 lifetime wood (have {_state.TotalWoodEarned})";
 		var tint = can ? HotColor : TextColor.WithAlpha( 0.40f );
 		hud.DrawText( new TextRendering.Scope( line, tint, font ),
 			new Rect( x, y, w, h ), TextFlag.LeftCenter );
