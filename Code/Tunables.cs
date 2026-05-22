@@ -59,7 +59,6 @@ public static class Tunables
 	// Tier names (HUD/lore): Hands, Stone Axe, Bronze, Iron, Steel,
 	// Lumberjack, Chainsaw.
 	public const int MaxAxeTier = 6;
-	public static readonly int[] AxeTierCosts =     {    0,   8,   28,   80,  220,  580, 1400 };
 	public static readonly int[] AxeTierChopPower = {    1,   2,    3,    5,    8,   12,   20 };
 	// Valheim 1:1 recipes — each axe tier requires multi-resource cost. Index
 	// 0=Wood, 1=Finewood, 2=CoreWood. Stone/Bronze pure Wood, Iron+ requires
