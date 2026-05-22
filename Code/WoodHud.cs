@@ -739,6 +739,7 @@ public sealed class WoodHud : Component
 		DrawLine( hud, x, ref y, width, height, pad, $"FPS : {fpsAvg:0} avg / {fpsMin:0} min", fpsTint );
 
 		var trees = Scene?.GetAllComponents<Tree>().ToList() ?? new List<Tree>();
+		var logs = Scene?.GetAllComponents<FallenLog>().ToList() ?? new List<FallenLog>();
 		int standing = 0, falling = 0, landed = 0;
 		foreach ( var t in trees )
 		{
@@ -746,6 +747,12 @@ public sealed class WoodHud : Component
 			if ( t.IsStanding ) standing++;
 			else if ( t.IsFalling ) falling++;
 			else landed++;
+		}
+		foreach ( var l in logs )
+		{
+			if ( !l.IsValid() ) continue;
+			if ( l.IsFalling ) falling++;
+			else if ( l.IsFallenLog ) landed++;
 		}
 		DrawLine( hud, x, ref y, width, height, pad, $"Trees: {standing}s {falling}f {landed}l", dim );
 	}

@@ -15,6 +15,14 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// Expose le trunk tint pour que AxeController puisse passer la couleur
 	// aux ChipBurst (Valheim chips reflect tree wood color).
 	public Color TrunkTint => _trunkTint;
+	internal FallenLog SpawnedLog => _spawnedLog;
+	internal float TrunkLength => _trunkLen;
+	internal float TrunkWidth => _trunkWidth;
+	internal Color CanopyTint => _canopyTint;
+	internal Vector3 SpawnFootPosition => _spawnFootPos;
+	internal float BiomeDifficulty => _biomeDifficulty;
+	internal float TrunkDamageMul => _trunkDamageMul;
+	internal float LogMass => Body.IsValid() && Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass : Tunables.TreeMass;
 	public Vector3 LogCenter
 	{
 		get
@@ -68,6 +76,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// Whoosh SFX pendant la chute â€” fire ONCE par fell quand tilt past 45Â°.
 	// Reset au StartFell pour le prochain cycle.
 	private bool _whooshFired;
+	private FallenLog _spawnedLog;
 	private GameObject _primaryCanopy;
 	private GameObject _rootStump;
 	private ModelRenderer _trunkLowerMr;
@@ -806,8 +815,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			_rootStump = null;
 		}
 		TreeStump.SpawnAt( Scene, _spawnFootPos, _trunkWidth, _trunkTint, Kind, _biomeDifficulty, IsMythic );
+		_spawnedLog = FallenLog.SpawnFromTree( this, _fellDir, fellPower, allowComboPush );
 
-		if ( Body.IsValid() )
+		if ( Body.IsValid() && !_spawnedLog.IsValid() )
 		{
 			Body.MotionEnabled = true;
 			Body.LinearDamping = 0f;
@@ -877,6 +887,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 				WoodItem.SpawnAt( Scene, _spawnFootPos + ring + Vector3.Up * (10f + i * 4f) );
 			}
 		}
+
+		if ( _spawnedLog.IsValid() )
+			GameObject?.Destroy();
 	}
 
 	protected override void OnFixedUpdate()
@@ -1021,6 +1034,11 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			return;
 		}
 		if ( _landed ) ApplyLandedKick( dir, contactPoint );
+	}
+
+	internal void ReactToSoftImpactFromLog( Vector3 dir, Vector3 contactPoint )
+	{
+		ReactToSoftImpact( dir, contactPoint );
 	}
 
 	private void SweepNearbyCascadeTargets()

@@ -18,7 +18,7 @@ public sealed class AxeController : Component
 	private float _baseFov = -1f;
 	private float _fovOffset;
 	private int _hitstopFramesLeft;
-	private Tree _previewTree;
+	private IChoppable _previewTarget;
 	// Combo chain Valheim Attack.m_attackChainLevels — chain reset à 0 si gap
 	// > ChopComboWindow ou level atteint max. Level final = chop damage ×
 	// ChopComboFinalDamageMul + push × ChopComboFinalPushMul. Expose en
@@ -185,26 +185,31 @@ public sealed class AxeController : Component
 	private void TickAimPreview()
 	{
 		bool canHighlight = _phase == SwingPhase.Idle;
-		Tree target = _previewTree;
+		IChoppable target = _previewTarget;
 		// Re-pick the target every 3 frames (~20Hz) instead of every frame.
 		// Aim highlight feels identical to a human at this rate, the 60Hz
 		// sphere+ray traces against 400 trees burned cycles for nothing.
 		_aimPreviewFrame++;
 		if ( canHighlight && _aimPreviewFrame % 3 == 0 )
 		{
-			var hit = PickCameraAimTarget( out _ );
-			target = hit as Tree;
+			target = PickCameraAimTarget( out _ );
 		}
 		else if ( !canHighlight )
 		{
 			target = null;
 		}
-		if ( target != _previewTree )
+		if ( target != _previewTarget )
 		{
-			if ( _previewTree.IsValid() ) _previewTree.SetAimHighlight( false );
-			_previewTree = target;
-			if ( _previewTree.IsValid() ) _previewTree.SetAimHighlight( true );
+			SetTargetHighlight( _previewTarget, false );
+			_previewTarget = target;
+			SetTargetHighlight( _previewTarget, true );
 		}
+	}
+
+	private static void SetTargetHighlight( IChoppable target, bool on )
+	{
+		if ( target is Tree tree && tree.IsValid() ) tree.SetAimHighlight( on );
+		else if ( target is FallenLog log && log.IsValid() ) log.SetAimHighlight( on );
 	}
 
 	private void TickTeleportHome()
@@ -312,6 +317,14 @@ public sealed class AxeController : Component
 				damageFrac = !tooHard
 					? (chopPower / MathF.Max( 1f, treeHit.ChopsRemaining )).Clamp( 0.2f, 1.5f )
 					: 0.2f;
+			}
+			else if ( hit is FallenLog logHit )
+			{
+				chipTint = logHit.TrunkTint;
+				chopPitchMul = Tunables.TreeKindChopPitchMul[(int)logHit.Kind];
+				isLogHit = true;
+				willBreakTree = logHit.ChopsRemaining <= chopPower;
+				damageFrac = (chopPower / MathF.Max( 1f, logHit.ChopsRemaining )).Clamp( 0.2f, 1.5f );
 			}
 			if ( tooHard )
 			{
@@ -453,7 +466,7 @@ public sealed class AxeController : Component
 			considered++;
 			if ( !c.IsValid() ) { droppedValid++; continue; }
 			if ( !c.AcceptsTool( ToolKind.Axe ) ) { droppedTool++; continue; }
-			var to = c.WorldPosition - origin;
+			var to = GetAimCenter( c ) - origin;
 			to.z = 0f;
 			var dist = to.Length;
 			if ( dist > SwingRangeNow() ) { droppedRange++; continue; }
@@ -484,7 +497,7 @@ public sealed class AxeController : Component
 		foreach ( var c in Scene.GetAllComponents<IChoppable>() )
 		{
 			if ( !c.IsValid() || !c.AcceptsTool( ToolKind.Axe ) ) continue;
-			var to = c.WorldPosition - origin;
+			var to = GetAimCenter( c ) - origin;
 			to.z = 0f;
 			var dist = to.Length;
 			if ( dist > range ) continue;
@@ -500,6 +513,13 @@ public sealed class AxeController : Component
 	private static Vector3 GetFallbackHitPoint( IChoppable target, Vector3 origin )
 	{
 		if ( target is Tree tree ) return tree.GetChopPointFrom( origin );
+		if ( target is FallenLog log ) return log.GetChopPointFrom( origin );
+		return target.WorldPosition;
+	}
+
+	private static Vector3 GetAimCenter( IChoppable target )
+	{
+		if ( target is FallenLog log ) return log.LogCenter;
 		return target.WorldPosition;
 	}
 
@@ -521,33 +541,35 @@ public sealed class AxeController : Component
 	// HUD hit-or-miss indicator : true when there's a chop target under the
 	// reticle within melee range. Re-evaluated at ~20Hz by TickAimPreview,
 	// so reading this from WoodHud each frame is cheap (no extra trace).
-	public bool HasAimTarget => _previewTree.IsValid();
-	public bool AimTargetIsLog => _previewTree.IsValid() && _previewTree.IsFallenLog;
+	public bool HasAimTarget => _previewTarget is not null && _previewTarget.IsValid();
+	public bool AimTargetIsLog => _previewTarget is FallenLog || (_previewTarget is Tree tree && tree.IsFallenLog);
 	public bool AimTargetTooHard
 	{
 		get
 		{
-			if ( !_previewTree.IsValid() || !_previewTree.IsStanding ) return false;
+			if ( _previewTarget is not Tree tree || !tree.IsValid() || !tree.IsStanding ) return false;
 			var state = GameState.Get( Scene );
 			int axeTier = state.IsValid() ? state.AxeTier : 0;
-			return axeTier < Tunables.TreeKindMinAxeTier[(int)_previewTree.Kind];
+			return axeTier < Tunables.TreeKindMinAxeTier[(int)tree.Kind];
 		}
 	}
 	public string AimTargetLabel
 	{
 		get
 		{
-			if ( !_previewTree.IsValid() ) return "";
-			if ( _previewTree.IsFallenLog ) return $"CHOP LOG · {_previewTree.ChopsRemaining}";
+			if ( _previewTarget is null || !_previewTarget.IsValid() ) return "";
+			if ( _previewTarget is FallenLog log ) return $"CHOP LOG · {log.ChopsRemaining}";
+			if ( _previewTarget is not Tree tree ) return "";
+			if ( tree.IsFallenLog ) return $"CHOP LOG · {tree.ChopsRemaining}";
 			if ( AimTargetTooHard )
 			{
-				int neededTier = Tunables.TreeKindMinAxeTier[(int)_previewTree.Kind];
+				int neededTier = Tunables.TreeKindMinAxeTier[(int)tree.Kind];
 				string need = neededTier >= 0 && neededTier < Tunables.AxeTierName.Length
 					? Tunables.AxeTierName[neededTier].ToUpper()
 					: $"T{neededTier}";
 				return $"AXE TOO WEAK · NEEDS {need}";
 			}
-			return $"CHOP {_previewTree.Kind.ToString().ToUpper()} · {_previewTree.ChopsRemaining}";
+			return $"CHOP {tree.Kind.ToString().ToUpper()} · {tree.ChopsRemaining}";
 		}
 	}
 
@@ -579,7 +601,9 @@ public sealed class AxeController : Component
 		if ( !go.IsValid() ) return null;
 
 		var ic = (go.Components.Get<Tree>() as IChoppable)
-			?? (go.Components.Get<Tree>( FindMode.InAncestors ) as IChoppable);
+			?? (go.Components.Get<Tree>( FindMode.InAncestors ) as IChoppable)
+			?? (go.Components.Get<FallenLog>() as IChoppable)
+			?? (go.Components.Get<FallenLog>( FindMode.InAncestors ) as IChoppable);
 		if ( ic is null || !ic.IsValid() || !ic.AcceptsTool( ToolKind.Axe ) ) return null;
 
 		var hp = trace.EndPosition;

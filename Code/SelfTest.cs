@@ -27,6 +27,10 @@ public sealed class SelfTest : Component
 	private AxeController _axe;
 	private GameState _state;
 	private Tree _targetTree;
+	private FallenLog _targetLog;
+	private bool _targetLogSeen;
+	private bool _targetLogLandedSeen;
+	private TimeSince _targetLogSinceLanded;
 	private Vector3 _targetTreePos;
 	private int _woodBeforeSwings;
 
@@ -35,8 +39,11 @@ public sealed class SelfTest : Component
 
 	// État pour TestBonusDrop : référence sur le Veteran spawné, count avant.
 	private Tree _bonusDropVeteran;
+	private bool _bonusDropSpawned;
+	private Vector3 _bonusDropPos;
 	private int _woodItemsBeforeBonusDrop;
 	private Tree _landedGraceTree;
+	private FallenLog _landedGraceLog;
 	private bool _landedGraceSpawned;
 	private bool _landedGraceEarlyHitChecked;
 	private int _landedGraceHpAfterEarlyHit;
@@ -47,9 +54,11 @@ public sealed class SelfTest : Component
 	private bool _pickupSpawned;
 	// État pour TestPhysicsAutoSplit
 	private Tree _autoSplitTree;
+	private FallenLog _autoSplitLog;
 	private TimeSince _autoSplitStartTime;
 	private bool _autoSplitSpawned;
 	private Tree _cascadeSource;
+	private FallenLog _cascadeSourceLog;
 	private Tree _cascadeNeighbor;
 	private TimeSince _cascadeCollisionStartTime;
 	private bool _cascadeCollisionSpawned;
@@ -169,6 +178,9 @@ public sealed class SelfTest : Component
 			return;
 		}
 		_targetTreePos = _targetTree.WorldPosition;
+		_targetLog = null;
+		_targetLogSeen = false;
+		_targetLogLandedSeen = false;
 		_woodBeforeSwings = _state.Wood;
 		Log.Info( $"[TC_TEST] INIT playerPos={_axe.WorldPosition} treePos={_targetTreePos} kind={_targetTree.Kind} chops={_targetTree.ChopsRemaining} wood={_state.Wood} tier={_state.AxeTier}" );
 		Transition( Phase.TestSpawnDistribution );
@@ -353,14 +365,20 @@ public sealed class SelfTest : Component
 		// atteint par TickFall), puis chop-it jusqu'à split en WoodItems.
 		// Si le sapling auto-split via TreeSplitImpactSpeed (ne devrait pas
 		// passer le seuil, il est trop léger), GameObject est déjà destroyed.
-		bool destroyed = !_targetTree.IsValid();
-		bool landed = _targetTree.IsValid() && _targetTree.IsFallenLog;
+		if ( !_targetLog.IsValid() )
+		{
+			_targetLog = FindNearestFallenLog( _targetTreePos, 700f );
+			if ( _targetLog.IsValid() ) _targetLogSeen = true;
+		}
+
+		bool destroyed = _targetLogSeen && !_targetLog.IsValid();
+		bool landed = _targetLog.IsValid() && _targetLog.IsFallenLog;
 
 		if ( !destroyed && !landed )
 		{
 			if ( (float)_phaseTime > 5f )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSplit: tree ne devient ni FallenLog ni destroyed après 5s (IsFalling={_targetTree.IsFalling})" );
+				Log.Error( $"[TC_TEST] FAIL TestSplit: no landed FallenLog after 5s (logValid={_targetLog.IsValid()} seen={_targetLogSeen})" );
 				Finish();
 			}
 			return;
@@ -369,14 +387,21 @@ public sealed class SelfTest : Component
 		// Chop le tronc landed via DebugSwingVerbose. Sapling.LogChopHP=1 = 1 chop.
 		if ( !destroyed )
 		{
+			if ( !_targetLogLandedSeen )
+			{
+				_targetLogLandedSeen = true;
+				_targetLogSinceLanded = 0f;
+				return;
+			}
+			if ( (float)_targetLogSinceLanded < Tunables.WoodLogChopGrace + 0.08f ) return;
 			if ( (float)_lastSwingTime < 0.45f ) return;
 			_lastSwingTime = 0f;
-			ParkPlayerInFrontOfTarget();
+			ParkPlayerFacing( _targetLog.LogCenter );
 			_axe.DebugSwingVerbose();
 			_swingsFired++;
 			if ( _swingsFired > 30 )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSplit: 30 swings sur le landed log sans split (ChopsRemaining={(_targetTree.IsValid() ? _targetTree.ChopsRemaining : -1)})" );
+				Log.Error( $"[TC_TEST] FAIL TestSplit: 30 swings sur le landed log sans split (ChopsRemaining={(_targetLog.IsValid() ? _targetLog.ChopsRemaining : -1)})" );
 				Finish();
 				return;
 			}
@@ -410,20 +435,19 @@ public sealed class SelfTest : Component
 			if ( TryGetGroundZ( pos.x, pos.y, out var gz ) ) pos = pos.WithZ( gz );
 			_landedGraceTree = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Normal );
 			_landedGraceTree.StartFell( Vector3.Forward );
+			_landedGraceLog = FindNearestFallenLog( pos, 700f );
 			return;
 		}
 
-		if ( !_landedGraceTree.IsValid() )
+		if ( !_landedGraceLog.IsValid() )
 		{
-			Log.Error( "[TC_TEST] FAIL TestLandedLogChopGrace: tree destroyed before grace check" );
-			Finish();
-			return;
+			_landedGraceLog = FindNearestFallenLog( _targetTreePos + new Vector3( -520f, 420f, 0f ), 700f );
 		}
-		if ( !_landedGraceTree.IsFallenLog )
+		if ( !_landedGraceLog.IsValid() || !_landedGraceLog.IsFallenLog )
 		{
 			if ( (float)_phaseTime > 5f )
 			{
-				Log.Error( "[TC_TEST] FAIL TestLandedLogChopGrace: tree never became landed log" );
+				Log.Error( "[TC_TEST] FAIL TestLandedLogChopGrace: log never became landed" );
 				Finish();
 			}
 			return;
@@ -433,9 +457,9 @@ public sealed class SelfTest : Component
 		{
 			_landedGraceEarlyHitChecked = true;
 			_landedGraceSinceLanded = 0f;
-			int hpBefore = _landedGraceTree.ChopsRemaining;
-			_landedGraceTree.Chop( Vector3.Forward, 1, _landedGraceTree.LogCenter );
-			_landedGraceHpAfterEarlyHit = _landedGraceTree.ChopsRemaining;
+			int hpBefore = _landedGraceLog.ChopsRemaining;
+			_landedGraceLog.Chop( Vector3.Forward, 1, _landedGraceLog.LogCenter );
+			_landedGraceHpAfterEarlyHit = _landedGraceLog.ChopsRemaining;
 			if ( _landedGraceHpAfterEarlyHit != hpBefore )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestLandedLogChopGrace: early hit damaged log HP {hpBefore}->{_landedGraceHpAfterEarlyHit}" );
@@ -445,10 +469,10 @@ public sealed class SelfTest : Component
 		}
 
 		if ( (float)_landedGraceSinceLanded < Tunables.WoodLogChopGrace + 0.08f ) return;
-		_landedGraceTree.Chop( Vector3.Forward, 1, _landedGraceTree.LogCenter );
-		if ( _landedGraceTree.IsValid() && _landedGraceTree.ChopsRemaining >= _landedGraceHpAfterEarlyHit )
+		_landedGraceLog.Chop( Vector3.Forward, 1, _landedGraceLog.LogCenter );
+		if ( _landedGraceLog.IsValid() && _landedGraceLog.ChopsRemaining >= _landedGraceHpAfterEarlyHit )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestLandedLogChopGrace: post-grace hit did not damage log HP={_landedGraceTree.ChopsRemaining}" );
+			Log.Error( $"[TC_TEST] FAIL TestLandedLogChopGrace: post-grace hit did not damage log HP={_landedGraceLog.ChopsRemaining}" );
 			Finish();
 			return;
 		}
@@ -461,13 +485,15 @@ public sealed class SelfTest : Component
 		// Spawn un Veteran (DropChance=1.0, Min=2, Max=4 bonus items) puis
 		// force fell via CascadeWake. Snapshot WoodItems avant/après pour
 		// vérifier que ≥2 items ont apparu dans le ring près du spawn.
-		if ( !_bonusDropVeteran.IsValid() )
+		if ( !_bonusDropSpawned )
 		{
 			// Spawn loin de la zone du test précédent pour pas que la cascade
 			// physique tape autre chose.
 			var spawnPos = _targetTreePos + new Vector3( 0f, 600f, 0f );
 			if ( TryGetGroundZ( spawnPos.x, spawnPos.y, out var groundZ ) )
 				spawnPos = spawnPos.WithZ( groundZ );
+			_bonusDropSpawned = true;
+			_bonusDropPos = spawnPos;
 			_woodItemsBeforeBonusDrop = Scene.GetAllComponents<WoodItem>().Count( w => w.IsValid() );
 			_bonusDropVeteran = Tree.SpawnAt( Scene, spawnPos, 1f, TreeKind.Veteran );
 			Log.Info( $"[TC_TEST] BonusDrop : spawned Veteran at {spawnPos}, WoodItems before={_woodItemsBeforeBonusDrop}" );
@@ -481,7 +507,6 @@ public sealed class SelfTest : Component
 
 		// Veteran : DropChance=1.0 → toujours ≥ Min (2) items. Compter items
 		// récemment apparus près du spawn de Veteran.
-		var vetPos = _bonusDropVeteran.IsValid() ? _bonusDropVeteran.WorldPosition : _targetTreePos + new Vector3( 0f, 600f, 0f );
 		int totalNow = Scene.GetAllComponents<WoodItem>().Count( w => w.IsValid() );
 		int delta = totalNow - _woodItemsBeforeBonusDrop;
 		int minExpected = Tunables.TreeKindFellBonusItemsMin[(int)TreeKind.Veteran];
@@ -562,15 +587,16 @@ public sealed class SelfTest : Component
 				spawnPos = spawnPos.WithZ( groundZ + 50f ); // slight gap for clean OnCollisionStart event
 			_autoSplitTree = Tree.SpawnAt( Scene, spawnPos, 1f, TreeKind.Brittle );
 			_autoSplitTree.StartFell( Vector3.Forward );
-			if ( _autoSplitTree.Body.IsValid() )
-				_autoSplitTree.Body.Velocity = new Vector3( 0f, 0f, -1500f );
+			_autoSplitLog = _autoSplitTree.SpawnedLog;
+			if ( _autoSplitLog.IsValid() && _autoSplitLog.Body.IsValid() )
+				_autoSplitLog.Body.Velocity = new Vector3( 0f, 0f, -1500f );
 			_autoSplitStartTime = 0f;
 			Log.Info( $"[TC_TEST] AutoSplit : spawned Brittle at {spawnPos} with forced -1500u/s downward velocity" );
 			return;
 		}
 
 		// Tree GameObject destroyed = SplitIntoLogs fired via OnCollisionStart.
-		if ( !_autoSplitTree.IsValid() )
+		if ( !_autoSplitLog.IsValid() )
 		{
 			Log.Info( $"[TC_TEST] AUTO_SPLIT PASS  Brittle split via physics at t={(float)_autoSplitStartTime:F2}s (threshold {Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)TreeKind.Brittle]:F0} u/s respected)" );
 			Transition( Phase.TestStumpRespawn );
@@ -579,7 +605,7 @@ public sealed class SelfTest : Component
 
 		if ( (float)_autoSplitStartTime > 3f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestPhysicsAutoSplit: Brittle didn't auto-split in 3s (IsFallenLog={_autoSplitTree.IsFallenLog})" );
+			Log.Error( $"[TC_TEST] FAIL TestPhysicsAutoSplit: Brittle didn't auto-split in 3s (logFalling={_autoSplitLog.IsFalling} logLanded={_autoSplitLog.IsFallenLog})" );
 			Finish();
 			return;
 		}
@@ -692,17 +718,18 @@ public sealed class SelfTest : Component
 			_cascadeSource = Tree.SpawnAt( Scene, sourcePos, 0f, TreeKind.Sapling );
 			_cascadeNeighborHpBefore = _cascadeNeighbor.ChopsRemaining;
 			_cascadeSource.StartFell( Vector3.Forward );
-			_cascadeSource.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
-			var logAxis = _cascadeSource.WorldRotation.Up.Normal;
+			_cascadeSourceLog = _cascadeSource.SpawnedLog;
+			_cascadeSourceLog.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
+			var logAxis = _cascadeSourceLog.WorldRotation.Up.Normal;
 			sourcePos = neighborPos - logAxis * 150f;
 			sourcePos = sourcePos.WithZ( neighborPos.z + 130f );
-			_cascadeSource.WorldPosition = sourcePos;
-			if ( _cascadeSource.Body.IsValid() )
+			_cascadeSourceLog.WorldPosition = sourcePos;
+			if ( _cascadeSourceLog.Body.IsValid() )
 			{
-				if ( _cascadeSource.Body.PhysicsBody.IsValid() )
-					_cascadeSource.Body.PhysicsBody.Position = sourcePos;
-				_cascadeSource.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
-				_cascadeSource.Body.AngularVelocity = Vector3.Zero;
+				if ( _cascadeSourceLog.Body.PhysicsBody.IsValid() )
+					_cascadeSourceLog.Body.PhysicsBody.Position = sourcePos;
+				_cascadeSourceLog.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
+				_cascadeSourceLog.Body.AngularVelocity = Vector3.Zero;
 			}
 			_cascadeCollisionStartTime = 0f;
 			_cascadeCollisionSpawned = true;
@@ -726,7 +753,7 @@ public sealed class SelfTest : Component
 
 		if ( (float)_cascadeCollisionStartTime > 2.0f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestCascadeCollision: neighbor unchanged after falling tree collision window (HP={_cascadeNeighbor.ChopsRemaining}/{_cascadeNeighborHpBefore}, sourceValid={_cascadeSource.IsValid()})" );
+			Log.Error( $"[TC_TEST] FAIL TestCascadeCollision: neighbor unchanged after falling log collision window (HP={_cascadeNeighbor.ChopsRemaining}/{_cascadeNeighborHpBefore}, logValid={_cascadeSourceLog.IsValid()})" );
 			Finish();
 		}
 	}
@@ -969,16 +996,17 @@ public sealed class SelfTest : Component
 		if ( TryGetGroundZ( pos.x, pos.y, out var gz ) ) pos = pos.WithZ( gz );
 		var tree = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Sapling );
 		tree.StartFell( Vector3.Forward ); // _chopped=true, _landed=false (falling)
-		if ( !tree.IsFalling )
+		var log = tree.SpawnedLog;
+		if ( !log.IsValid() || !log.IsFalling )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestFallingImpactSplit: tree pas en état Falling après StartFell (IsValid={tree.IsValid()} IsStanding={tree.IsStanding} IsFallenLog={tree.IsFallenLog})" );
 			Finish();
 			return;
 		}
 		// Force HP→0 via impact damage massif
-		tree.ApplyImpactDamage( 999, Vector3.Forward );
+		log.ApplyImpactDamage( 999, Vector3.Forward );
 		// Tree should be _logSplit=true → GameObject destroyed
-		if ( tree.IsValid() && !tree.IsValid() )
+		if ( !log.IsSplit )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestFallingImpactSplit: tree toujours valide après ApplyImpactDamage(999) — split non déclenché" );
 			Finish();
@@ -1989,6 +2017,23 @@ public sealed class SelfTest : Component
 	{
 		var pos = _targetTreePos + new Vector3( 60f, 0f, 40f );
 		_axe.TeleportTo( pos, 180f ); // face -X (toward tree at -60 relative)
+	}
+
+	private void ParkPlayerFacing( Vector3 targetPos )
+	{
+		var dir = (targetPos - _axe.WorldPosition).WithZ( 0f );
+		if ( dir.LengthSquared < 1f ) dir = Vector3.Forward;
+		dir = dir.Normal;
+		var pos = targetPos - dir * 70f + Vector3.Up * 35f;
+		_axe.TeleportTo( pos, Rotation.LookAt( dir ).Yaw() );
+	}
+
+	private FallenLog FindNearestFallenLog( Vector3 pos, float radius )
+	{
+		return Scene.GetAllComponents<FallenLog>()
+			.Where( l => l.IsValid() && l.WorldPosition.Distance( pos ) < radius )
+			.OrderBy( l => l.WorldPosition.Distance( pos ) )
+			.FirstOrDefault();
 	}
 
 	private void Finish()

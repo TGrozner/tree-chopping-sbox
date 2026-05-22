@@ -17,6 +17,7 @@ public sealed class AutoPlay : Component
 
 	private AxeController _axe;
 	private Tree _target;
+	private FallenLog _targetLog;
 	private Vector3 _targetPos;
 	private bool _countedTargetFell;
 	private TimeSince _sinceLastSwing = 999f;
@@ -61,6 +62,7 @@ public sealed class AutoPlay : Component
 		{
 			_wasActive = true;
 			_target = null;
+			_targetLog = null;
 			_step = StepPickTarget;
 		}
 
@@ -109,6 +111,7 @@ public sealed class AutoPlay : Component
 		}
 		_target = PickNearestStandingTree();
 		if ( !_target.IsValid() ) { CurrentAction = "no standing trees in range"; return; }
+		_targetLog = null;
 		_targetPos = _target.WorldPosition;
 		_countedTargetFell = false;
 		CurrentAction = $"targeted tree at {_target.WorldPosition}";
@@ -136,30 +139,43 @@ public sealed class AutoPlay : Component
 		// over-counts during the fall animation.
 		if ( _target.IsValid() && !_countedTargetFell && !_target.IsStanding )
 		{
+			_targetLog = _target.SpawnedLog;
 			_countedTargetFell = true;
 			TreesFelled++;
 			CurrentAction = $"tree fell — total {TreesFelled}";
 		}
-		if ( !_target.IsValid() )
+		if ( !_targetLog.IsValid() && !_target.IsValid() )
+			_targetLog = FindNearestFallenLog( _targetPos, 900f );
+		if ( !_countedTargetFell && _targetLog.IsValid() )
+		{
+			_countedTargetFell = true;
+			TreesFelled++;
+		}
+		if ( !_target.IsValid() && !_targetLog.IsValid() )
 		{
 			CurrentAction = "log split - collecting drops";
 			_sinceLastPickupMove = 999f;
 			_step = StepCollectDrops;
 			return;
 		}
-		if ( _target.IsFalling )
+		if ( _targetLog.IsValid() && _targetLog.IsFalling )
 		{
 			CurrentAction = $"tree falling - total {TreesFelled}";
 			return;
 		}
-		if ( !CanChopNow( _target ) )
+		if ( _target.IsValid() && _target.IsFalling )
+		{
+			CurrentAction = $"tree falling - total {TreesFelled}";
+			return;
+		}
+		if ( _target.IsValid() && !CanChopNow( _target ) )
 		{
 			CurrentAction = $"{_target.Kind} too hard - retargeting";
 			_step = StepPickTarget;
 			return;
 		}
 		if ( (float)_sinceLastSwing < 0.45f ) return;
-		ParkFacing( _target.LogCenter );
+		ParkFacing( _targetLog.IsValid() ? _targetLog.LogCenter : _target.LogCenter );
 		var hit = _axe.DebugSwing();
 		if ( hit is null )
 		{
@@ -176,11 +192,18 @@ public sealed class AutoPlay : Component
 				return;
 			}
 			_target = hitTree;
+			_targetLog = hitTree.SpawnedLog;
 			_targetPos = hitTree.WorldPosition;
 			_countedTargetFell = !hitTree.IsStanding;
 		}
+		else if ( hit is FallenLog hitLog && hitLog.IsValid() )
+		{
+			_targetLog = hitLog;
+		}
 		_sinceLastSwing = 0f;
-		CurrentAction = $"swing — chops left {_target.ChopsRemaining}";
+		CurrentAction = _targetLog.IsValid()
+			? $"swing log - chops left {_targetLog.ChopsRemaining}"
+			: $"swing - chops left {_target.ChopsRemaining}";
 	}
 
 	private void TickCollectDrops()
@@ -280,6 +303,14 @@ public sealed class AutoPlay : Component
 			.FirstOrDefault();
 		if ( choppable.IsValid() ) return choppable;
 		return null;
+	}
+
+	private FallenLog FindNearestFallenLog( Vector3 pos, float radius )
+	{
+		return Scene.GetAllComponents<FallenLog>()
+			.Where( l => l.IsValid() && l.WorldPosition.Distance( pos ) < radius )
+			.OrderBy( l => l.WorldPosition.Distance( pos ) )
+			.FirstOrDefault();
 	}
 
 	private void ParkFacing( Vector3 targetPos )

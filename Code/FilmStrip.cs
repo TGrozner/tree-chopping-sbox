@@ -63,6 +63,8 @@ public sealed class FilmStrip : Component
 	private AxeController _axe;
 	private GameState _state;
 	private Tree _target;
+	private FallenLog _targetLog;
+	private Vector3 _targetPos;
 	private Vector3 _targetDir = Vector3.Forward;
 	private int _frame;
 	private TimeSince _phaseTime;
@@ -137,6 +139,8 @@ public sealed class FilmStrip : Component
 		_awaitingHitConfirm = false;
 		_approachParkedClose = false;
 		_target = null;
+		_targetLog = null;
+		_targetPos = Vector3.Zero;
 		_targetDir = Vector3.Forward;
 		Sfx.DebugLog = false;
 	}
@@ -224,6 +228,7 @@ public sealed class FilmStrip : Component
 		var dir = (_target.WorldPosition - _axe.WorldPosition).WithZ( 0f );
 		if ( dir.LengthSquared < 1f ) dir = Vector3.Forward;
 		dir = dir.Normal;
+		_targetPos = _target.WorldPosition;
 		_targetDir = dir;
 		var side = Vector3.Cross( Vector3.Up, dir );
 		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
@@ -263,11 +268,25 @@ public sealed class FilmStrip : Component
 
 	private void TickSwinging()
 	{
-		if ( !_target.IsValid() ) { Phase = FilmPhase.Done; return; }
 		ConfirmPendingHit( allowMiss: ForceTooHard );
+
+		if ( !_target.IsValid() )
+		{
+			_targetLog = FindNearestFallenLog( _targetPos, 900f );
+			if ( _targetLog.IsValid() )
+			{
+				Transition( FilmPhase.Falling );
+				return;
+			}
+			Phase = FilmPhase.Done;
+			return;
+		}
 
 		if ( _target.IsFalling || !_target.IsStanding )
 		{
+			_targetLog = _target.SpawnedLog;
+			if ( !_targetLog.IsValid() )
+				_targetLog = FindNearestFallenLog( _targetPos, 900f );
 			Transition( FilmPhase.Falling );
 			return;
 		}
@@ -297,6 +316,14 @@ public sealed class FilmStrip : Component
 	private void TickFalling()
 	{
 		ConfirmPendingHit( allowMiss: false );
+		if ( !_targetLog.IsValid() )
+			_targetLog = FindNearestFallenLog( _targetPos, 900f );
+		if ( _targetLog.IsValid() )
+		{
+			if ( _targetLog.IsFallenLog )
+				Transition( FilmPhase.Landed );
+			return;
+		}
 		if ( !_target.IsValid() || (!_target.IsStanding && !_target.IsFalling) )
 		{
 			Transition( FilmPhase.Landed );
@@ -323,7 +350,7 @@ public sealed class FilmStrip : Component
 	// sub-log intermediate à chopper. Transition direct vers Pickup.
 	private void TickChopTrunk()
 	{
-		if ( !_target.IsValid() )
+		if ( !_targetLog.IsValid() )
 		{
 			ConfirmPendingHit( allowMiss: false );
 			Log.Info( "[TC_FILM] trunk split → pickup phase" );
@@ -343,13 +370,15 @@ public sealed class FilmStrip : Component
 		if ( !_axe.IsSwingIdle ) return;
 		ParkForLandedTrunk();
 		RequestSwingAtTarget();
-		Log.Info( $"[TC_FILM] TRUNK SWING #{SwingsFired} (chops left={_target.ChopsRemaining})" );
+		Log.Info( $"[TC_FILM] TRUNK SWING #{SwingsFired} (chops left={_targetLog.ChopsRemaining})" );
 	}
 
 	private void RequestSwingAtTarget()
 	{
-		if ( !_axe.IsValid() || !_target.IsValid() ) return;
-		_hpAtLastSwing = _target.ChopsRemaining;
+		if ( !_axe.IsValid() ) return;
+		if ( _targetLog.IsValid() ) _hpAtLastSwing = _targetLog.ChopsRemaining;
+		else if ( _target.IsValid() ) _hpAtLastSwing = _target.ChopsRemaining;
+		else return;
 		_awaitingHitConfirm = true;
 		_timeSinceSwingRequest = 0f;
 		_axe.DebugRequestSwing = true;
@@ -362,7 +391,21 @@ public sealed class FilmStrip : Component
 		if ( !_awaitingHitConfirm ) return;
 		if ( !_axe.IsSwingIdle || (float)_timeSinceSwingRequest < 0.2f ) return;
 
-		if ( !_target.IsValid() || _target.ChopsRemaining < _hpAtLastSwing )
+		if ( !_targetLog.IsValid() && !_target.IsValid() )
+		{
+			HitsConfirmed++;
+			_awaitingHitConfirm = false;
+			return;
+		}
+
+		if ( _targetLog.IsValid() && _targetLog.ChopsRemaining < _hpAtLastSwing )
+		{
+			HitsConfirmed++;
+			_awaitingHitConfirm = false;
+			return;
+		}
+
+		if ( _target.IsValid() && _target.ChopsRemaining < _hpAtLastSwing )
 		{
 			HitsConfirmed++;
 			_awaitingHitConfirm = false;
@@ -376,8 +419,8 @@ public sealed class FilmStrip : Component
 		}
 
 		MissedSwings++;
-		Log.Warning( $"[TC_FILM] swing miss kind={_target.Kind} hp={_target.ChopsRemaining} phase={Phase}; reparking closer" );
-		if ( _target.IsFallenLog ) ParkForLandedTrunk();
+		Log.Warning( $"[TC_FILM] swing miss kind={TargetKind} hp={_hpAtLastSwing} phase={Phase}; reparking closer" );
+		if ( _targetLog.IsValid() ) ParkForLandedTrunk();
 		else ParkForStandingTarget( close: true );
 		_awaitingHitConfirm = false;
 		_lastReSwing = 0.999f;
@@ -417,17 +460,21 @@ public sealed class FilmStrip : Component
 		if ( (float)_lastTelemetry < 0.1f ) return;
 		_lastTelemetry = 0f;
 
-		if ( !_target.IsValid() )
+		if ( !_target.IsValid() && !_targetLog.IsValid() )
 		{
 			Log.Info( $"[TC_FEEL] t={(float)_totalTime:F2} phase={Phase} target=none swings={SwingsFired} hits={HitsConfirmed} misses={MissedSwings}" );
 			return;
 		}
 
-		float upDot = _target.WorldRotation.Up.Dot( Vector3.Up );
+		var rotation = _targetLog.IsValid() ? _targetLog.WorldRotation : _target.WorldRotation;
+		var body = _targetLog.IsValid() ? _targetLog.Body : _target.Body;
+		var kind = _targetLog.IsValid() ? _targetLog.Kind : _target.Kind;
+		var hp = _targetLog.IsValid() ? _targetLog.ChopsRemaining : _target.ChopsRemaining;
+		float upDot = rotation.Up.Dot( Vector3.Up );
 		float tiltDeg = MathF.Acos( upDot.Clamp( -1f, 1f ) ) * 180f / MathF.PI;
-		float speed = _target.Body.IsValid() ? _target.Body.Velocity.Length : 0f;
-		float ang = _target.Body.IsValid() ? _target.Body.AngularVelocity.Length : 0f;
-		Log.Info( $"[TC_FEEL] t={(float)_totalTime:F2} phase={Phase} kind={_target.Kind} hp={_target.ChopsRemaining} tilt={tiltDeg:F1} speed={speed:F1} ang={ang:F2} swings={SwingsFired} hits={HitsConfirmed} misses={MissedSwings}" );
+		float speed = body.IsValid() ? body.Velocity.Length : 0f;
+		float ang = body.IsValid() ? body.AngularVelocity.Length : 0f;
+		Log.Info( $"[TC_FEEL] t={(float)_totalTime:F2} phase={Phase} kind={kind} hp={hp} tilt={tiltDeg:F1} speed={speed:F1} ang={ang:F2} swings={SwingsFired} hits={HitsConfirmed} misses={MissedSwings}" );
 	}
 
 	private bool TryGetGroundZ( float x, float y, out float groundZ )
@@ -447,7 +494,7 @@ public sealed class FilmStrip : Component
 
 	private void ParkForLandedTrunk()
 	{
-		if ( !_axe.IsValid() || !_target.IsValid() ) return;
+		if ( !_axe.IsValid() || !_targetLog.IsValid() ) return;
 
 		var dir = _targetDir.WithZ( 0f );
 		if ( dir.LengthSquared < 0.001f ) dir = Vector3.Forward;
@@ -455,8 +502,9 @@ public sealed class FilmStrip : Component
 		var side = Vector3.Cross( Vector3.Up, dir );
 		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
 		side = side.Normal;
-		var pos = _target.WorldPosition + side * MathF.Max( 110f, ParkDistanceForKind( _target.Kind ) * 0.75f ) + Vector3.Up * 45f;
-		var look = (_target.WorldPosition - pos).WithZ( 0f );
+		var center = _targetLog.LogCenter;
+		var pos = center + side * MathF.Max( 110f, ParkDistanceForKind( _targetLog.Kind ) * 0.75f ) + Vector3.Up * 45f;
+		var look = (center - pos).WithZ( 0f );
 		if ( look.LengthSquared < 0.001f ) look = -side;
 		float yaw = Rotation.LookAt( look.Normal ).Yaw();
 		_axe.TeleportTo( pos, yaw );
@@ -500,6 +548,14 @@ public sealed class FilmStrip : Component
 			TreeKind.Veteran => 35f,
 			_ => 30f
 		};
+	}
+
+	private FallenLog FindNearestFallenLog( Vector3 pos, float radius )
+	{
+		return Scene.GetAllComponents<FallenLog>()
+			.Where( l => l.IsValid() && l.WorldPosition.Distance( pos ) < radius )
+			.OrderBy( l => l.WorldPosition.Distance( pos ) )
+			.FirstOrDefault();
 	}
 
 	private void ClearCaptureLane( Vector3 center, float radius )
