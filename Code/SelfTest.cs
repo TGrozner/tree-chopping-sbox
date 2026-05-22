@@ -1053,6 +1053,15 @@ public sealed class SelfTest : Component
 			return;
 		}
 		_state.ResetForTest();
+		_state.AddBackpack( Tunables.AxeTierCostsByType[1][0], WoodType.Wood );
+		bool helperSoldAndBought = ShopStation.TryBuyCheapestAcrossAll( Scene );
+		if ( !helperSoldAndBought || _state.BackpackTotal != 0 || _state.AxeTier != 1 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not sell+buy Stone in one shop pass (ok={helperSoldAndBought}, bag={_state.BackpackTotal}, axe=T{_state.AxeTier}, wood={_state.Wood})" );
+			Finish();
+			return;
+		}
+		_state.ResetForTest();
 		_state.AddWood( Tunables.AxeTierCostsByType[1][0] + Tunables.AxeTierCostsByType[2][0] + Tunables.AxeTierCostsByType[3][0] );
 		_state.TryUpgradeAxe();
 		_state.TryUpgradeAxe();

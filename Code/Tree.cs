@@ -1162,7 +1162,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 					ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, shedDir.Normal, count, _canopyTint );
 					// Random rustle SFX trÃ¨s discret (vol scale par count) â€” too loud serait
 					// gÃªnant car fired ~12Ã—/s pendant la chute.
-					float rustleVol = (count / 6f).Clamp( 0.035f, 0.12f );
+					float rustleVol = (count / 6f).Clamp( 0.025f, 0.065f );
 					Sfx.Play( "sounds/leaves_rustle.sound", _primaryCanopy.WorldPosition,
 						volume: rustleVol, pitchMin: 0.85f, pitchMax: 1.15f );
 				}

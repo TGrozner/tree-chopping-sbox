@@ -311,10 +311,10 @@ public sealed class ShopStation : Component
 	{
 		var state = GameState.Get( scene );
 		if ( !state.IsValid() ) return false;
+		bool didSomething = false;
 		if ( state.BackpackTotal > 0 )
 		{
-			state.TrySell();
-			return true;
+			didSomething = state.TrySell() > 0;
 		}
 		if ( state.CanPrestige() )
 		{
@@ -338,7 +338,7 @@ public sealed class ShopStation : Component
 		int cPet   = AffordableWoodCost( state.PetTier       < Tunables.MaxPetTier      ? Tunables.PetCosts[state.PetTier + 1]             : int.MaxValue );
 		int cheapest = Math.Min( Math.Min( Math.Min( Math.Min( cAxe, cRange ), Math.Min( cSpd, cSpeed ) ),
 			Math.Min( cLuck, cPower ) ), Math.Min( cBack, cPet ) );
-		if ( cheapest == int.MaxValue ) return false;
+		if ( cheapest == int.MaxValue ) return didSomething;
 		if ( cheapest == cAxe   && state.TryUpgradeAxe()       ) return true;
 		if ( cheapest == cRange && state.TryUpgradeToolRange() ) return true;
 		if ( cheapest == cSpd   && state.TryUpgradeToolSpeed() ) return true;
@@ -347,6 +347,6 @@ public sealed class ShopStation : Component
 		if ( cheapest == cPower && state.TryUpgradePower()     ) return true;
 		if ( cheapest == cBack  && state.TryUpgradeBackpack()  ) return true;
 		if ( cheapest == cPet   && state.TryUpgradePet()       ) return true;
-		return false;
+		return didSomething;
 	}
 }

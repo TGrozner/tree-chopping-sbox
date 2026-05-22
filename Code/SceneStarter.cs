@@ -244,7 +244,7 @@ public sealed class SceneStarter : Component
 		float outerR = Tunables.ArenaRadius;
 		SpawnStarterResourceField();
 		int scripted = SpawnProgressionGroves();
-		SpawnForestBand( innerR + 680f, outerR, Math.Max( 0, TreeCount - scripted ) );
+		SpawnForestBand( innerR + 920f, outerR, Math.Max( 0, TreeCount - scripted ) );
 	}
 
 	private int SpawnProgressionGroves()

@@ -682,9 +682,31 @@ public sealed class WoodHud : Component
 		// hint is more important and would overlap).
 		if ( _activeStation.IsValid() ) return;
 		float fontSize = 16f;
+		string text = "[R] teleport to shop";
 		var tint = TextColor.WithAlpha( 0.40f );
+		if ( _state is not null && _state.BackpackTotal > 0 )
+		{
+			if ( _state.AxeTier < Tunables.MaxAxeTier )
+			{
+				var recipe = Tunables.AxeTierCostsByType[_state.AxeTier + 1];
+				bool nextAxeReady =
+					_state.Wood + _state.BackpackWood >= recipe[0]
+					&& _state.Finewood + _state.BackpackFinewood >= recipe[1]
+					&& _state.CoreWood + _state.BackpackCoreWood >= recipe[2];
+				if ( nextAxeReady )
+				{
+					text = $"[R] return to sell - {Tunables.AxeTierName[_state.AxeTier + 1].ToUpper()} ready";
+					tint = HotColor.WithAlpha( 0.72f );
+				}
+			}
+			if ( _state.BackpackFull )
+			{
+				text = "[R] return to sell - backpack full";
+				tint = HotColor.WithAlpha( 0.72f );
+			}
+		}
 		var rect = new Rect( 0, Screen.Height * 0.92f, Screen.Width, fontSize * 1.4f );
-		hud.DrawText( new TextRendering.Scope( "[R] teleport to shop", tint, fontSize ), rect, TextFlag.Center );
+		hud.DrawText( new TextRendering.Scope( text, tint, fontSize ), rect, TextFlag.Center );
 	}
 
 	private float[] _frameTimes = new float[120];
