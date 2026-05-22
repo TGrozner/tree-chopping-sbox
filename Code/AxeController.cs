@@ -357,7 +357,7 @@ public sealed class AxeController : Component
 		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: (isLogHit ? 0.58f : 0.44f) * vol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
 		if ( heavyHit )
 		{
-			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.35f * vol, pitchMin: 1.25f * kindPitch, pitchMax: 1.45f * kindPitch );
+			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.18f * vol, pitchMin: 1.25f * kindPitch, pitchMax: 1.45f * kindPitch );
 		}
 		// Positional camera shake — kept very subtle after the Phase D revert.
 		// Was 1.6 + power×0.2 (up to 3.2u) → felt "shake de fou" ; halved.
