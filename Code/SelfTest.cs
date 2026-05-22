@@ -940,6 +940,9 @@ public sealed class SelfTest : Component
 		float basePush = Tree.ComputeLandedKickPowerScale( basePower, basePower );
 		float finalPush = Tree.ComputeLandedKickPowerScale( basePower, finalPower );
 		float expectedPush = (1f + 0.3f * finalPower) * Tunables.ChopComboFinalPushMul;
+		float baseFellPush = Tree.ComputeFellKickPowerScale( basePower, basePower );
+		float finalFellPush = Tree.ComputeFellKickPowerScale( basePower, finalPower );
+		float expectedFellPush = (1f + MathF.Min( finalPower - 1, 6 ) * 0.04f) * Tunables.ChopComboFinalPushMul;
 		if ( finalPower != 2 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: ceiling(1×{Tunables.ChopComboFinalDamageMul})={finalPower} (expected 2)" );
@@ -949,6 +952,12 @@ public sealed class SelfTest : Component
 		if ( MathF.Abs( finalPush - expectedPush ) > 0.001f || finalPush <= basePush )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: finalPush={finalPush:0.###}, expected={expectedPush:0.###}, basePush={basePush:0.###}" );
+			Finish();
+			return;
+		}
+		if ( MathF.Abs( finalFellPush - expectedFellPush ) > 0.001f || finalFellPush <= baseFellPush )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: finalFellPush={finalFellPush:0.###}, expected={expectedFellPush:0.###}, baseFellPush={baseFellPush:0.###}" );
 			Finish();
 			return;
 		}

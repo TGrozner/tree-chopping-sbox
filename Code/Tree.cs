@@ -458,7 +458,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( !_landed )
 		{
 			EmitBreakYield( direction, hitPoint );
-			StartFell( direction );
+			StartFell( direction, chopPower );
 		}
 		else SplitIntoLogs();
 	}
@@ -611,6 +611,16 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		return scale;
 	}
 
+	internal static float ComputeFellKickPowerScale( int baseChopPower, int actualChopPower, bool allowComboPush = true )
+	{
+		baseChopPower = Math.Max( 1, baseChopPower );
+		actualChopPower = Math.Max( 1, actualChopPower );
+		float scale = 1f + MathF.Min( actualChopPower - 1, 6 ) * 0.04f;
+		if ( allowComboPush && actualChopPower > baseChopPower )
+			scale *= Tunables.ChopComboFinalPushMul;
+		return scale;
+	}
+
 	private void ApplyLandedKick( Vector3 chopDirection, Vector3 hitPoint, int chopPower = 0 )
 	{
 		if ( !Body.IsValid() || !Body.PhysicsBody.IsValid() ) return;
@@ -700,7 +710,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// the SlowTipInitialFrac + SlowTipDuration physics ramp instead, which
 	// is naturally continuous. The groan SFX still fires here = the "creak"
 	// audio cue, just without a corresponding kinematic visual freeze.
-	internal void StartFell( Vector3 direction )
+	internal void StartFell( Vector3 direction, int fellPower = 0, bool allowComboPush = true )
 	{
 		_chopped = true;
 		_fellDir = direction.WithZ( 0f ).Normal;
@@ -739,18 +749,21 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			// Ã  _fellDir pour faire pivoter le tree dans le sens du fell.
 			var spinAxis = Vector3.Up.Cross( _fellDir ).Normal;
 			float kindMul = Tunables.TreeKindInitialFellOmegaMul[(int)Kind];
+			int baseChopPower = GameState.Get( Scene )?.ChopPower ?? 1;
+			if ( fellPower <= 0 ) fellPower = baseChopPower;
+			float powerScale = ComputeFellKickPowerScale( baseChopPower, fellPower, allowComboPush );
 			Body.AngularVelocity = spinAxis * Tunables.InitialFellOmega * kindMul;
 			if ( Body.PhysicsBody.IsValid() )
 			{
 				float mass = Body.PhysicsBody.Mass;
 				var topPoint = WorldPosition + Vector3.Up * (_trunkLen * 0.78f);
-				Body.PhysicsBody.ApplyImpulseAt( topPoint, _fellDir * mass * Tunables.InitialFellTopImpulseSpeed * kindMul );
+				Body.PhysicsBody.ApplyImpulseAt( topPoint, _fellDir * mass * Tunables.InitialFellTopImpulseSpeed * kindMul * powerScale );
 			}
 			// Lurch linÃ©aire â€” Valheim TreeBase.SpawnLog applique un AddForceAtPosition
 			// haut sur le tronc qui crÃ©e Ã  la fois rotation + slide. On le dÃ©compose
 			// en deux pour avoir le contrÃ´le (nos unitÃ©s sont trop grandes pour
 			// reproduire le ratio exact avec un seul impulse).
-			Body.Velocity = _fellDir * Tunables.InitialFellLurchSpeed * kindMul;
+			Body.Velocity = _fellDir * Tunables.InitialFellLurchSpeed * kindMul * powerScale;
 		}
 
 		if ( _primaryCanopy.IsValid() )
@@ -1031,7 +1044,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 		if ( !_chopped )
 		{
-			StartFell( dir );
+			StartFell( dir, damage, allowComboPush: false );
 		}
 		else if ( _landed )
 		{

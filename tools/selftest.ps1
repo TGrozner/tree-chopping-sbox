@@ -45,7 +45,7 @@ function Get-ExpectedPhases {
         'TestStatCounters', 'TestWoodCuttingLevel', 'TestPickupStackMerge', 'TestEnvWindSanity', 'TestStrictTooHard', 'TestTunablesValheimSanity',
         'TestImpactDamageScaling', 'TestWindDirRotation', 'TestRespawnJitterRange', 'TestWoodTypeDistribution', 'TestTreeShakeReset', 'TestCascadeShakeNoFell',
         'TestRollingLogsDamping', 'TestEnvWindDeterministic', 'TestWoodTypeMixSumsAll', 'TestHitDataDamage',
-        'TestStats', 'TestPrestige' )
+        'TestGameStateSanitize', 'TestStats', 'TestPrestige' )
 }
 
 $expectedPhases = Get-ExpectedPhases
