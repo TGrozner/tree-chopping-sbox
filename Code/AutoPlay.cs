@@ -154,9 +154,15 @@ public sealed class AutoPlay : Component
 	private Tree PickNearestStandingTree()
 	{
 		var playerPos = _axe.WorldPosition;
-		return Scene.GetAllComponents<Tree>()
+		int axeTier = GameState.Get( Scene )?.AxeTier ?? 0;
+		var standing = Scene.GetAllComponents<Tree>()
 			.Where( t => t.IsValid() && t.IsStanding )
+			.ToList();
+		var choppable = standing
+			.Where( t => Tunables.TreeKindMinAxeTier[(int)t.Kind] <= axeTier )
 			.OrderBy( t => playerPos.Distance( t.WorldPosition ) )
 			.FirstOrDefault();
+		if ( choppable.IsValid() ) return choppable;
+		return standing.OrderBy( t => playerPos.Distance( t.WorldPosition ) ).FirstOrDefault();
 	}
 }
