@@ -719,20 +719,25 @@ public sealed class SelfTest : Component
 			if ( TryGetGroundZ( sourcePos.x, sourcePos.y, out var gzSource ) )
 				sourcePos = sourcePos.WithZ( gzSource );
 
-			_cascadeNeighbor = Tree.SpawnAt( Scene, neighborPos, 0f, TreeKind.Sapling );
-			_cascadeSource = Tree.SpawnAt( Scene, sourcePos, 0f, TreeKind.Sapling );
+			_cascadeNeighbor = Tree.SpawnAt( Scene, neighborPos, 0f, TreeKind.Normal );
+			_cascadeSource = Tree.SpawnAt( Scene, sourcePos, 0f, TreeKind.Normal );
 			_cascadeNeighborHpBefore = _cascadeNeighbor.ChopsRemaining;
 			_cascadeSource.StartFell( Vector3.Forward );
 			_cascadeSourceLog = _cascadeSource.SpawnedLog;
 			_cascadeSourceLog.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
 			var logAxis = _cascadeSourceLog.WorldRotation.Up.Normal;
 			sourcePos = neighborPos - logAxis * 150f;
-			sourcePos = sourcePos.WithZ( neighborPos.z + 130f );
+			sourcePos = sourcePos.WithZ( neighborPos.z + _cascadeNeighbor.TrunkLength * 0.35f );
 			_cascadeSourceLog.WorldPosition = sourcePos;
 			if ( _cascadeSourceLog.Body.IsValid() )
 			{
 				if ( _cascadeSourceLog.Body.PhysicsBody.IsValid() )
+				{
 					_cascadeSourceLog.Body.PhysicsBody.Position = sourcePos;
+					_cascadeSourceLog.Body.PhysicsBody.Rotation = _cascadeSourceLog.WorldRotation;
+					_cascadeSourceLog.Body.PhysicsBody.Velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
+					_cascadeSourceLog.Body.PhysicsBody.AngularVelocity = Vector3.Zero;
+				}
 				_cascadeSourceLog.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
 				_cascadeSourceLog.Body.AngularVelocity = Vector3.Zero;
 			}

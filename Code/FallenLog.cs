@@ -206,6 +206,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 
 	protected override void OnFixedUpdate()
 	{
+		if ( !_logSplit ) SweepNearbyCascadeTargets();
 		if ( !_landed ) TickFall();
 		else TickLandedDecay();
 		if ( Body.IsValid() ) _preCollisionVelocity = Body.Velocity;
@@ -220,7 +221,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		float massScale = Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass / Tunables.TreeMass : 1f;
 		Body.ApplyTorque( Vector3.Up.Cross( _fellDir ) * Tunables.FellTorque * frac * Time.Delta * massScale );
 		var upDot = WorldRotation.Up.Dot( Vector3.Up );
-		SweepNearbyCascadeTargets();
 		if ( !_whooshFired && upDot < Tunables.TreeWhooshUpDotThreshold )
 		{
 			_whooshFired = true;
