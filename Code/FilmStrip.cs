@@ -387,7 +387,9 @@ public sealed class FilmStrip : Component
 		var items = Scene.GetAllComponents<WoodItem>().Where( i => i.IsValid() ).ToList();
 		if ( items.Count == 0 )
 		{
-			WoodAtFinish = _state.IsValid() ? _state.Wood + _state.BackpackWood : -1;
+			WoodAtFinish = _state.IsValid()
+				? _state.Wood + _state.Finewood + _state.CoreWood + _state.BackpackTotal
+				: -1;
 			Log.Info( $"[TC_FILM] PICKUP COMPLETE wood+bag={WoodAtFinish} swings={SwingsFired} elapsed={(float)_totalTime:F2}s" );
 			Phase = FilmPhase.Done;
 			return;

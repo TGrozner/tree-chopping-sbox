@@ -116,7 +116,7 @@ public sealed class GameState : Component
 				SanitizeLoadedState();
 			}
 			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh" );
-			Log.Info( $"[GameState] Loaded : wood={Wood} bag={BackpackWood}/{BackpackCapacity} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier} spirits={Spirits}" );
+			Log.Info( $"[GameState] Loaded : wood={Wood} bag={BackpackTotal}/{BackpackCapacity} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier} spirits={Spirits}" );
 		}
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Load failed: {ex.Message}" ); }
 	}

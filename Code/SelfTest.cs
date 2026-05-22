@@ -1043,6 +1043,15 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		_state.ResetForTest();
+		_state.AddBackpack( 3, WoodType.Finewood );
+		bool helperSold = ShopStation.TryBuyCheapestAcrossAll( Scene );
+		if ( !helperSold || _state.BackpackTotal != 0 || _state.Finewood != 3 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not flush Finewood-only backpack (sold={helperSold}, bag={_state.BackpackTotal}, Finewood={_state.Finewood})" );
+			Finish();
+			return;
+		}
 		// Tunables.TreeKindWoodTypeMix proba sum check
 		for ( int k = 0; k < Tunables.TreeKindWoodTypeMix.Length; k++ )
 		{

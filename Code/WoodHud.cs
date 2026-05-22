@@ -347,9 +347,15 @@ public sealed class WoodHud : Component
 		var col = _state.BackpackFull ? HotColor : TextColor.WithAlpha( 0.80f );
 		hud.DrawText( new TextRendering.Scope( "BACKPACK", TextColor.WithAlpha( 0.45f ), labelSize ),
 			new Rect( padL, y, boxW, labelSize * 1.4f ), TextFlag.LeftCenter );
-		var str = $"{_state.BackpackWood} / {_state.BackpackCapacity}";
+		var str = $"{_state.BackpackTotal} / {_state.BackpackCapacity}";
 		hud.DrawText( new TextRendering.Scope( str, col, valueSize ),
 			new Rect( padL, y + labelSize, boxW, valueSize * 1.3f ), TextFlag.LeftCenter );
+		if ( _state.BackpackFinewood > 0 || _state.BackpackCoreWood > 0 )
+		{
+			string detail = $"W {_state.BackpackWood}  F {_state.BackpackFinewood}  C {_state.BackpackCoreWood}";
+			hud.DrawText( new TextRendering.Scope( detail, TextColor.WithAlpha( 0.55f ), 12f ),
+				new Rect( padL, y + labelSize + valueSize * 1.12f, boxW, 18f ), TextFlag.LeftCenter );
+		}
 	}
 
 	private void DrawBackpackFullWarning( Sandbox.Rendering.HudPainter hud )
@@ -520,7 +526,7 @@ public sealed class WoodHud : Component
 	private void DrawSellHint( Sandbox.Rendering.HudPainter hud )
 	{
 		string header = _state.BackpackTotal > 0
-			? $"SELL — auto on entry · [E] / [1] to flush again ({_state.BackpackWood} carried)"
+			? $"SELL — auto on entry · [E] / [1] to flush again ({_state.BackpackTotal} carried)"
 			: "SELL — backpack empty, go chop";
 		DrawStationHintFrame( hud, 0, header,
 			out _, out _, out _, out _, out _ );

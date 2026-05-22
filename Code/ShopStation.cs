@@ -310,7 +310,7 @@ public sealed class ShopStation : Component
 	{
 		var state = GameState.Get( scene );
 		if ( !state.IsValid() ) return false;
-		if ( state.BackpackWood > 0 )
+		if ( state.BackpackTotal > 0 )
 		{
 			state.TrySell();
 			return true;
