@@ -583,6 +583,12 @@ public sealed class SelfTest : Component
 		}
 		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _subLogPos ) < 700f ) )
 		{
+			if ( log.DebugAxisUpDot() > 0.35f )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog too vertical upDot={log.DebugAxisUpDot():F2} center={log.LogCenter}" );
+				Finish();
+				return;
+			}
 			float clearance = log.DebugMinGroundClearance();
 			if ( clearance < -2f )
 			{

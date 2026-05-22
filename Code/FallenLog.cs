@@ -603,12 +603,14 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	private void SplitIntoSubLogs( int count, int totalItems )
 	{
 		ClampAboveGround();
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		var axis = WorldRotation.Up.WithZ( 0f );
+		if ( axis.LengthSquared < 0.001f ) axis = _fellDir.WithZ( 0f );
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Forward;
 		axis = axis.Normal;
 		var side = Vector3.Cross( Vector3.Up, axis );
 		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
 		side = side.Normal;
+		var childRotation = RotationWithUp( axis );
 
 		float childLen = MathF.Max( _trunkWidth * 2.0f, _trunkLen / count * 0.64f );
 		int remaining = totalItems;
@@ -625,7 +627,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 			var center = LogCenter + axis * centerOff + side * sideOff + Vector3.Up * (spawnLift + i * 2f);
 			var start = center - axis * (childLen * 0.5f);
 			var burst = (side * sideSign + Vector3.Up * 0.08f).Normal;
-			SpawnSubLog( start, WorldRotation, childLen, _trunkWidth * 0.82f, drops, burst );
+			SpawnSubLog( start, childRotation, childLen, _trunkWidth * 0.82f, drops, burst );
 			ChipBurst.Spawn( Scene, center, burst, 4, _trunkTint );
 		}
 		Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.95f, pitchMin: 0.58f, pitchMax: 0.78f );
@@ -690,6 +692,18 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		return log;
 	}
 
+	private static Rotation RotationWithUp( Vector3 up )
+	{
+		if ( up.LengthSquared < 0.001f ) return Rotation.Identity;
+		up = up.Normal;
+		float dot = Vector3.Up.Dot( up ).Clamp( -1f, 1f );
+		if ( dot > 0.999f ) return Rotation.Identity;
+		if ( dot < -0.999f ) return Rotation.FromAxis( Vector3.Right, 180f );
+		var axis = Vector3.Cross( Vector3.Up, up );
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Right;
+		return Rotation.FromAxis( axis.Normal, MathF.Acos( dot ).RadianToDegree() );
+	}
+
 	internal float DebugMinGroundClearance()
 	{
 		if ( Scene is null ) return 9999f;
@@ -706,6 +720,8 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		AccumulateGroundClearance( upper, radius, ref clearance );
 		return clearance;
 	}
+
+	internal float DebugAxisUpDot() => MathF.Abs( WorldRotation.Up.Normal.Dot( Vector3.Up ) );
 
 	private void TickLandedDecay()
 	{
