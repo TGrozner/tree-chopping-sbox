@@ -14,11 +14,12 @@ public static class Tunables
 	// forest natural variation — small saplings to towering veterans share
 	// the same arena. Mass scales with volume so taller trees fall heavier
 	// and chain harder.
-	public const float TreeHeight = 600f;
+	// 470u ~= 12m : Normal stays Beech/Oak sized; Veteran reaches tall Pine.
+	public const float TreeHeight = 470f;
 	public const float TreeRadius = 32f;
 	public const float TreeMass = 240f;
-	public const float TreeScaleMin = 0.7f;
-	public const float TreeScaleMax = 1.45f;
+	public const float TreeScaleMin = 0.82f;
+	public const float TreeScaleMax = 1.22f;
 
 	// Tree kinds : Normal (baseline), Sapling (thin+light), Veteran (big+heavy),
 	// Brittle (splits early on impact). Indices match TreeKind enum order.
@@ -239,11 +240,15 @@ public static class Tunables
 	// Valheim TreeBase → TreeLog → drops directly (aligné 2026-05-21, on a
 	// supprimé le sub-log intermediate qui était notre déviation). Standing
 	// tree → falls → landed log (chopable) → à HP=0 drop directement N items.
-	// LogChopHP = HP du landed log avant de splitter en items.
+	// LogChopHP = HP du landed log avant sublogs/items.
 	// TreeKindLandedDropCount = nombre d'items lâchés au split (= total wood
 	// kind, modulé par luck + mythic à runtime).
 	public static readonly int[] LogChopHP                  = { 2, 1, 3, 1 };
 	public static readonly int[] TreeKindLandedDropCount    = { 4, 1, 9, 2 };
+	public static readonly int[] TreeKindSubLogCount        = { 2, 0, 3, 0 };
+	public static readonly int[] TreeKindSubLogHP           = { 1, 0, 2, 0 };
+	public static readonly float[] TreeKindLogLengthMul     = { 0.34f, 0.42f, 0.30f, 0.34f };
+	public static readonly float[] TreeKindLogWidthMul      = { 0.58f, 0.64f, 0.52f, 0.55f };
 	public const float WoodItemPickupRange = 30f;
 	// Pickup kept slightly tighter than Valheim's 2m (~80u) so wood reads as a
 	// nearby cleanup action instead of long-range vacuum; speed is bumped so
@@ -410,8 +415,6 @@ public static class Tunables
 	// pondered Valheim axe rhythm observed in Thomas's gameplay capture.
 	public const float SwingWindUpDuration = 0.55f;
 	public const float SwingRecoveryDuration = 0.40f;
-	public const float SwingFovPunch = 6f;
-	public const float SwingFovDecayPerSec = 14f;
 	// Valheim Attack.m_freezeFrameDuration = 0.15s. Frame-counted so the
 	// duration isn't itself scaled by the freeze.
 	public const float HitstopTimeScale = 0f;

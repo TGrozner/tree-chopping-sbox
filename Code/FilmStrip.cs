@@ -354,6 +354,14 @@ public sealed class FilmStrip : Component
 		if ( !_targetLog.IsValid() )
 		{
 			ConfirmPendingHit( allowMiss: false );
+			var nextLog = FindNearestFallenLog( _targetPos, 900f );
+			if ( nextLog.IsValid() )
+			{
+				_targetLog = nextLog;
+				_lastReSwing = 0.999f;
+				Log.Info( "[TC_FILM] trunk split -> sub-log phase" );
+				return;
+			}
 			Log.Info( "[TC_FILM] trunk split → pickup phase" );
 			_lastReSwing = 0.999f;
 			Transition( FilmPhase.Pickup );

@@ -36,9 +36,10 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	private float _trunkDamageMul = 1f;
 	private float _trunkLen;
 	private float _trunkWidth;
+	private int _subLogGeneration;
+	private int _dropCountOverride = -1;
 	private Color _trunkTint;
 	private ModelRenderer _trunkLowerMr;
-	private ModelRenderer _trunkUpperMr;
 	private bool _highlighted;
 	private float _biomeDifficulty;
 
@@ -52,33 +53,23 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		go.WorldRotation = tree.WorldRotation;
 		go.Tags.Add( "tree" );
 
-		float trunkH = tree.TrunkLength;
-		float trunkW = tree.TrunkWidth;
+		int kindIdx = (int)tree.Kind;
+		float lengthMul = Tunables.TreeKindLogLengthMul[kindIdx];
+		float widthMul = Tunables.TreeKindLogWidthMul[kindIdx];
+		float trunkH = tree.TrunkLength * lengthMul;
+		float trunkW = tree.TrunkWidth * widthMul;
 		var tint = tree.TrunkTint;
 
-		var lower = tree.Scene.CreateObject();
-		lower.Name = "FallenLogTrunk";
-		lower.SetParent( go );
-		lower.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.32f );
-		lower.LocalScale = new Vector3( trunkW, trunkW, trunkH * 0.56f ) / Tunables.CubeBase;
-		var lowerMr = Mat.AddTintedCube( lower, tint );
+		var lowerMr = AddLogVisual( tree.Scene, go, "FallenLogTrunk", trunkH, trunkW, tint );
 
-		var upper = tree.Scene.CreateObject();
-		upper.Name = "FallenLogTrunkUpper";
-		upper.SetParent( go );
-		upper.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.78f );
-		upper.LocalScale = new Vector3( trunkW * 0.78f, trunkW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
-		var upperMr = Mat.AddTintedCube( upper, new Color( MathF.Min( 1f, tint.r * 1.08f ), MathF.Min( 1f, tint.g * 1.08f ), MathF.Min( 1f, tint.b * 1.08f ), 1f ) );
-		AddTrunkDetail( tree.Scene, lower, "LogBarkSideA", new Vector3( 0.515f, -0.10f, 0.00f ), new Vector3( 0.06f, 0.28f, 0.92f ), new Color( tint.r * 0.56f, tint.g * 0.50f, tint.b * 0.44f, 1f ) );
-		AddTrunkDetail( tree.Scene, lower, "LogBandLower", new Vector3( 0f, 0f, -0.46f ), new Vector3( 0.88f, 0.88f, 0.035f ), new Color( tint.r * 0.56f, tint.g * 0.50f, tint.b * 0.44f, 1f ) );
-		AddTrunkDetail( tree.Scene, upper, "LogBandUpper", new Vector3( 0f, 0f, 0.47f ), new Vector3( 0.90f, 0.90f, 0.04f ), new Color( tint.r * 0.70f, tint.g * 0.62f, tint.b * 0.52f, 1f ) );
-
-		var col = go.AddComponent<BoxCollider>();
-		col.Scale = new Vector3( MathF.Max( trunkW, 1f ), MathF.Max( trunkW, 1f ), MathF.Max( trunkH, 1f ) );
-		col.Center = new Vector3( 0f, 0f, trunkH * 0.5f );
+		float radius = MathF.Max( trunkW * 0.5f, 1f );
+		var col = go.AddComponent<CapsuleCollider>();
+		col.Radius = radius;
+		col.Start = new Vector3( 0f, 0f, radius );
+		col.End = new Vector3( 0f, 0f, MathF.Max( radius + 1f, trunkH - radius ) );
 
 		var rb = go.AddComponent<Rigidbody>();
-		rb.MassOverride = MathF.Max( tree.LogMass, 1f );
+		rb.MassOverride = MathF.Max( tree.LogMass * MathF.Max( 0.35f, lengthMul * widthMul ), 1f );
 		rb.LinearDamping = 0f;
 		rb.AngularDamping = 0.3f;
 		rb.EnhancedCcd = true;
@@ -96,7 +87,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		log._trunkTint = tint;
 		log._trunkDamageMul = tree.TrunkDamageMul;
 		log._trunkLowerMr = lowerMr;
-		log._trunkUpperMr = upperMr;
 		log._biomeDifficulty = tree.BiomeDifficulty;
 		log._fellDir = direction.WithZ( 0f ).Normal;
 		if ( log._fellDir.LengthSquared < 0.001f ) log._fellDir = Vector3.Forward;
@@ -110,8 +100,25 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		go.Name = name;
 		go.SetParent( parent );
 		go.LocalPosition = localPos;
-		go.LocalScale = localScale;
+		go.LocalScale = localScale / Tunables.CubeBase;
 		Mat.AddTintedCube( go, tint );
+	}
+
+	private static ModelRenderer AddLogVisual( Scene scene, GameObject parent, string name, float length, float width, Color tint )
+	{
+		var go = scene.CreateObject();
+		go.Name = name;
+		go.SetParent( parent );
+		go.LocalPosition = new Vector3( 0f, 0f, length * 0.5f );
+		go.LocalScale = new Vector3( width, width, length );
+		var mr = go.AddComponent<ModelRenderer>();
+		mr.Model = LogVisuals.CylinderModel;
+		mr.MaterialOverride = Mat.Default;
+		mr.Tint = tint;
+		AddTrunkDetail( scene, go, "LogBarkSideA", new Vector3( 0.52f, -0.10f, 0.00f ), new Vector3( 0.05f, 0.20f, 0.78f ), new Color( tint.r * 0.56f, tint.g * 0.50f, tint.b * 0.44f, 1f ) );
+		AddTrunkDetail( scene, go, "LogCutLower", new Vector3( 0f, 0f, -0.50f ), new Vector3( 0.58f, 0.58f, 0.035f ), new Color( tint.r * 1.18f, tint.g * 1.08f, tint.b * 0.88f, 1f ) );
+		AddTrunkDetail( scene, go, "LogCutUpper", new Vector3( 0f, 0f, 0.50f ), new Vector3( 0.58f, 0.58f, 0.035f ), new Color( tint.r * 1.18f, tint.g * 1.08f, tint.b * 0.88f, 1f ) );
+		return mr;
 	}
 
 	private void Launch( int fellPower, bool allowComboPush )
@@ -484,7 +491,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	private void UpdateTrunkVisuals()
 	{
 		SetRendererTint( _trunkLowerMr, 1.00f, 0.35f );
-		SetRendererTint( _trunkUpperMr, 1.08f, 0.28f );
 	}
 
 	private void SetRendererTint( ModelRenderer mr, float brightness, float highlightStrength )
@@ -529,15 +535,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	{
 		if ( _landingSnapApplied ) return;
 		_landingSnapApplied = true;
-		float snap = MathX.Lerp( 5f, 14f, (speedFrac - 0.4f).Clamp( 0f, 0.9f ) / 0.9f );
-		var side = Vector3.Cross( Vector3.Up, _fellDir.WithZ( 0f ) );
-		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
-		if ( _trunkUpperMr.IsValid() )
-		{
-			var upper = _trunkUpperMr.GameObject;
-			upper.LocalRotation *= Rotation.FromAxis( side.Normal, snap );
-			upper.LocalPosition += side.Normal * Game.Random.Float( 2f, 6f );
-		}
+		ChipBurst.Spawn( Scene, LogCenter, Vector3.Up, 5 + (int)(speedFrac * 8f), _trunkTint );
 	}
 
 	private void SplitIntoLogs()
@@ -545,14 +543,21 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		if ( _logSplit ) return;
 		_logSplit = true;
 		int kindIdx = (int)Kind;
-		int totalItems = Tunables.TreeKindLandedDropCount[kindIdx];
-		if ( IsMythic ) totalItems += 2;
+		int totalItems = _dropCountOverride >= 0 ? _dropCountOverride : Tunables.TreeKindLandedDropCount[kindIdx];
+		if ( _dropCountOverride < 0 && IsMythic ) totalItems += 2;
 		var gs = GameState.Get( Scene );
 		bool luckTriggered = false;
-		if ( gs.IsValid() && gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance )
+		if ( _dropCountOverride < 0 && gs.IsValid() && gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance )
 		{
 			totalItems += Math.Max( 1, totalItems / 2 );
 			luckTriggered = true;
+		}
+
+		int subLogCount = Tunables.TreeKindSubLogCount[kindIdx];
+		if ( _subLogGeneration == 0 && subLogCount > 0 && totalItems > 1 )
+		{
+			SplitIntoSubLogs( subLogCount, totalItems );
+			return;
 		}
 
 		var axis = WorldRotation.Up;
@@ -582,6 +587,86 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 			if ( hud.IsValid() ) hud.ShowDamageText( "LUCKY!", LogCenter, WoodHud.DamageTextBonus, isBonus: true );
 		}
 		GameObject?.Destroy();
+	}
+
+	private void SplitIntoSubLogs( int count, int totalItems )
+	{
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		var side = Vector3.Cross( Vector3.Up, axis );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+
+		float childLen = MathF.Max( _trunkWidth * 2.2f, _trunkLen / count * 0.78f );
+		int remaining = totalItems;
+		for ( int i = 0; i < count; i++ )
+		{
+			int slotsLeft = count - i;
+			int drops = Math.Max( 1, (int)MathF.Round( remaining / (float)slotsLeft ) );
+			remaining -= drops;
+			float t = count <= 1 ? 0.5f : i / (float)(count - 1);
+			float centerOff = MathX.Lerp( -_trunkLen * 0.28f, _trunkLen * 0.28f, t );
+			var center = LogCenter + axis * centerOff + side * Game.Random.Float( -8f, 8f ) + Vector3.Up * (4f + i * 2f);
+			var start = center - axis * (childLen * 0.5f);
+			var burst = (side * (i % 2 == 0 ? 1f : -1f) + Vector3.Up * 0.22f).Normal;
+			SpawnSubLog( start, WorldRotation, childLen, _trunkWidth * 0.82f, drops, burst );
+			ChipBurst.Spawn( Scene, center, burst, 6, _trunkTint );
+		}
+		Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.95f, pitchMin: 0.58f, pitchMax: 0.78f );
+		GameObject?.Destroy();
+	}
+
+	private FallenLog SpawnSubLog( Vector3 start, Rotation rotation, float length, float width, int dropCount, Vector3 burstDir )
+	{
+		var go = Scene.CreateObject();
+		go.Name = "SubLog";
+		go.WorldPosition = start;
+		go.WorldRotation = rotation;
+		go.Tags.Add( "tree" );
+
+		var lowerMr = AddLogVisual( Scene, go, "SubLogTrunk", length, width, _trunkTint );
+		float radius = MathF.Max( width * 0.5f, 1f );
+		var col = go.AddComponent<CapsuleCollider>();
+		col.Radius = radius;
+		col.Start = new Vector3( 0f, 0f, radius );
+		col.End = new Vector3( 0f, 0f, MathF.Max( radius + 1f, length - radius ) );
+
+		var rb = go.AddComponent<Rigidbody>();
+		float parentMass = Body.IsValid() && Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass : Tunables.TreeMass;
+		rb.MassOverride = MathF.Max( 1f, parentMass / MathF.Max( 1, Tunables.TreeKindSubLogCount[(int)Kind] ) );
+		rb.LinearDamping = Tunables.TreeLinearDampLanded;
+		rb.AngularDamping = Tunables.TreeAngularDampLanded;
+		rb.EnhancedCcd = true;
+		rb.SleepThreshold = Tunables.TreeLogSleepThreshold;
+		rb.StartAsleep = false;
+		rb.MotionEnabled = true;
+
+		var log = go.AddComponent<FallenLog>();
+		log.Body = rb;
+		log.Kind = Kind;
+		log.IsMythic = IsMythic;
+		log.ChopsRemaining = Math.Max( 1, Tunables.TreeKindSubLogHP[(int)Kind] );
+		log._landed = true;
+		log._subLogGeneration = _subLogGeneration + 1;
+		log._dropCountOverride = dropCount;
+		log._trunkLen = length;
+		log._trunkWidth = width;
+		log._trunkTint = _trunkTint;
+		log._trunkDamageMul = _trunkDamageMul;
+		log._trunkLowerMr = lowerMr;
+		log._biomeDifficulty = _biomeDifficulty;
+		log._fellDir = burstDir.WithZ( 0f ).Normal;
+		if ( log._fellDir.LengthSquared < 0.001f ) log._fellDir = Vector3.Forward;
+		log._timeSinceLanded = 0f;
+
+		if ( rb.PhysicsBody.IsValid() )
+		{
+			rb.ResetInertiaTensor();
+			rb.PhysicsBody.Velocity = (Body.IsValid() ? Body.Velocity : Vector3.Zero) + burstDir * Game.Random.Float( 75f, 130f );
+			rb.PhysicsBody.AngularVelocity = Vector3.Cross( burstDir, Vector3.Up ).Normal * Game.Random.Float( 0.7f, 1.4f );
+		}
+		return log;
 	}
 
 	private void TickLandedDecay()

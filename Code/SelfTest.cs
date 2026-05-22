@@ -12,7 +12,7 @@ public sealed class SelfTest : Component
 	enum Phase
 	{
 		Init, TestSpawnDistribution, Approach, Swing, Verify,
-		TestStump, TestSplit, TestLandedLogChopGrace, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
+		TestStump, TestSplit, TestLandedLogChopGrace, TestBonusDrop, TestSubLogSplit, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestLogTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestDepositFlush, TestDepositStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
@@ -42,6 +42,12 @@ public sealed class SelfTest : Component
 	private bool _bonusDropSpawned;
 	private Vector3 _bonusDropPos;
 	private int _woodItemsBeforeBonusDrop;
+	private Tree _subLogTree;
+	private FallenLog _subLogParent;
+	private bool _subLogSpawned;
+	private TimeSince _subLogSinceLanded;
+	private int _subLogSwings;
+	private Vector3 _subLogPos;
 	private Tree _landedGraceTree;
 	private FallenLog _landedGraceLog;
 	private bool _landedGraceSpawned;
@@ -103,6 +109,7 @@ public sealed class SelfTest : Component
 			case Phase.TestSplit: TickTestSplit(); break;
 			case Phase.TestLandedLogChopGrace: TickTestLandedLogChopGrace(); break;
 			case Phase.TestBonusDrop: TickTestBonusDrop(); break;
+			case Phase.TestSubLogSplit: TickTestSubLogSplit(); break;
 			case Phase.TestWoodPickup: TickTestWoodPickup(); break;
 			case Phase.TestPhysicsAutoSplit: TickTestPhysicsAutoSplit(); break;
 			case Phase.TestStumpRespawn: TickTestStumpRespawn(); break;
@@ -523,6 +530,59 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] BONUS_DROP PASS  delta={delta} items (expected {minExpected}..{Tunables.TreeKindFellBonusItemsMax[(int)TreeKind.Veteran]})" );
+		Transition( Phase.TestSubLogSplit );
+	}
+
+	private void TickTestSubLogSplit()
+	{
+		if ( !_subLogSpawned )
+		{
+			UpgradeAxeTo( Tunables.TreeKindMinAxeTier[(int)TreeKind.Normal] );
+			var spawnPos = _targetTreePos + new Vector3( 360f, 620f, 0f );
+			if ( TryGetGroundZ( spawnPos.x, spawnPos.y, out var groundZ ) )
+				spawnPos = spawnPos.WithZ( groundZ );
+			_subLogPos = spawnPos;
+			_subLogTree = Tree.SpawnAt( Scene, spawnPos, 0.5f, TreeKind.Normal );
+			_subLogTree.StartFell( Vector3.Forward );
+			_subLogParent = _subLogTree.SpawnedLog;
+			_subLogSinceLanded = 0f;
+			_subLogSpawned = true;
+			return;
+		}
+
+		if ( _subLogParent.IsValid() && !_subLogParent.IsFallenLog )
+		{
+			_subLogSinceLanded = 0f;
+			return;
+		}
+		if ( _subLogParent.IsValid() && (float)_subLogSinceLanded < Tunables.WoodLogChopGrace + 0.08f )
+			return;
+
+		if ( _subLogParent.IsValid() )
+		{
+			if ( _subLogSwings > 6 )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: parent log still valid after {_subLogSwings} swings hp={_subLogParent.ChopsRemaining}" );
+				Finish();
+				return;
+			}
+			ParkPlayerFacing( _subLogParent.LogCenter );
+			_axe.DebugSwingVerbose();
+			_subLogSwings++;
+			return;
+		}
+
+		int subLogs = Scene.GetAllComponents<FallenLog>()
+			.Count( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _subLogPos ) < 700f );
+		int expected = Tunables.TreeKindSubLogCount[(int)TreeKind.Normal];
+		if ( subLogs < expected )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublogs={subLogs}, expected >= {expected}" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] SUBLOG_SPLIT PASS  Normal parent log -> {subLogs} sublogs" );
+		ClearTestObjectsAround( _subLogPos, 900f );
 		Transition( Phase.TestWoodPickup );
 	}
 
@@ -542,7 +602,7 @@ public sealed class SelfTest : Component
 			// l'item à dist aléatoire >80u et bypasse magnet). Avec gravity=false
 			// + vel=0, l'item reste à 60u → magnet engage post-grace, fly à
 			// 700u/s vers player, pickup à <30u dans ~0.04s. Total ~0.54s.
-			var spawnPos = _axe.WorldPosition + new Vector3( 60f, 0f, 30f );
+			var spawnPos = _axe.WorldPosition + new Vector3( 40f, 0f, 18f );
 			var item = WoodItem.SpawnAt( Scene, spawnPos );
 			if ( item.Body.IsValid() )
 			{
@@ -551,7 +611,7 @@ public sealed class SelfTest : Component
 				item.Body.Gravity = false;
 			}
 			_pickupSpawnTime = 0f;
-			Log.Info( $"[TC_TEST] WoodPickup : spawned item at {spawnPos} (60u from player, vel+gravity zeroed), backpack before={_backpackBeforePickup}" );
+			Log.Info( $"[TC_TEST] WoodPickup : spawned item at {spawnPos} (40u from player, vel+gravity zeroed), backpack before={_backpackBeforePickup}" );
 			return;
 		}
 
@@ -1012,6 +1072,7 @@ public sealed class SelfTest : Component
 			_depositStationEntrySetup = true;
 			_depositStationEntered = false;
 			_state.ResetForTest();
+			ClearWoodItems();
 			_state.AddBackpack( 12 );
 			_depositStationStockpileBefore = _state.Wood;
 			_depositStationTotalBefore = _state.TotalWoodEarned;
@@ -1461,6 +1522,13 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( RuntimeValue( Tunables.TreeHeight ) < 420f || RuntimeValue( Tunables.TreeHeight ) > 520f
+			|| RuntimeValue( Tunables.TreeScaleMax ) > 1.3f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: tree visual ratios drifted (height={Tunables.TreeHeight}, scaleMax={Tunables.TreeScaleMax})" );
+			Finish();
+			return;
+		}
 		if ( Tunables.TreeKindWoodTypeMix.Length != 4 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeKindWoodTypeMix has {Tunables.TreeKindWoodTypeMix.Length} kinds (expected 4)" );
@@ -1532,6 +1600,13 @@ public sealed class SelfTest : Component
 		if ( Tunables.TreeKindFellTorqueMul.Length != 4 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeKindFellTorqueMul has {Tunables.TreeKindFellTorqueMul.Length} entries (expected 4)" );
+			Finish();
+			return;
+		}
+		if ( Tunables.TreeKindSubLogCount.Length != 4 || Tunables.TreeKindSubLogHP.Length != 4
+			|| Tunables.TreeKindLogLengthMul.Length != 4 || Tunables.TreeKindLogWidthMul.Length != 4 )
+		{
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: log/sublog kind arrays must have 4 entries" );
 			Finish();
 			return;
 		}
@@ -2180,6 +2255,20 @@ public sealed class SelfTest : Component
 		{
 			if ( log.IsValid() && log.WorldPosition.Distance( center ) < radius )
 				log.GameObject?.Destroy();
+		}
+		foreach ( var item in Scene.GetAllComponents<WoodItem>().ToList() )
+		{
+			if ( item.IsValid() && item.WorldPosition.Distance( center ) < radius )
+				item.GameObject?.Destroy();
+		}
+	}
+
+	private void ClearWoodItems()
+	{
+		foreach ( var item in Scene.GetAllComponents<WoodItem>().ToList() )
+		{
+			if ( item.IsValid() )
+				item.GameObject?.Destroy();
 		}
 	}
 

@@ -15,8 +15,6 @@ public sealed class AxeController : Component
 	private float _phaseTime;
 	private Vector3 _pendingForward;
 
-	private float _baseFov = -1f;
-	private float _fovOffset;
 	private int _hitstopFramesLeft;
 	private IChoppable _previewTarget;
 	// Combo chain Valheim Attack.m_attackChainLevels — chain reset à 0 si gap
@@ -25,9 +23,6 @@ public sealed class AxeController : Component
 	// [Property, ReadOnly] pour HUD pip indicator + selftest visibility.
 	[Property, ReadOnly] public int ChainLevel { get; private set; }
 	private TimeSince _timeSinceLastSwing = 999f;
-	private TimeSince _shakeStart = 999f;
-	private float _shakeAmplitude;
-	private int _shakeSeed;
 	private TimeSince _viewImpactStart = 999f;
 	private float _viewImpactStrength;
 
@@ -73,7 +68,6 @@ public sealed class AxeController : Component
 	{
 		TickDebugHooks();
 		TickHitstop();
-		TickFov();
 		TickAimPreview();
 		TickTeleportHome();
 		TickSpeedStat();
@@ -88,8 +82,6 @@ public sealed class AxeController : Component
 	protected override void OnPreRender()
 	{
 		if ( !Camera.IsValid() ) return;
-		if ( _baseFov <= 0f ) _baseFov = Camera.FieldOfView;
-		Camera.FieldOfView = _baseFov + _fovOffset;
 		// Anti-clip : trace from the player head toward the third-person
 		// camera position, pull the cam in if a tree trunk is between. Stops
 		// the "camera inside a wooden cube" frames when the player teleports
@@ -109,35 +101,6 @@ public sealed class AxeController : Component
 				Camera.WorldPosition = trace.EndPosition + (head - camPos).Normal * 6f;
 			}
 		}
-		ApplyCameraShake();
-	}
-
-	// Per-hit positional camera shake. Sin-based decaying jitter, applied
-	// AFTER the anti-clip pullback so the shake doesn't push the camera back
-	// inside a trunk we just dodged.
-	private void ApplyCameraShake()
-	{
-		float t = (float)_shakeStart;
-		const float duration = 0.18f;
-		if ( t >= duration || _shakeAmplitude < 0.05f ) return;
-		float decay = 1f - (t / duration);
-		float amp = _shakeAmplitude * decay * decay;
-		// Two out-of-phase sin axes for a quick "rattle" rather than a smooth
-		// orbit. Seed shifts the phase so back-to-back hits don't beat
-		// constructively.
-		float phase = _shakeSeed * 0.31f;
-		float fx = MathF.Sin( (t * 47f) + phase );
-		float fy = MathF.Sin( (t * 53f) + phase * 1.4f + 1.2f );
-		var right = Camera.WorldRotation.Right;
-		var up = Camera.WorldRotation.Up;
-		Camera.WorldPosition += right * (fx * amp) + up * (fy * amp);
-	}
-
-	public void AddCameraShake( float amplitudeUnits )
-	{
-		_shakeStart = 0f;
-		_shakeAmplitude = MathF.Max( _shakeAmplitude, amplitudeUnits );
-		_shakeSeed = (_shakeSeed + 1) & 0xFF;
 	}
 
 	private void AddViewImpactKick( float strength )
@@ -164,12 +127,6 @@ public sealed class AxeController : Component
 		if ( _phase != SwingPhase.Idle ) mul *= Tunables.SwingMoveSpeedFactor;
 		Player.WalkSpeed = _baseWalkSpeed * mul;
 		Player.RunSpeed = _baseRunSpeed * mul;
-	}
-
-	private void TickFov()
-	{
-		if ( _fovOffset <= 0.01f ) { _fovOffset = 0f; return; }
-		_fovOffset = MathX.Lerp( _fovOffset, 0f, Tunables.SwingFovDecayPerSec * Time.Delta );
 	}
 
 	private void TickDebugHooks()
@@ -265,7 +222,6 @@ public sealed class AxeController : Component
 		_phase = SwingPhase.WindUp;
 		_phaseTime = 0f;
 
-		_fovOffset += Tunables.SwingFovPunch * 0.4f;
 		// No chip burst at swing-start anymore (Thomas 2026-05-21 : "quand on
 		// chop dans le vide on a quand même des wood chips"). Chips only fire
 		// on actual impact, via ApplyImpactFeedback.
@@ -342,7 +298,6 @@ public sealed class AxeController : Component
 		}
 		else
 		{
-			_fovOffset += Tunables.SwingFovPunch * 0.25f;
 			Sfx.PlayLocal( "sounds/swing.sound",
 				volume: 0.72f, pitchMin: 1.16f, pitchMax: 1.38f );
 		}
@@ -372,9 +327,6 @@ public sealed class AxeController : Component
 		if ( willBreakTree ) chipCount = Math.Max( chipCount, (int)(Tunables.ChipBurstCount * 1.35f) );
 		var chipDir = isLogHit ? (forward.WithZ( 0f ) + Vector3.Up * 0.18f).Normal : forward;
 		ChipBurst.Spawn( Scene, contactPoint, chipDir, isLogHit ? (int)(chipCount * 1.15f) : chipCount, chipTint );
-		_fovOffset += heavyHit
-			? Tunables.SwingFovPunch * 1.5f
-			: Tunables.SwingFovPunch * damageFeel;
 		Scene.TimeScale = Tunables.HitstopTimeScale;
 		_hitstopFramesLeft = heavyHit ? Tunables.HitstopFrames + 2 : Tunables.HitstopFrames;
 		// Valheim split hitEffect/destroyedEffect: every valid chop gets a
@@ -397,24 +349,17 @@ public sealed class AxeController : Component
 		// Positional camera shake — kept very subtle after the Phase D revert.
 		// Was 1.6 + power×0.2 (up to 3.2u) → felt "shake de fou" ; halved.
 		// Final hit boost le shake aussi.
-		int power = GameState.Get( Scene )?.ChopPower ?? 1;
-		float shakeAmp = 0.7f + MathF.Min( power * 0.08f, 0.7f );
-		shakeAmp *= MathX.Lerp( 0.85f, 1.25f, damageFeel );
-		if ( heavyHit ) shakeAmp *= 1.4f;
-		AddCameraShake( shakeAmp );
 		AddViewImpactKick( heavyHit ? 1.35f : 0.85f );
 	}
 
 	private void ApplyTooHardFeedback( Vector3 contactPoint, Vector3 forward )
 	{
 		ChipBurst.Spawn( Scene, contactPoint, forward, Tunables.ChipBurstCount / 2, new Color( 0.55f, 0.50f, 0.42f, 1f ) );
-		_fovOffset += Tunables.SwingFovPunch * 0.45f;
 		Scene.TimeScale = Tunables.HitstopTimeScale;
 		_hitstopFramesLeft = 1;
 		Sfx.PlayLocal( "sounds/axe_too_weak.sound", volume: 0.72f, pitchMin: 0.75f, pitchMax: 0.95f );
 		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: 0.34f, pitchMin: 0.55f, pitchMax: 0.70f );
 		Sfx.Play( "sounds/axe_too_weak.sound", contactPoint, volume: 0.22f, pitchMin: 0.75f, pitchMax: 0.95f );
-		AddCameraShake( 0.45f );
 		AddViewImpactKick( 0.45f );
 	}
 
