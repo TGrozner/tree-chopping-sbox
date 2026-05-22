@@ -303,6 +303,9 @@ public static class Tunables
 	public const float SplitLogAxisSpawnFrac = 0.34f;
 	public const float SplitLogSideSpawnMin = 18f;
 	public const float SplitLogSideSpawnMul = 0.75f;
+	public const float SplitLogMaxSettledSpeed = 35f;
+	public const float SplitLogSpawnPoseSettleDuration = 1.0f;
+	public const float SplitLogMaxSpawnUpDot = 0.32f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.
@@ -348,14 +351,21 @@ public static class Tunables
 	public const float TreeLandedMaxAngularSpeed = 2.8f;
 	public const float TreeLandedMaxVerticalSpeed = 44f;
 	public const float TreeGroundedLandingClearance = 14f;
+	public const int LogGroundProbeCount = 7;
+	public const float TreeGroundContactMemory = 0.45f;
 	public const float TreeGroundContactHorizontalDrag = 0.965f;
 	public const float TreeGroundContactAngularDrag = 0.970f;
+	public const float TreeGroundContactStickyHorizontalDrag = 0.90f;
+	public const float TreeGroundContactStickyAngularDrag = 0.92f;
 	public const float TreeGroundContactMaxUpSpeed = 5f;
+	public const float TreePlayerBumpHorizontalMul = 0.18f;
+	public const float TreePlayerBumpAngularMul = 0.45f;
+	public const float TreePlayerBumpMaxUpSpeed = 2f;
 	public const float TreeFallbackLandingDelay = 6f;
 
 	// Tree is 'landed' once its up-axis tilts past this dot threshold.
 	public const float TreeFallenUpDotMax = 0.28f;
-	public const float TreeRestingTiltUpDotMax = 0.75f;
+	public const float TreeRestingTiltUpDotMax = 0.35f;
 	public const float TreeRestingLandingDelay = 1.4f;
 	public const float TreeRestingLandingSpeed = 90f;
 	public const float TreeRestingLandingAngularSpeed = 0.22f;

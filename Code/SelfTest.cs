@@ -392,7 +392,10 @@ public sealed class SelfTest : Component
 		{
 			if ( (float)_phaseTime > 5f )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSplit: no landed FallenLog after 5s (logValid={_targetLog.IsValid()} seen={_targetLogSeen})" );
+				string logState = _targetLog.IsValid()
+					? $" upDot={_targetLog.DebugAxisUpDot():F2} clearance={_targetLog.DebugMinGroundClearance():F1} vel={_targetLog.Body.Velocity.Length:F1} ang={_targetLog.Body.AngularVelocity.Length:F2}"
+					: "";
+				Log.Error( $"[TC_TEST] FAIL TestSplit: no landed FallenLog after 5s (logValid={_targetLog.IsValid()} seen={_targetLogSeen}){logState}" );
 				Finish();
 			}
 			return;
@@ -602,13 +605,13 @@ public sealed class SelfTest : Component
 				return;
 			}
 			float clearance = log.DebugMinGroundClearance();
-			if ( clearance < -2f )
+			if ( clearance < -Tunables.LogGroundSkin )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log penetrates terrain clearance={clearance:F1}u center={log.LogCenter}" );
 				Finish();
 				return;
 			}
-			if ( log.Body.IsValid() && log.Body.Velocity.Length > 8f )
+			if ( log.Body.IsValid() && log.Body.Velocity.Length > Tunables.SplitLogMaxSettledSpeed )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log spawned too hot vel={log.Body.Velocity.Length:F1}u/s" );
 				Finish();
@@ -2010,7 +2013,31 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		Log.Info( $"[TC_TEST] VALHEIM_LOG_DAMPING PASS  Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} Sleep={Tunables.TreeLogSleepThreshold} ManualDelay={Tunables.TreeLandedManualSleepDelay}" );
+		if ( RuntimeValue( Tunables.LogGroundProbeCount ) < 5 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: LogGroundProbeCount={Tunables.LogGroundProbeCount} < 5 (terrain probes too sparse)" );
+			Finish();
+			return;
+		}
+		if ( RuntimeValue( Tunables.TreeGroundContactMemory ) < 0.25f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeGroundContactMemory={Tunables.TreeGroundContactMemory} < 0.25 (depenetration emulation too short)" );
+			Finish();
+			return;
+		}
+		if ( RuntimeValue( Tunables.SplitLogMaxSettledSpeed ) > 35f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: SplitLogMaxSettledSpeed={Tunables.SplitLogMaxSettledSpeed} > 35 (split logs allowed to spawn too hot)" );
+			Finish();
+			return;
+		}
+		if ( RuntimeValue( Tunables.TreePlayerBumpHorizontalMul ) > 0.25f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreePlayerBumpHorizontalMul={Tunables.TreePlayerBumpHorizontalMul} > 0.25 (player can over-push logs)" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] VALHEIM_LOG_DAMPING PASS  Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} Sleep={Tunables.TreeLogSleepThreshold} ManualDelay={Tunables.TreeLandedManualSleepDelay} Probes={Tunables.LogGroundProbeCount}" );
 		Transition( Phase.TestEnvWindDeterministic );
 	}
 

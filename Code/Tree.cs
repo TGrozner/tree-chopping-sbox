@@ -69,6 +69,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// read "speed going into the impact" without depending on the Collision
 	// struct's Contact field (struct shape varies across s&box SDK versions).
 	private Vector3 _preCollisionVelocity;
+	private TimeSince _timeSinceGroundContact = 999f;
 	// Valheim feel : trees pleuvent des feuilles continuously while falling.
 	// Throttled Ã  80ms entre bursts, count scaled by angular velocity (faster
 	// rotation = plus de feuilles arrachÃ©es).
@@ -917,6 +918,14 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// appelle ApplyImpactDamage via SON OnCollisionStart.
 		if ( !_chopped ) return;
 
+		var otherGo = other.Other.GameObject;
+		float upDotNow = WorldRotation.Up.Dot( Vector3.Up );
+		if ( otherGo.IsValid() && otherGo.Tags.Has( "ground" ) && (_landed || upDotNow < Tunables.TreeRestingTiltUpDotMax) )
+		{
+			_timeSinceGroundContact = 0f;
+			ApplyGroundContactLimits();
+		}
+
 		// Valheim ImpactEffect.m_interval cooldown â€” Ã©vite spam damage si log
 		// reste en contact avec un voisin (rolling/bouncing fire multiple
 		// OnCollisionStart events). 0.5s entre deux cascade damages.
@@ -946,7 +955,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 		// Cascade â€” damage l'autre tronc s'il est un Tree (Valheim TreeLog
 		// crash dans TreeBase voisin = damage standing tree HP, peut le fell).
-		var otherGo = other.Other.GameObject;
 		Tree neighbor = null;
 		if ( otherGo.IsValid() )
 		{
@@ -1246,9 +1254,15 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// needs this contact-rest escape hatch so large trunks don't hang in a
 		// "falling but stopped" limbo until timeout.
 		bool fallenEnough = upDot < Tunables.TreeFallenUpDotMax;
-		bool groundSupported = DebugMinGroundClearance() < Tunables.TreeGroundedLandingClearance;
-		if ( groundSupported ) ApplyGroundContactLimits();
-		if ( (fallenEnough && groundSupported) || restingOnSomething || (_slowTipElapsed > Tunables.TreeFallbackLandingDelay && groundSupported) )
+		float groundClearance = DebugMinGroundClearance();
+		bool nearGround = groundClearance < Tunables.TreeGroundedLandingClearance;
+		bool groundSupported = upDot < Tunables.TreeRestingTiltUpDotMax && nearGround;
+		if ( groundSupported )
+		{
+			_timeSinceGroundContact = 0f;
+			ApplyGroundContactLimits();
+		}
+		if ( (fallenEnough && groundSupported) || (restingOnSomething && groundSupported) || (_slowTipElapsed > Tunables.TreeFallbackLandingDelay && groundSupported) )
 			BecomeLandedLog();
 	}
 
@@ -1442,26 +1456,38 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		axis = axis.Normal;
 		float radius = MathF.Max( _trunkWidth * 0.5f, 1f );
 		float length = MathF.Max( _trunkLen, radius * 2f + 1f );
-		var lower = WorldPosition + axis * radius;
-		var upper = WorldPosition + axis * MathF.Max( radius + 1f, length - radius );
 		float clearance = 9999f;
-		AccumulateGroundClearance( lower, radius, ref clearance );
-		AccumulateGroundClearance( (lower + upper) * 0.5f, radius, ref clearance );
-		AccumulateGroundClearance( upper, radius, ref clearance );
+		int count = Math.Max( 3, Tunables.LogGroundProbeCount );
+		for ( int i = 0; i < count; i++ )
+		{
+			float offset = LogProbeOffset( i, count, radius, length );
+			AccumulateGroundClearance( WorldPosition + axis * offset, radius, ref clearance );
+		}
 		return clearance;
 	}
 
 	private void ApplyGroundContactLimits()
 	{
 		if ( !Body.IsValid() ) return;
-		if ( DebugMinGroundClearance() > Tunables.TreeGroundedLandingClearance ) return;
+		float clearance = DebugMinGroundClearance();
+		bool recentContact = (float)_timeSinceGroundContact < Tunables.TreeGroundContactMemory;
+		if ( clearance > Tunables.TreeGroundedLandingClearance && !recentContact ) return;
 
 		var v = Body.Velocity;
 		if ( v.z > Tunables.TreeGroundContactMaxUpSpeed )
 			v = v.WithZ( Tunables.TreeGroundContactMaxUpSpeed );
-		var flat = v.WithZ( 0f ) * Tunables.TreeGroundContactHorizontalDrag;
+		float drag = recentContact ? Tunables.TreeGroundContactStickyHorizontalDrag : Tunables.TreeGroundContactHorizontalDrag;
+		var flat = v.WithZ( 0f ) * drag;
 		Body.Velocity = flat + Vector3.Up * v.z;
-		Body.AngularVelocity *= Tunables.TreeGroundContactAngularDrag;
+		Body.AngularVelocity *= recentContact ? Tunables.TreeGroundContactStickyAngularDrag : Tunables.TreeGroundContactAngularDrag;
+	}
+
+	private static float LogProbeOffset( int index, int count, float radius, float length )
+	{
+		float start = radius;
+		float end = MathF.Max( radius + 1f, length - radius );
+		float t = count <= 1 ? 0.5f : index / (float)(count - 1);
+		return MathX.Lerp( start, end, t );
 	}
 
 	private void AccumulateGroundClearance( Vector3 point, float radius, ref float clearance )
