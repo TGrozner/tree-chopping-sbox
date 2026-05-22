@@ -97,6 +97,7 @@ public sealed class WoodHud : Component
 
 	// Test hook : exposer le count de toasts actifs pour TestPickupStackMerge.
 	internal int GetPickupToastDebugCount() => _pickupToasts.Count;
+	internal void ClearPickupToastsForTest() => _pickupToasts.Clear();
 
 	// Damage popups Valheim-style — port direct de DamageText.AddInworldText.
 	// Float-up text au hit point + offset random, rise lent, cubic alpha decay,

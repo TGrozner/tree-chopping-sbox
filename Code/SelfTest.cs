@@ -19,7 +19,7 @@ public sealed class SelfTest : Component
 		Init, Approach, Swing, Verify,
 		TestStump, TestSplit, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
-		TestBackpackFull, TestSellFlush, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
+		TestBackpackFull, TestSellFlush, TestSellStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
 		TestImpactDamageScaling, TestWindDirRotation, TestRespawnJitterRange, TestWoodTypeDistribution, TestTreeShakeReset, TestCascadeShakeNoFell,
 		TestRollingLogsDamping, TestEnvWindDeterministic, TestWoodTypeMixSumsAll, TestHitDataDamage,
@@ -58,6 +58,10 @@ public sealed class SelfTest : Component
 	private TreeStump _respawnStump;
 	private TimeSince _respawnStartTime;
 	private bool _respawnTriggered;
+	private bool _sellStationEntrySetup;
+	private bool _sellStationEntered;
+	private int _sellStationWalletBefore;
+	private int _sellStationTotalBefore;
 
 	[ConVar( "tc_selftest", Help = "Spawn TreeChopping.SelfTest on bootstrap to run the mow-the-lawn headless scenario." )]
 	public static bool Enable { get; set; }
@@ -92,6 +96,7 @@ public sealed class SelfTest : Component
 			case Phase.TestImpactZeroNoOp: TickTestImpactZeroNoOp(); break;
 			case Phase.TestBackpackFull: TickTestBackpackFull(); break;
 			case Phase.TestSellFlush: TickTestSellFlush(); break;
+			case Phase.TestSellStationEntry: TickTestSellStationEntry(); break;
 			case Phase.TestPrestigeFormula: TickTestPrestigeFormula(); break;
 			case Phase.TestFallingImpactSplit: TickTestFallingImpactSplit(); break;
 			case Phase.TestComboFinalDamage: TickTestComboFinalDamage(); break;
@@ -722,6 +727,57 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] SELL_FLUSH PASS  sold=10, wallet {wBefore}→{_state.Wood}, total {totalBefore}→{_state.TotalWoodEarned}, backpack reset" );
+		Transition( Phase.TestSellStationEntry );
+	}
+
+	private void TickTestSellStationEntry()
+	{
+		var sellStation = Scene.GetAllComponents<ShopStation>()
+			.FirstOrDefault( s => s.IsValid() && s.Kind == StationKind.Sell );
+		if ( !sellStation.IsValid() )
+		{
+			Log.Error( "[TC_TEST] FAIL TestSellStationEntry: no SELL station found" );
+			Finish();
+			return;
+		}
+
+		if ( !_sellStationEntrySetup )
+		{
+			_sellStationEntrySetup = true;
+			_sellStationEntered = false;
+			_state.ResetForTest();
+			_state.AddBackpack( 12 );
+			_sellStationWalletBefore = _state.Wood;
+			_sellStationTotalBefore = _state.TotalWoodEarned;
+			var outside = sellStation.WorldPosition + Vector3.Right * (sellStation.Radius + 120f) + Vector3.Up * 80f;
+			_axe.TeleportTo( outside, 180f );
+			return;
+		}
+
+		if ( !_sellStationEntered )
+		{
+			if ( (float)_phaseTime < 0.20f ) return;
+			if ( sellStation.PlayerInside )
+			{
+				Log.Error( "[TC_TEST] FAIL TestSellStationEntry: station considered player inside before entry transition" );
+				Finish();
+				return;
+			}
+			_sellStationEntered = true;
+			_axe.TeleportTo( sellStation.WorldPosition + Vector3.Up * 80f, 180f );
+			return;
+		}
+
+		if ( (float)_phaseTime < 0.45f ) return;
+		if ( _state.BackpackTotal != 0 || _state.Wood != _sellStationWalletBefore + 12
+			|| _state.TotalWoodEarned != _sellStationTotalBefore + 12 || !sellStation.PlayerInside )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSellStationEntry: inside={sellStation.PlayerInside} backpack={_state.BackpackTotal} wood {_sellStationWalletBefore}->{_state.Wood} total {_sellStationTotalBefore}->{_state.TotalWoodEarned}" );
+			Finish();
+			return;
+		}
+
+		Log.Info( $"[TC_TEST] SELL_STATION_ENTRY PASS  entering SELL ring auto-sold 12, wallet {_sellStationWalletBefore}->{_state.Wood}" );
 		Transition( Phase.TestPrestigeFormula );
 	}
 
@@ -971,6 +1027,7 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		hud.ClearPickupToastsForTest();
 		// Spawn 3 toasts rapide
 		hud.ShowWoodPickupToast( 1, WoodType.Wood );
 		hud.ShowWoodPickupToast( 2, WoodType.Wood );
