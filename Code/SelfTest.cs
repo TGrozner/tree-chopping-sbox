@@ -614,10 +614,17 @@ public sealed class SelfTest : Component
 			_cascadeSource = Tree.SpawnAt( Scene, sourcePos, 0f, TreeKind.Sapling );
 			_cascadeNeighborHpBefore = _cascadeNeighbor.ChopsRemaining;
 			_cascadeSource.StartFell( Vector3.Forward );
+			_cascadeSource.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
+			var logAxis = _cascadeSource.WorldRotation.Up.Normal;
+			sourcePos = neighborPos - logAxis * 150f;
+			sourcePos = sourcePos.WithZ( neighborPos.z + 130f );
+			_cascadeSource.WorldPosition = sourcePos;
 			if ( _cascadeSource.Body.IsValid() )
 			{
-				_cascadeSource.Body.Velocity = Vector3.Forward * (Tunables.ImpactMaxSpeed * 1.1f);
-				_cascadeSource.Body.AngularVelocity = Vector3.Up.Cross( Vector3.Forward ).Normal * Tunables.InitialFellOmega;
+				if ( _cascadeSource.Body.PhysicsBody.IsValid() )
+					_cascadeSource.Body.PhysicsBody.Position = sourcePos;
+				_cascadeSource.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 260f);
+				_cascadeSource.Body.AngularVelocity = Vector3.Zero;
 			}
 			_cascadeCollisionStartTime = 0f;
 			_cascadeCollisionSpawned = true;

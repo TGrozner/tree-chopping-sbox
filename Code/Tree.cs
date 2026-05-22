@@ -501,6 +501,14 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		notch.LocalRotation = Rotation.FromYaw( angle.RadianToDegree() + Game.Random.Float( -18f, 18f ) );
 		Mat.AddTintedCube( notch, new Color( 0.08f, 0.04f, 0.02f, 1f ) );
 
+		var fresh = Scene.CreateObject();
+		fresh.Name = "FreshChopFace";
+		fresh.SetParent( trunkGO );
+		fresh.LocalPosition = notch.LocalPosition + new Vector3( 0f, 0.035f, 0.01f );
+		fresh.LocalScale = new Vector3( 0.15f * bite * variantWide, 0.055f, 0.095f * bite * variantTall );
+		fresh.LocalRotation = Rotation.FromYaw( angle.RadianToDegree() + Game.Random.Float( -12f, 12f ) );
+		Mat.AddTintedCube( fresh, Color.Lerp( _trunkTint, Tunables.ChipSplinterTint, finalHit ? 0.72f : 0.52f ) );
+
 		if ( chopPower > 1 || finalHit )
 		{
 			var chipCut = Scene.CreateObject();
@@ -544,6 +552,14 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		scar.LocalScale = new Vector3( 0.42f * bite, 0.055f, 0.10f * bite );
 		scar.LocalRotation = Rotation.FromYaw( Game.Random.Float( -16f, 16f ) );
 		Mat.AddTintedCube( scar, finalHit ? new Color( 0.04f, 0.02f, 0.01f, 1f ) : new Color( 0.10f, 0.05f, 0.02f, 1f ) );
+
+		var fresh = Scene.CreateObject();
+		fresh.Name = finalHit ? "LogFreshSplitFace" : "LogFreshChopFace";
+		fresh.SetParent( trunkGO );
+		fresh.LocalPosition = scar.LocalPosition + new Vector3( 0f, 0.035f, 0.01f );
+		fresh.LocalScale = new Vector3( 0.32f * bite, 0.045f, 0.075f * bite );
+		fresh.LocalRotation = scar.LocalRotation * Rotation.FromYaw( Game.Random.Float( -8f, 8f ) );
+		Mat.AddTintedCube( fresh, Color.Lerp( _trunkTint, Tunables.ChipSplinterTint, finalHit ? 0.75f : 0.48f ) );
 	}
 
 	private void EmitBreakYield( Vector3 direction, Vector3 hitPoint )
