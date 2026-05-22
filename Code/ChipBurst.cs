@@ -119,9 +119,10 @@ public sealed class Chip : Component
 		Velocity = Velocity.WithZ( Velocity.z - Gravity * dt );
 
 		var p = WorldPosition + Velocity * dt;
-		if ( p.z <= Tunables.GroundZ )
+		float groundZ = FindGroundZ( p );
+		if ( p.z <= groundZ )
 		{
-			p.z = Tunables.GroundZ;
+			p.z = groundZ;
 			Velocity = Velocity.WithZ( 0f ) * 0.3f;
 			SpinSpeed *= 0.4f;
 			if ( Velocity.LengthSquared < 25f ) _resting = true;
@@ -130,5 +131,14 @@ public sealed class Chip : Component
 
 		if ( SpinAxis.LengthSquared > 0.001f && MathF.Abs( SpinSpeed ) > 0.5f )
 			WorldRotation = Rotation.FromAxis( SpinAxis, SpinSpeed * dt ) * WorldRotation;
+	}
+
+	private float FindGroundZ( Vector3 pos )
+	{
+		if ( Scene is null ) return Tunables.GroundZ;
+		var hit = Scene.Trace.Ray( pos + Vector3.Up * 18f, pos - Vector3.Up * 120f )
+			.WithAnyTags( "ground" )
+			.Run();
+		return hit.Hit ? hit.EndPosition.z : Tunables.GroundZ;
 	}
 }
