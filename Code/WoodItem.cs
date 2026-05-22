@@ -28,8 +28,9 @@ public sealed class WoodItem : Component
 	{
 		var go = scene.CreateObject();
 		go.Name = "WoodItem";
-		// Slight upward kick + horizontal jitter so the burst feels organic.
-		go.WorldPosition = pos + Vector3.Up * Game.Random.Float( 6f, 14f );
+		// Short lift only: Valheim drops thud near the log, they don't spray
+		// upward like arcade pickups.
+		go.WorldPosition = pos + Vector3.Up * Game.Random.Float( 2f, 5f );
 		// Random yaw 0-360° — Valheim DropOnDestroyed.OnDestroyed pattern :
 		// `Quaternion.Euler(0, Random.Range(0, 360), 0)` sur chaque drop.
 		float yaw = Game.Random.Float( 0f, 360f );
@@ -49,9 +50,9 @@ public sealed class WoodItem : Component
 		col.Scale = new Vector3( Tunables.CubeBase );
 
 		var rb = go.AddComponent<Rigidbody>();
-		rb.MassOverride = 0.5f;
-		rb.LinearDamping = 0.4f;
-		rb.AngularDamping = 1.0f;
+		rb.MassOverride = 1.8f;
+		rb.LinearDamping = 1.4f;
+		rb.AngularDamping = 2.6f;
 		rb.MotionEnabled = true;
 
 		var item = go.AddComponent<WoodItem>();
@@ -65,18 +66,18 @@ public sealed class WoodItem : Component
 		if ( rb.PhysicsBody.IsValid() )
 		{
 			var burst = new Vector3(
-				Game.Random.Float( -120f, 120f ),
-				Game.Random.Float( -120f, 120f ),
-				Game.Random.Float( 180f, 320f ) );
+				Game.Random.Float( -35f, 35f ),
+				Game.Random.Float( -35f, 35f ),
+				Game.Random.Float( 55f, 115f ) );
 			if ( burstDir.LengthSquared > 0.001f )
 			{
-				burst += burstDir.Normal * Game.Random.Float( 90f, 180f );
+				burst += burstDir.Normal * Game.Random.Float( 20f, 55f );
 			}
 			rb.Velocity = burst;
 			rb.AngularVelocity = new Vector3(
-				Game.Random.Float( -8f, 8f ),
-				Game.Random.Float( -8f, 8f ),
-				Game.Random.Float( -8f, 8f ) );
+				Game.Random.Float( -2.5f, 2.5f ),
+				Game.Random.Float( -2.5f, 2.5f ),
+				Game.Random.Float( -2.5f, 2.5f ) );
 		}
 		Sfx.Play( "sounds/wood_drop.sound", go.WorldPosition, volume: 0.25f, pitchMin: 0.85f, pitchMax: 1.20f );
 		return item;

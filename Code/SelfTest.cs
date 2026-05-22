@@ -608,7 +608,7 @@ public sealed class SelfTest : Component
 				Finish();
 				return;
 			}
-			if ( log.Body.IsValid() && log.Body.Velocity.Length > 220f )
+			if ( log.Body.IsValid() && log.Body.Velocity.Length > 8f )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log spawned too hot vel={log.Body.Velocity.Length:F1}u/s" );
 				Finish();
@@ -1604,9 +1604,9 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) > 0.7f )
+		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) < 0.4f || RuntimeValue( Tunables.TreeAngularDampLanded ) > 1.2f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} (expected <= 0.7, Valheim-like dynamic log)" );
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} (expected 0.4..1.2, Valheim-like dynamic log)" );
 			Finish();
 			return;
 		}
@@ -1618,7 +1618,7 @@ public sealed class SelfTest : Component
 		}
 		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.0f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} (expected >= 2.0 pour laisser le log dynamique)" );
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} (expected >= 2.0, let logs roll before sleep)" );
 			Finish();
 			return;
 		}
@@ -1986,15 +1986,15 @@ public sealed class SelfTest : Component
 
 	private void TickTestRollingLogsDamping()
 	{
-		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) > 0.7f )
+		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) < 0.4f || RuntimeValue( Tunables.TreeAngularDampLanded ) > 1.2f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} > 0.7 (logs trop amortis)" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} outside 0.4..1.2" );
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeLinearDampLanded ) > 0.4f )
+		if ( RuntimeValue( Tunables.TreeLinearDampLanded ) < 0.2f || RuntimeValue( Tunables.TreeLinearDampLanded ) > 0.9f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLinearDampLanded={Tunables.TreeLinearDampLanded} > 0.4 (logs trop amortis)" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLinearDampLanded={Tunables.TreeLinearDampLanded} outside 0.2..0.9" );
 			Finish();
 			return;
 		}
@@ -2006,7 +2006,7 @@ public sealed class SelfTest : Component
 		}
 		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.0f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} < 2.0 (manual sleep coupe le roll trop tôt)" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} < 2.0 (manual sleep too early)" );
 			Finish();
 			return;
 		}

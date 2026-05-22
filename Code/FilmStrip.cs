@@ -466,7 +466,7 @@ public sealed class FilmStrip : Component
 
 	private void EmitTelemetry()
 	{
-		if ( (float)_lastTelemetry < 0.1f ) return;
+		if ( (float)_lastTelemetry < 0.02f ) return;
 		_lastTelemetry = 0f;
 
 		if ( !_target.IsValid() && !_targetLog.IsValid() )

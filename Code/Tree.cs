@@ -730,7 +730,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( side.LengthSquared < 0.001f ) side = Vector3.Cross( Vector3.Up, flat );
 		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
 		side = side.Normal;
-		var impulseDir = (flat * 0.82f + side * Game.Random.Float( -0.22f, 0.22f ) + Vector3.Up * 0.10f).Normal;
+		var impulseDir = (flat * 0.96f + Vector3.Up * 0.02f).Normal;
 		Body.PhysicsBody.ApplyImpulseAt( applyPoint, impulseDir * Tunables.LandedLogKickImpulse * powerScale );
 		var spinAxis = Vector3.Cross( centerToHit.Normal, impulseDir );
 		if ( spinAxis.LengthSquared < 0.001f ) spinAxis = Vector3.Cross( Vector3.Up, flat );
@@ -887,7 +887,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			{
 				float ang = Game.Random.Float( 0f, MathF.Tau );
 				var ring = new Vector3( MathF.Cos( ang ), MathF.Sin( ang ), 0f ) * Game.Random.Float( 12f, 24f );
-				var burstDir = (ring.WithZ( 0f ).Normal + Vector3.Up * 0.35f).Normal;
+				var burstDir = (ring.WithZ( 0f ).Normal + Vector3.Up * 0.08f).Normal;
 				WoodItem.SpawnAt( Scene, _spawnFootPos + ring + Vector3.Up * (10f + i * 4f), WorldScale.x, PickWoodType( mix ), burstDir );
 			}
 		}
@@ -1189,8 +1189,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		float massScale = Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass / Tunables.TreeMass : 1f;
 		float kindTorqueMul = Tunables.TreeKindFellTorqueMul[(int)Kind];
 		var torqueAxis = Vector3.Up.Cross( _fellDir );
-		Body.ApplyTorque( torqueAxis * Tunables.FellTorque * frac * Time.Delta * massScale * kindTorqueMul );
 		var upDot = WorldRotation.Up.Dot( Vector3.Up );
+		float tiltAssist = upDot.Clamp( 0f, 1f );
+		Body.ApplyTorque( torqueAxis * Tunables.FellTorque * frac * tiltAssist * Time.Delta * massScale * kindTorqueMul );
 		SweepNearbyCascadeTargets();
 
 		// Whoosh SFX une fois quand le tree passe past ~45Â° tilt. Match Valheim
@@ -1244,7 +1245,10 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// is already a physical log after spawn; our single-object transition
 		// needs this contact-rest escape hatch so large trunks don't hang in a
 		// "falling but stopped" limbo until timeout.
-		if ( upDot < Tunables.TreeFallenUpDotMax || restingOnSomething || _slowTipElapsed > 5f )
+		bool fallenEnough = upDot < Tunables.TreeFallenUpDotMax;
+		bool groundSupported = DebugMinGroundClearance() < Tunables.TreeGroundedLandingClearance;
+		if ( groundSupported ) ApplyGroundContactLimits();
+		if ( (fallenEnough && groundSupported) || restingOnSomething || (_slowTipElapsed > Tunables.TreeFallbackLandingDelay && groundSupported) )
 			BecomeLandedLog();
 	}
 
@@ -1259,6 +1263,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			Body.AngularDamping = Tunables.TreeAngularDampLanded;
 			Body.LinearDamping = Tunables.TreeLinearDampLanded;
 			Body.SleepThreshold = Tunables.TreeLogSleepThreshold;
+			Body.AngularVelocity *= Tunables.TreeLandedPostImpactAngularMul;
+			Body.Velocity *= Tunables.TreeLandedPostImpactLinearMul;
+			StabilizeLandedMotion();
 		}
 		float impactScale = ((landingSpeed - Tunables.ImpactMinSpeed)
 			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
@@ -1363,13 +1370,13 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			float off = MathX.Lerp( -spread, spread, t );
 			float sideSign = (i & 1) == 0 ? 1f : -1f;
 			float sideOff = sideSign * Game.Random.Float( MathF.Max( _trunkWidth * 0.42f, Tunables.LogDropSideSpread * 0.35f ), MathF.Max( _trunkWidth * 0.85f, Tunables.LogDropSideSpread ) );
-			var burstDir = (side * sideSign * 1.15f + axis * MathF.Sign( off == 0f ? sideSign : off ) * 0.42f + Vector3.Up * 0.25f).Normal;
-			var pos = trunkCenter + axis * off + side * sideOff + burstDir * Game.Random.Float( 6f, 16f ) + Vector3.Up * Game.Random.Float( 8f, 20f );
+			var burstDir = (side * sideSign * 0.85f + axis * MathF.Sign( off == 0f ? sideSign : off ) * 0.28f + Vector3.Up * 0.08f).Normal;
+			var pos = trunkCenter + axis * off + side * sideOff + burstDir * Game.Random.Float( 2f, 7f ) + Vector3.Up * Game.Random.Float( 2f, 8f );
 			WoodType type = PickWoodType( mix );
 			WoodItem.SpawnAt( Scene, pos, itemScaleMul, type, burstDir );
 			if ( i < 8 )
 			{
-				ChipBurst.Spawn( Scene, pos, -burstDir, 3, _trunkTint );
+				ChipBurst.Spawn( Scene, pos, -burstDir, 2, _trunkTint );
 			}
 		}
 
@@ -1394,6 +1401,8 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private void TickLandedDecay()
 	{
 		if ( !Body.IsValid() ) return;
+		ApplyGroundContactLimits();
+		StabilizeLandedMotion();
 		if ( _timeSinceLanded < Tunables.TreeLandedManualSleepDelay ) return;
 		Body.Sleeping = Body.Velocity.LengthSquared < Tunables.TreeLandedManualSleepSpeed * Tunables.TreeLandedManualSleepSpeed
 			&& Body.AngularVelocity.LengthSquared < Tunables.TreeLandedManualSleepAngularSpeed * Tunables.TreeLandedManualSleepAngularSpeed;
@@ -1408,6 +1417,61 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		{
 			GameObject.Destroy();
 		}
+	}
+
+	private void StabilizeLandedMotion()
+	{
+		if ( !Body.IsValid() ) return;
+		var v = Body.Velocity;
+		if ( v.Length > Tunables.TreeLandedMaxSpeed )
+			v = v.Normal * Tunables.TreeLandedMaxSpeed;
+		v = v.WithZ( v.z.Clamp( -Tunables.TreeLandedMaxVerticalSpeed, Tunables.TreeLandedMaxVerticalSpeed ) );
+		Body.Velocity = v;
+
+		var av = Body.AngularVelocity;
+		if ( av.Length > Tunables.TreeLandedMaxAngularSpeed )
+			av = av.Normal * Tunables.TreeLandedMaxAngularSpeed;
+		Body.AngularVelocity = av;
+	}
+
+	private float DebugMinGroundClearance()
+	{
+		if ( Scene is null ) return 9999f;
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		float radius = MathF.Max( _trunkWidth * 0.5f, 1f );
+		float length = MathF.Max( _trunkLen, radius * 2f + 1f );
+		var lower = WorldPosition + axis * radius;
+		var upper = WorldPosition + axis * MathF.Max( radius + 1f, length - radius );
+		float clearance = 9999f;
+		AccumulateGroundClearance( lower, radius, ref clearance );
+		AccumulateGroundClearance( (lower + upper) * 0.5f, radius, ref clearance );
+		AccumulateGroundClearance( upper, radius, ref clearance );
+		return clearance;
+	}
+
+	private void ApplyGroundContactLimits()
+	{
+		if ( !Body.IsValid() ) return;
+		if ( DebugMinGroundClearance() > Tunables.TreeGroundedLandingClearance ) return;
+
+		var v = Body.Velocity;
+		if ( v.z > Tunables.TreeGroundContactMaxUpSpeed )
+			v = v.WithZ( Tunables.TreeGroundContactMaxUpSpeed );
+		var flat = v.WithZ( 0f ) * Tunables.TreeGroundContactHorizontalDrag;
+		Body.Velocity = flat + Vector3.Up * v.z;
+		Body.AngularVelocity *= Tunables.TreeGroundContactAngularDrag;
+	}
+
+	private void AccumulateGroundClearance( Vector3 point, float radius, ref float clearance )
+	{
+		var hit = Scene.Trace.Ray( point + Vector3.Up * 140f, point - Vector3.Up * 260f )
+			.WithAnyTags( "ground" )
+			.Run();
+		if ( !hit.Hit ) return;
+		float wantedZ = hit.EndPosition.z + radius + Tunables.LogGroundSkin;
+		clearance = MathF.Min( clearance, point.z - wantedZ );
 	}
 }
 
