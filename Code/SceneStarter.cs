@@ -60,7 +60,7 @@ public sealed class SceneStarter : Component
 			// pierre du spawn". Hub is now just terrain + wooden props + the
 			// 4 invisible station zones with their worldspace labels.
 			SpawnForest();
-			SpawnTestSapling();
+			SpawnStarterSapling();
 			SpawnPet( player );
 
 			Log.Info( $"[SceneStarter] Bootstrap OK -- player pos={player?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
@@ -387,10 +387,9 @@ public sealed class SceneStarter : Component
 		return MathX.Lerp( 0.72f, 1.0f, (t - 0.58f) / 0.42f );
 	}
 
-	// Guaranteed weak sapling 120u ahead (+X) of the player on boot -- test
-	// convenience so the dev/selftest doesn't have to walk to the forest band.
-	// Inside SpawnPadRadius so the forest's keepout skips it, no crowding.
-	private void SpawnTestSapling()
+	// Guaranteed weak sapling 120u ahead (+X) of the player on boot. This is
+	// the first bite-sized chop before the denser starter lane.
+	private void SpawnStarterSapling()
 	{
 		const float distAhead = 120f;
 		float x = ResolvedPlayerSpawn.x + distAhead;
@@ -398,7 +397,7 @@ public sealed class SceneStarter : Component
 		if ( !TryGetGroundZ( x, y, out float z ) ) z = ResolvedPlayerSpawn.z;
 		var pos = new Vector3( x, y, z );
 		Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: TreeKind.Sapling );
-		Log.Info( $"[SceneStarter] Test sapling spawned at {pos}" );
+		Log.Info( $"[SceneStarter] Starter sapling spawned at {pos}" );
 	}
 
 	private bool TryGetGroundZ( float x, float y, out float groundZ )
