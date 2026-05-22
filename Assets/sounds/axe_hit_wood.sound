@@ -5,15 +5,11 @@
   "Decibels": 88,
   "SelectionMode": "Random",
   "Sounds": [
-    "sounds/cc0/wood/wood_hit_01.vsnd",
-    "sounds/cc0/wood/wood_hit_02.vsnd",
-    "sounds/cc0/wood/wood_hit_03.vsnd",
-    "sounds/cc0/wood/wood_hit_04.vsnd",
-    "sounds/cc0/wood/wood_hit_05.vsnd",
-    "sounds/cc0/wood/wood_hit_06.vsnd",
-    "sounds/cc0/wood/wood_hit_07.vsnd",
-    "sounds/cc0/wood/wood_hit_08.vsnd",
-    "sounds/cc0/wood/wood_hit_09.vsnd"
+    "sounds/raw/Audio/impactWood_heavy_000.vsnd",
+    "sounds/raw/Audio/impactWood_heavy_001.vsnd",
+    "sounds/raw/Audio/impactWood_heavy_002.vsnd",
+    "sounds/raw/Audio/impactWood_heavy_003.vsnd",
+    "sounds/raw/Audio/impactWood_heavy_004.vsnd"
   ],
   "Occlusion": false,
   "AirAbsorption": false,
