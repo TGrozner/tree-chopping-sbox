@@ -334,6 +334,10 @@ public static class Tunables
 	// Réduit pour matcher Valheim feel : logs roulent ~3-5s avant rest.
 	public const float TreeAngularDampLanded = 0.22f;
 	public const float TreeLinearDampLanded = 0.14f;
+	public const float TreeLogSleepThreshold = 0.05f;
+	public const float TreeLandedManualSleepDelay = 3.0f;
+	public const float TreeLandedManualSleepSpeed = 1.0f;
+	public const float TreeLandedManualSleepAngularSpeed = 0.18f;
 	// Tree is "landed" once its up-axis tilts past this dot threshold.
 	public const float TreeFallenUpDotMax = 0.28f;
 	public const float TreeRestingTiltUpDotMax = 0.75f;

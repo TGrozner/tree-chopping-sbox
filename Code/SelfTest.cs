@@ -726,8 +726,8 @@ public sealed class SelfTest : Component
 			_cascadeSourceLog = _cascadeSource.SpawnedLog;
 			_cascadeSourceLog.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
 			var logAxis = _cascadeSourceLog.WorldRotation.Up.Normal;
-			sourcePos = neighborPos - logAxis * 95f;
-			sourcePos = sourcePos.WithZ( neighborPos.z + _cascadeNeighbor.TrunkLength * 0.35f );
+			sourcePos = neighborPos - logAxis * 72f;
+			sourcePos = sourcePos.WithZ( neighborPos.z + MathF.Max( _cascadeNeighbor.TrunkWidth * 1.4f, _cascadeNeighbor.TrunkLength * 0.12f ) );
 			_cascadeSourceLog.WorldPosition = sourcePos;
 			if ( _cascadeSourceLog.Body.IsValid() )
 			{
@@ -748,7 +748,7 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		if ( _cascadeSourceLog.IsValid() && (float)_cascadeCollisionStartTime < 0.65f && _cascadeSourceLog.Body.IsValid() )
+		if ( _cascadeSourceLog.IsValid() && (float)_cascadeCollisionStartTime < 1.35f && _cascadeSourceLog.Body.IsValid() )
 		{
 			var logAxis = _cascadeSourceLog.WorldRotation.Up;
 			if ( logAxis.LengthSquared < 0.001f ) logAxis = Vector3.Forward;
@@ -774,7 +774,7 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		if ( (float)_cascadeCollisionStartTime > 2.0f )
+		if ( (float)_cascadeCollisionStartTime > 3.5f )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestCascadeCollision: neighbor unchanged after falling log collision window (HP={_cascadeNeighbor.ChopsRemaining}/{_cascadeNeighborHpBefore}, logValid={_cascadeSourceLog.IsValid()})" );
 			Finish();
@@ -1504,6 +1504,18 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( RuntimeValue( Tunables.TreeLogSleepThreshold ) > 0.1f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLogSleepThreshold={Tunables.TreeLogSleepThreshold} (expected <= 0.1 pour rolling logs Valheim feel)" );
+			Finish();
+			return;
+		}
+		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.5f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} (expected >= 2.5 pour laisser vivre le landed log)" );
+			Finish();
+			return;
+		}
 		if ( RuntimeValue( Tunables.WoodLogBreakImpactSpeed ) <= RuntimeValue( Tunables.TreeSplitImpactSpeed ) )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: WoodLogBreakImpactSpeed={Tunables.WoodLogBreakImpactSpeed} should exceed TreeSplitImpactSpeed={Tunables.TreeSplitImpactSpeed} so normal landed logs remain chopable" );
@@ -1875,7 +1887,19 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		Log.Info( $"[TC_TEST] ROLLING_DAMPING PASS  Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} (Valheim feel : logs roll)" );
+		if ( RuntimeValue( Tunables.TreeLogSleepThreshold ) > 0.1f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLogSleepThreshold={Tunables.TreeLogSleepThreshold} > 0.1 (logs dorment trop vite)" );
+			Finish();
+			return;
+		}
+		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.5f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} < 2.5 (manual sleep coupe le roll trop tôt)" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] ROLLING_DAMPING PASS  Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} Sleep={Tunables.TreeLogSleepThreshold} ManualDelay={Tunables.TreeLandedManualSleepDelay} (Valheim feel : logs roll)" );
 		Transition( Phase.TestEnvWindDeterministic );
 	}
 

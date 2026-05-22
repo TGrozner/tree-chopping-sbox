@@ -82,6 +82,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		rb.LinearDamping = 0f;
 		rb.AngularDamping = 0.3f;
 		rb.EnhancedCcd = true;
+		rb.SleepThreshold = Tunables.TreeLogSleepThreshold;
 		rb.StartAsleep = false;
 		rb.MotionEnabled = true;
 
@@ -250,6 +251,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		{
 			Body.AngularDamping = Tunables.TreeAngularDampLanded;
 			Body.LinearDamping = Tunables.TreeLinearDampLanded;
+			Body.SleepThreshold = Tunables.TreeLogSleepThreshold;
 		}
 		float impactScale = ((landingSpeed - Tunables.ImpactMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
 		float softScale = ((landingSpeed - Tunables.ImpactSoftMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
@@ -378,8 +380,10 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		foreach ( var other in Scene.GetAllComponents<Tree>() )
 		{
 			if ( !other.IsValid() || !other.IsStanding ) continue;
-			var probe = other.WorldPosition + Vector3.Up * (other.TrunkLength * 0.35f);
-			ConsiderCascadeProbe( probe, other.TrunkWidth, a, b, ref bestPoint, ref bestDist, onHit: () => { bestTree = other; bestLog = null; } );
+			var lowProbe = other.WorldPosition + Vector3.Up * MathF.Max( other.TrunkWidth * 1.4f, other.TrunkLength * 0.12f );
+			var midProbe = other.WorldPosition + Vector3.Up * (other.TrunkLength * 0.35f);
+			ConsiderCascadeProbe( lowProbe, other.TrunkWidth, a, b, ref bestPoint, ref bestDist, onHit: () => { bestTree = other; bestLog = null; } );
+			ConsiderCascadeProbe( midProbe, other.TrunkWidth, a, b, ref bestPoint, ref bestDist, onHit: () => { bestTree = other; bestLog = null; } );
 		}
 		foreach ( var other in Scene.GetAllComponents<FallenLog>() )
 		{
@@ -583,8 +587,9 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	private void TickLandedDecay()
 	{
 		if ( !Body.IsValid() ) return;
-		if ( _timeSinceLanded < 0.6f ) return;
-		Body.Sleeping = Body.Velocity.LengthSquared < 4f && Body.AngularVelocity.LengthSquared < 0.5f;
+		if ( _timeSinceLanded < Tunables.TreeLandedManualSleepDelay ) return;
+		Body.Sleeping = Body.Velocity.LengthSquared < Tunables.TreeLandedManualSleepSpeed * Tunables.TreeLandedManualSleepSpeed
+			&& Body.AngularVelocity.LengthSquared < Tunables.TreeLandedManualSleepAngularSpeed * Tunables.TreeLandedManualSleepAngularSpeed;
 		float despawnDelay = Tunables.TreeKindRespawnDelay[(int)Kind];
 		if ( IsMythic ) despawnDelay += Tunables.MythicRespawnExtra;
 		if ( (float)_timeSinceLanded > despawnDelay )

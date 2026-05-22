@@ -202,6 +202,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		rb.AngularDamping = 1.2f;
 		rb.LinearDamping = 0.3f;
 		rb.EnhancedCcd = true;
+		rb.SleepThreshold = Tunables.TreeLogSleepThreshold;
 		rb.StartAsleep = true;
 		rb.MotionEnabled = false; // CLAUDE.md non-negotiable #8
 
@@ -1076,15 +1077,15 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		foreach ( var other in Scene.GetAllComponents<Tree>() )
 		{
 			if ( !other.IsValid() || other == this || other._logSplit ) continue;
-			if ( !other.IsStanding && !other.IsFallenLog ) continue;
-			var probe = other.IsStanding ? other.WorldPosition + Vector3.Up * (other._trunkLen * 0.35f) : other.LogCenter;
-			var p = ClosestPointOnSegment( a, b, probe );
-			float dist = (probe - p).Length;
-			float reach = (_trunkWidth + other._trunkWidth) * 0.55f + Tunables.CascadeSweepRadius;
-			if ( dist > reach || dist >= bestDist ) continue;
-			best = other;
-			bestPoint = p;
-			bestDist = dist;
+			if ( other.IsStanding )
+			{
+				ConsiderCascadeProbe( other.WorldPosition + Vector3.Up * MathF.Max( other._trunkWidth * 1.4f, other._trunkLen * 0.12f ), other );
+				ConsiderCascadeProbe( other.WorldPosition + Vector3.Up * (other._trunkLen * 0.35f), other );
+			}
+			else if ( other.IsFallenLog )
+			{
+				ConsiderCascadeProbe( other.LogCenter, other );
+			}
 		}
 
 		if ( !best.IsValid() ) return;
@@ -1107,6 +1108,17 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			: 0;
 		if ( damage > 0 ) best.ApplyImpactDamage( damage, dir.Normal );
 		else best.ReactToSoftImpact( dir.Normal, contactPoint );
+
+		void ConsiderCascadeProbe( Vector3 probe, Tree other )
+		{
+			var p = ClosestPointOnSegment( a, b, probe );
+			float dist = (probe - p).Length;
+			float reach = (_trunkWidth + other._trunkWidth) * 0.55f + Tunables.CascadeSweepRadius;
+			if ( dist > reach || dist >= bestDist ) return;
+			best = other;
+			bestPoint = p;
+			bestDist = dist;
+		}
 	}
 
 	private static Vector3 ClosestPointOnSegment( Vector3 a, Vector3 b, Vector3 p )
@@ -1246,6 +1258,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		{
 			Body.AngularDamping = Tunables.TreeAngularDampLanded;
 			Body.LinearDamping = Tunables.TreeLinearDampLanded;
+			Body.SleepThreshold = Tunables.TreeLogSleepThreshold;
 		}
 		float impactScale = ((landingSpeed - Tunables.ImpactMinSpeed)
 			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
@@ -1381,8 +1394,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private void TickLandedDecay()
 	{
 		if ( !Body.IsValid() ) return;
-		if ( _timeSinceLanded < 0.6f ) return;
-		Body.Sleeping = Body.Velocity.LengthSquared < 4f && Body.AngularVelocity.LengthSquared < 0.5f;
+		if ( _timeSinceLanded < Tunables.TreeLandedManualSleepDelay ) return;
+		Body.Sleeping = Body.Velocity.LengthSquared < Tunables.TreeLandedManualSleepSpeed * Tunables.TreeLandedManualSleepSpeed
+			&& Body.AngularVelocity.LengthSquared < Tunables.TreeLandedManualSleepAngularSpeed * Tunables.TreeLandedManualSleepAngularSpeed;
 
 		// Respawn maintenant gÃ©rÃ© par TreeStump (spawnÃ©e au StartFell, survit
 		// au split). Le tronc landed lui-mÃªme despawn juste aprÃ¨s le delay si
