@@ -358,6 +358,10 @@ public static class Tunables
 	public const float LandedLogKickTorque = 420f;
 	public const float LandedLogHitPointTorqueMul = 0.55f;
 	public const float LogDropAxisSpreadFrac = 0.42f;
+	// Valheim TreeLog.Destroy uses m_spawnDistance=2m along the log up-axis,
+	// not a full-log shower. Cap the spread so drops stay readable near the
+	// trunk instead of flying hundreds of units down the slope.
+	public const float LogDropAxisSpreadMax = 82f;
 	public const float LogDropSideSpread = 26f;
 
 	// Valheim ImpactEffect pattern : `damage = m_damages × LerpStep(min, max, speed)`.

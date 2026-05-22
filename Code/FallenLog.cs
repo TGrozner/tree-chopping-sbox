@@ -537,7 +537,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
 		side = side.Normal;
 		var mix = Tunables.TreeKindWoodTypeMix[kindIdx];
-		float spread = _trunkLen * Tunables.LogDropAxisSpreadFrac;
+		float spread = MathF.Min( _trunkLen * Tunables.LogDropAxisSpreadFrac, Tunables.LogDropAxisSpreadMax );
 		for ( int i = 0; i < totalItems; i++ )
 		{
 			float t = totalItems <= 1 ? 0.5f : (i + Game.Random.Float( 0.18f, 0.82f )) / totalItems;

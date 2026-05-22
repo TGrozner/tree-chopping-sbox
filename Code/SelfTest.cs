@@ -1524,6 +1524,12 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( RuntimeValue( Tunables.LogDropAxisSpreadMax ) > 90f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: LogDropAxisSpreadMax={Tunables.LogDropAxisSpreadMax} (Valheim TreeLog.m_spawnDistance=2m ~= 79u)" );
+			Finish();
+			return;
+		}
 		if ( !ResourceIsReachableBeforeRecipe( WoodType.Finewood, 3 ) )
 		{
 			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: Finewood is required for Axe T3 but no Finewood tree is choppable at Axe T2" );
