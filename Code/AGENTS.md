@@ -109,7 +109,7 @@ hud.DrawText( new TextRendering.Scope( "Hello", Color.White, 32f ), pos );
   var c  = go.Components.Create<MyComponent>();
   ```
 
-Mais pour valider du gameplay end-to-end, on a déjà `tools\selftest.ps1` (scénario mow-the-lawn : approach + swing + wood gained) et `tools\test-suite.ps1` (assertions unit-style headless). Pas de MSTest project actuel.
+Mais pour valider du gameplay end-to-end, on a déjà `tools\selftest.ps1` : swing réel, spawn distribution, stump/respawn, split, pickup/sell, cascade, too-hard, stats, prestige. Pas de MSTest project actuel.
 
 ## Où chercher de la doc à jour
 

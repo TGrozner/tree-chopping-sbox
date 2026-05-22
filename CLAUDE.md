@@ -11,7 +11,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 2. **Headless est le loop par défaut, pas l'éditeur :**
    - `dotnet build C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj` pour valider les types.
    - `sbox-server.exe +game <sbproj> +maxplayers 1` pour le lifecycle + physique (pas de rendu, pas d'input client). `Log.Info` → stdout.
-   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT en ~12 s. Phases : Init → Approach → Swing → Verify (wood gained, target tree no longer standing). **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
+   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/sell, cascade, too-hard, stats, prestige. **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
    - `sbox.exe` ne marche PAS sur projets locaux (traite le sbproj comme un cloud package et 404). Seuls `sbox-dev.exe` (éditeur) et `sbox-server.exe` (headless) gèrent du dev non shippé.
 
 3. **`System.Environment.*` est sur le deny-list de la whitelist du compiler s&box.** `GetEnvironmentVariable`, `GetCommandLineArgs`, etc. font échouer la compile avec `"is not allowed when whitelist is enabled"`. Pour les flags de lancement → `[ConVar("name")]`, set via `sbox-server.exe ... +name value`.
@@ -41,7 +41,7 @@ Workflow type pour un changement runtime :
 
 **Harness automation (.claude/settings.json)** :
 - **PostToolUse hook** lance `dotnet build Code/tree_chopping.csproj` après chaque Edit/Write/MultiEdit sur `Code/**/*.cs`. Échec → exit 2 + stderr remonté ici comme blocking message. Étape 1 du workflow appliquée automatiquement.
-- **Stop hook** lance `tools\selftest.ps1` (1 seed, ~12s) si `Tree.cs` / `GameState.cs` / `SceneStarter.cs` / `AxeController.cs` / `WoodLog.cs` / `WoodItem.cs` / `ShopStation.cs` apparaissent dans `git status`. Échec → bloque le stop une fois ; appel de Stop suivant override (`stop_hook_active` guard). Étape 2 partiellement appliquée — seulement pour les fichiers du chop/wood path. **TODO sync `tools/hooks/stop-selftest.ps1`** : il liste probablement encore l'ancien `ShopArea.cs` (deleted) — vérifier que la liste actuelle du script match.
+- **Stop hook** lance `tools\selftest.ps1` (1 seed, ~12s) si `Tree.cs` / `GameState.cs` / `SceneStarter.cs` / `AxeController.cs` / `WoodItem.cs` / `ShopStation.cs` apparaissent dans `git status`. Échec → bloque le stop une fois ; appel de Stop suivant override (`stop_hook_active` guard). Étape 2 partiellement appliquée — seulement pour les fichiers du chop/wood path.
 - **Limitation à connaître :** le Stop hook utilise `git status`, pas le track des fichiers édités cette session. Si la branche a des changements pendants sur un fichier critical avant que tu démarres, le hook se déclenchera quand même. Pour bypass délibéré : commit/stash avant, ou Stop deux fois (la 2e passe).
 - Scripts : `tools/hooks/post-edit-build.ps1` et `tools/hooks/stop-selftest.ps1` — modifie-les si la couverture ne te convient pas.
 
@@ -145,8 +145,8 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Claude v1.3.1) expose 99 
 | `tree_chopping.slnx` | Solution VS qui pointe vers `Code/`, `Editor/`, et les addons sbox dans `Program Files (x86)\Steam\steamapps\common\sbox\`. |
 | `Code/` | Assembly de jeu. Namespace `TreeChopping`. `Assembly.cs` = global usings. **`Code/CLAUDE.md`** = patterns API s&box / Source 2 / hotload, chargé seulement quand tu touches `Code/**/*.cs`. |
 | `Editor/` | Assembly **éditeur** séparée (`tree_chopping.editor.csproj`) — code outils, pas sandboxé. Actuellement vide à part les usings. |
-| `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, overridden au runtime par SceneStarter.SetupLighting) + `Skybox` (SkyBox2D, warm orange tint) + `Fog` (GradientFog, copper-orange `0.92,0.62,0.42`) + `Ground` (plane initial — désactivé au boot, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter, TreeCount=400, MinSpacing=180, PlayerSpawn=(-1000,0,80), SpawnPadRadius=180) + `Camera` (FieldOfView=72, Tonemapping HableFilmic + Bloom + ColorGrading). Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopArea, WoodHud, GameState, AutoPlay) est spawné au runtime par `SceneStarter`. |
-| `ProjectSettings/Input.config` | Bindings clavier/gamepad. **Tu lis ces noms** dans `Input.Pressed("Jump")` etc. "Use" (E) achète un upgrade dans ShopArea ; "Reload" (R) téléporte le joueur au spawn shop. |
+| `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, overridden au runtime par SceneStarter.SetupLighting) + `Skybox` + `Fog` + `Ground` (plane initial — désactivé au boot, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter) + `Camera`. Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopStation, WoodHud, GameState, AutoPlay) est spawné au runtime par `SceneStarter`. |
+| `ProjectSettings/Input.config` | Bindings clavier/gamepad. **Tu lis ces noms** dans `Input.Pressed("Jump")` etc. "Use" (E) vend au SELL ring ; slots 1-7 déclenchent les stations Tools/Upgrades/Prestige ; "Reload" (R) téléporte le joueur au spawn shop. |
 | `ProjectSettings/Collision.config` | Matrice de collision. |
 | `Libraries/` | Libs externes. Contient `claudebridge/` (MCP bridge addon — cf. section "Avec l'éditeur"). `tree_chopping.sbproj.PackageReferences = ["facepunch.woodaxe"]` — sbox-dev DL au project-open, pas de fichier local. |
 | `tools/` | `selftest.ps1` (harness mow-the-lawn scenario, exit 0/1/3 = PASS/FAIL/TIMEOUT) + `filmstrip.ps1` (visual capture procedure / cold-start launcher — voir section "Visual cycle — filmstrip") + `session-prompt.md` + `hooks/` (scripts appelés par `.claude/settings.json`). |
@@ -274,7 +274,7 @@ Shop / progression (GameState + ShopStation) :
     ├─ SpeedMultiplier (applied to PlayerController.WalkSpeed by AxeController)
     └─ LuckChance (rolled UNE FOIS dans Tree.SplitIntoLogs pour +50% items
         sur le drop entier, plus dans Tree.GiveWoodOnce qui n'existe plus)
-  ShopStation × 4 (à la HubAmphitheatre — supplante l'ex-ShopArea single-menu) :
+  ShopStation × 4 (stations worldspace — supplante l'ex-ShopArea single-menu) :
     Chaque station = StationKind {Tools, Sell, Upgrades, Prestige}, anneau de
     Radius=160u + worldspace label tinté (cyan/vert/orange/gold), PAS de pillar
     (Thomas 2026-05-21 : just the label). Inputs lus quand PlayerInside d'UNE
@@ -298,7 +298,7 @@ Prestige loop (Cookie-Clicker / AdVenture-Capitalist pattern) :
   │   Spirits + TotalWoodEarned
   ├─ Spirits gained = floor(sqrt(TotalWoodEarned/50)), capped à pas re-decrease
   ├─ Each Spirit = +1% permanent wood multiplier
-  └─ ShopArea.FirePrestigeBurst : 3-direction golden leaf burst + double sfx
+  └─ ShopStation.FirePrestigeBurst : 3-direction golden leaf burst + double sfx
 
 HUD (WoodHud, immediate-mode) :
   ├─ Crosshair + au centre (3-arm gap pour ne pas masquer le aim highlight)
@@ -394,7 +394,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 - `mcp__sbox__trigger_hotload` pour pousser nos changes dans sbox-dev ouvert.
 - `tools/selftest.ps1` : 7 phases test le pipeline (Verify/TestStump/TestSplit/TestBonusDrop/TestWoodPickup/TestStats/TestPrestige). 10s wall.
 
-**Drift restant dans CE document** : section HUD (mentionne "Shop menu 6 lines" — c'est maintenant station-per-input split), Prestige loop (cite ShopArea.FirePrestigeBurst — fichier supprimé). Tout ce qui touche le hub/shop a bougé phase G — fix au prochain shop edit.
+**Drift restant dans CE document** : compat legacy seulement. `AGENTS.md` est la source canonique pour Codex.
 
 ## API s&box, Source 2, hotload, doc
 

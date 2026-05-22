@@ -11,7 +11,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 2. **Headless est le loop par défaut, pas l'éditeur :**
    - `dotnet build C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj` pour valider les types.
    - `sbox-server.exe +game <sbproj> +maxplayers 1` pour le lifecycle + physique (pas de rendu, pas d'input client). `Log.Info` → stdout.
-   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT en ~12 s. Phases : Init → Approach → Swing → Verify (wood gained, target tree no longer standing). **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
+   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/sell, cascade, too-hard, stats, prestige. **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
    - `sbox.exe` ne marche PAS sur projets locaux (traite le sbproj comme un cloud package et 404). Seuls `sbox-dev.exe` (éditeur) et `sbox-server.exe` (headless) gèrent du dev non shippé.
 
 3. **`System.Environment.*` est sur le deny-list de la whitelist du compiler s&box.** `GetEnvironmentVariable`, `GetCommandLineArgs`, etc. font échouer la compile avec `"is not allowed when whitelist is enabled"`. Pour les flags de lancement → `[ConVar("name")]`, set via `sbox-server.exe ... +name value`.
@@ -280,7 +280,7 @@ Shop / progression (GameState + ShopStation) :
     ├─ SpeedMultiplier (applied to PlayerController.WalkSpeed by AxeController)
     └─ LuckChance (rolled UNE FOIS dans Tree.SplitIntoLogs pour +50% items
         sur le drop entier, plus dans Tree.GiveWoodOnce qui n'existe plus)
-  ShopStation × 4 (à la HubAmphitheatre — supplante l'ex-ShopArea single-menu) :
+  ShopStation × 4 (stations worldspace — supplante l'ex-ShopArea single-menu) :
     Chaque station = StationKind {Tools, Sell, Upgrades, Prestige}, anneau de
     Radius=160u + worldspace label tinté (cyan/vert/orange/gold), PAS de pillar
     (Thomas 2026-05-21 : just the label). Inputs lus quand PlayerInside d'UNE
