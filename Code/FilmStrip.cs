@@ -291,8 +291,9 @@ public sealed class FilmStrip : Component
 			return;
 		}
 
-		if ( ForceTooHard && SwingsFired >= 2 && (float)_phaseTime > 2.0f )
+		if ( ForceTooHard && SwingsFired >= 3 )
 		{
+			if ( (float)_lastReSwing < 0.85f ) return;
 			Log.Info( $"[TC_FILM] TOOHARD COMPLETE kind={_target.Kind} hp={_target.ChopsRemaining} axeTier={_state.AxeTier}" );
 			Phase = FilmPhase.Done;
 			return;
