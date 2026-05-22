@@ -579,7 +579,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		ChipBurst.Spawn( Scene, point, dir, Tunables.ChipBurstCount + Tunables.ChipBurstCount / 2, _trunkTint );
 		ChipBurst.SpawnLeaves( Scene, point + Vector3.Up * 12f, dir, 10, new Color( 0.52f, 0.40f, 0.28f, 1f ) );
 		Sfx.Play( "sounds/log_break.sound", point,
-			volume: 0.42f, pitchMin: 0.92f * Tunables.TreeKindGroanPitchMul[(int)Kind], pitchMax: 1.10f * Tunables.TreeKindGroanPitchMul[(int)Kind] );
+			volume: 0.28f, pitchMin: 0.92f * Tunables.TreeKindGroanPitchMul[(int)Kind], pitchMax: 1.10f * Tunables.TreeKindGroanPitchMul[(int)Kind] );
 		if ( _trunkUpperMr.IsValid() )
 		{
 			var upper = _trunkUpperMr.GameObject;
@@ -831,7 +831,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// brittle = crack sec. Multiplie autour du range Normal {0.48, 0.62}.
 		float pitchMul = Tunables.TreeKindGroanPitchMul[(int)Kind];
 		Sfx.Play( "sounds/log_break.sound", WorldPosition + Vector3.Up * 40f,
-			volume: 0.62f, pitchMin: 0.48f * pitchMul, pitchMax: 0.62f * pitchMul );
+			volume: 0.40f, pitchMin: 0.48f * pitchMul, pitchMax: 0.62f * pitchMul );
 
 		// Mythic = Valheim DamageText.Bonus popup (orange +50% size, 3s lifetime).
 		// Le joueur voit "MYTHIC!" floating au-dessus de l'arbre rare dorÃ©.

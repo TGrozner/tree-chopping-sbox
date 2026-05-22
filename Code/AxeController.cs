@@ -268,7 +268,7 @@ public sealed class AxeController : Component
 		// "ah", level 1 "uhh", level 2 "HEH" — hint sonore que le combo monte).
 		float swingPitchMul = 1f + 0.10f * ChainLevel;
 		Sfx.PlayLocal( "sounds/swing.sound",
-			volume: 1.25f, pitchMin: 1.28f * swingPitchMul, pitchMax: 1.52f * swingPitchMul );
+			volume: 0.86f, pitchMin: 1.30f * swingPitchMul, pitchMax: 1.56f * swingPitchMul );
 	}
 
 	private void TickWindUp()
@@ -330,7 +330,7 @@ public sealed class AxeController : Component
 		{
 			_fovOffset += Tunables.SwingFovPunch * 0.25f;
 			Sfx.PlayLocal( "sounds/swing.sound",
-				volume: 0.80f, pitchMin: 1.55f, pitchMax: 1.85f );
+				volume: 0.66f, pitchMin: 1.55f, pitchMax: 1.85f );
 		}
 
 		_phase = SwingPhase.Recovery;
@@ -370,11 +370,15 @@ public sealed class AxeController : Component
 		// Per-kind pitch mul: Sapling high crackle, Veteran deep thunk.
 		float kindPitch = pitchShift * chopPitchMul;
 		float logPitch = isLogHit ? 0.82f : 1f;
-		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: (isLogHit ? 1.85f : 1.70f) * vol, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
-		Sfx.PlayLocal( "sounds/chop_wood.sound", volume: (isLogHit ? 0.95f : 0.82f) * vol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
+		float hitVol = (isLogHit ? 1.35f : 1.22f) * vol;
+		float biteVol = (isLogHit ? 0.58f : 0.48f) * vol;
+		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: hitVol, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
+		Sfx.PlayLocal( "sounds/chop_wood.sound", volume: biteVol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
+		Sfx.Play( "sounds/axe_hit_wood.sound", contactPoint, volume: hitVol * 0.24f, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
 		if ( heavyHit )
 		{
-			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.18f * vol, pitchMin: 1.25f * kindPitch, pitchMax: 1.45f * kindPitch );
+			Sfx.PlayLocal( "sounds/log_break.sound", volume: 0.16f * vol, pitchMin: 1.18f * kindPitch, pitchMax: 1.34f * kindPitch );
+			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.12f * vol, pitchMin: 1.18f * kindPitch, pitchMax: 1.34f * kindPitch );
 		}
 		// Positional camera shake — kept very subtle after the Phase D revert.
 		// Was 1.6 + power×0.2 (up to 3.2u) → felt "shake de fou" ; halved.
@@ -393,8 +397,9 @@ public sealed class AxeController : Component
 		_fovOffset += Tunables.SwingFovPunch * 0.45f;
 		Scene.TimeScale = Tunables.HitstopTimeScale;
 		_hitstopFramesLeft = 1;
-		Sfx.Play( "sounds/axe_too_weak.sound", contactPoint, volume: 0.95f, pitchMin: 0.75f, pitchMax: 0.95f );
-		Sfx.Play( "sounds/axe_hit_wood.sound", contactPoint, volume: 0.45f, pitchMin: 0.55f, pitchMax: 0.70f );
+		Sfx.PlayLocal( "sounds/axe_too_weak.sound", volume: 0.72f, pitchMin: 0.75f, pitchMax: 0.95f );
+		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: 0.34f, pitchMin: 0.55f, pitchMax: 0.70f );
+		Sfx.Play( "sounds/axe_too_weak.sound", contactPoint, volume: 0.22f, pitchMin: 0.75f, pitchMax: 0.95f );
 		AddCameraShake( 0.45f );
 		AddViewImpactKick( 0.45f );
 	}
