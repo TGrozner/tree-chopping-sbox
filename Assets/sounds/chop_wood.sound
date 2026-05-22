@@ -1,22 +1,13 @@
 {
   "UI": false,
-  "Volume": "0.85",
+  "Volume": "0.55",
   "Pitch": "1.0",
   "Decibels": 72,
   "SelectionMode": "Random",
   "Sounds": [
-    "sounds/chop_wood.vsnd",
-    "sounds/cc0/wood/wood_hit_01.vsnd",
-    "sounds/cc0/wood/wood_hit_02.vsnd",
-    "sounds/cc0/wood/wood_hit_03.vsnd",
-    "sounds/cc0/wood/wood_hit_04.vsnd",
-    "sounds/cc0/wood/wood_hit_05.vsnd",
-    "sounds/cc0/wood/wood_hit_06.vsnd",
-    "sounds/cc0/wood/wood_hit_07.vsnd",
-    "sounds/cc0/wood/wood_hit_08.vsnd",
-    "sounds/cc0/wood/wood_hit_09.vsnd"
+    "sounds/chop_wood.vsnd"
   ],
-  "Occlusion": true,
+  "Occlusion": false,
   "AirAbsorption": true,
   "Transmission": true,
   "OcclusionRadius": 64,

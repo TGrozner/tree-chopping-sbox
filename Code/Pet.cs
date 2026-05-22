@@ -1,12 +1,12 @@
 namespace TreeChopping;
 
-// Cosmetic pet — a small tinted orb that orbits around the beaver. No
+// Cosmetic pet — a small tinted orb that orbits around the player. No
 // gameplay effect, just sells the "you have a companion" vibe à la
 // Mow-The-Lawn / Forager. Auto-syncs its visibility + size + tint from
 // GameState.PetTier each tick.
 public sealed class Pet : Component
 {
-	[Property] public BeaverController Beaver { get; set; }
+	[Property] public AxeController FollowTarget { get; set; }
 
 	private float _phase;
 	private ModelRenderer _renderer;
@@ -22,8 +22,8 @@ public sealed class Pet : Component
 
 	protected override void OnUpdate()
 	{
-		Beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-		if ( !Beaver.IsValid() ) return;
+		FollowTarget ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		if ( !FollowTarget.IsValid() ) return;
 
 		var gs = GameState.Get( Scene );
 		int tier = gs.IsValid() ? gs.PetTier : 0;
@@ -36,7 +36,7 @@ public sealed class Pet : Component
 		_phase += Time.Delta * 1.4f;
 		float radius = 60f + tier * 8f;
 		float bob = MathF.Sin( _phase * 2.0f ) * 4f;
-		var anchor = Beaver.WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight + 12f + bob);
+		var anchor = FollowTarget.WorldPosition + Vector3.Up * (Tunables.PlayerEyeHeight + 12f + bob);
 		WorldPosition = anchor + new Vector3( MathF.Cos( _phase ) * radius, MathF.Sin( _phase ) * radius, 0f );
 		WorldRotation *= Rotation.FromAxis( Vector3.Up, 90f * Time.Delta );
 	}

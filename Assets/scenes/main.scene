@@ -93,7 +93,7 @@
           "TreeCount": 100,
           "MinSpacing": 220,
           "Seed": 51804,
-          "BeaverSpawn": "-1000,0,80",
+          "PlayerSpawn": "-1000,0,80",
           "SpawnPadRadius": 1100,
           "ShopStationArcRadius": 650
         }

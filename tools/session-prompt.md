@@ -26,16 +26,16 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 1. **Plan 3-5 puces max.** Quels fichiers tu touches, pourquoi. Attends `ok` ou implicit OK avant code.
 2. **Petits changements.** Pas de refactor opportuniste. Un changement = une intention. Si tu vois autre chose, signale et demande.
 3. **Build automatique** : un PostToolUse hook lance `dotnet build` après chaque Edit/Write sur `Code/**/*.cs`. Échec → blocking message qui te remonte les erreurs. **Tu ne peux pas accumuler 4 fichiers cassés sans le savoir.**
-4. **Selftest automatique** : un Stop hook lance `tools/selftest.ps1` si tu as touché `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `WoodItem.cs` / `ShopStation.cs`. Échec → bloque le stop. **Couvre le chop pipeline + le wood payout.**
+4. **Selftest automatique** : un Stop hook lance `tools/selftest.ps1` si tu as touché `Tree.cs` / `SceneStarter.cs` / `AxeController.cs` / `GameState.cs` / `WoodItem.cs` / `ShopStation.cs`. Échec → bloque le stop. **Couvre le chop pipeline + le wood payout.**
 5. **Play GUI obligatoire** si tu touches rendering / scale / HUD / particles / camera / input / lighting. Le headless ne rend pas. **Dis-le explicitement** quand le headless ne suffit pas, ne réclame jamais "ça marche" sans validation visuelle quand le visuel est en jeu.
 6. **Pas de commit sans demande explicite (`commit ça`, `commit push`, etc.).** Je fais mes propres commits `phase5X:`.
 7. **MCP `sbox` bridge** : si sbox-dev.exe est ouvert + dock bridge visible, tu peux driver l'éditeur live (start_play, take_screenshot, get_scene_hierarchy, set_runtime_property, etc.).
 
 ## Architecture en cours (rapide)
 
-- **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, beaver, shop+totem, forêt initiale, 4 gates, pet)
+- **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, player, shop+totem, forêt initiale, 4 gates, pet)
 - **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog → split landed log → WoodItem drops. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
-- **`BeaverController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch, applique GameState.SpeedMultiplier sur PlayerController.WalkSpeed, AerialView toggle pour top-down screenshot
+- **`AxeController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch, applique GameState.SpeedMultiplier sur PlayerController.WalkSpeed, AerialView toggle pour top-down screenshot
 - **`GameState.cs`** : Wood + AxeTier (0..6) + Speed/Luck/Power tiers (0..5) + PetTier (0..5) + Spirits + GatesBroken + TotalWoodEarned persistence (FileSystem.Data/progress_{steamId}.json — per-user clé en MP)
 - **`ShopStation.cs`** : stations Tools / Sell / Upgrades / Prestige, inputs contextualisés, sell backpack → wallet
 - **`WoodItem.cs`** : items bois pickables, magnet de proximité, backpack
@@ -45,7 +45,7 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 - **`TerrainHeightmap.cs`** : Sandbox.Terrain procédural + materials/ground.vmat tinted green
 - **`MapBorders.cs`** : ring de cubes tagged "border" warm earth tones
 - **`ChipBurst.cs`** : chips/leaves/splinters custom-physics (pas de Rigidbody — perf killer)
-- **`Pet.cs`** : cosmetic orb orbitant le castor, auto-sync à GameState.PetTier
+- **`Pet.cs`** : cosmetic orb orbitant le player, auto-sync à GameState.PetTier
 - **`PerfProbe.cs`** : FpsAvg/Min + Renderers/Trees lisibles via bridge sans HUD
 - **`Mat.cs`** + **`Sfx.cs`** : helpers
 
@@ -54,7 +54,7 @@ Architecture détaillée : `AGENTS.md` section "Architecture gameplay actuelle".
 ## Pièges déjà payés
 
 - **`Model.Cube` ignore `Tint`** sauf `MaterialOverride = materials/default.vmat`. Mémoire : `sbox-model-cube-ignores-tint`. Pattern dans `Code/Mat.cs`.
-- **Standing rigidbodies (Tree) → `MotionEnabled = false`** sinon le castor les renverse en marchant. `StartFell` flip à true.
+- **Standing rigidbodies (Tree) → `MotionEnabled = false`** sinon le player les renverse en marchant. `StartFell` flip à true.
 - **`Scene.GetAllComponents<Component>()` renvoie 0.** Toujours query par interface (`IChoppable`) ou type concret.
 - **`System.Environment.*` banni** par la whitelist. Flags → `[ConVar]`.
 - **F1-F12 banni** pour bindings — éditeur les intercepte. État courant : `DebugToggle=B`, `PlayShortcut=Ctrl+Shift+P`.

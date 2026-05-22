@@ -12,7 +12,7 @@ public sealed class WoodHud : Component
 	public static bool DebugVisible { get; private set; }
 
 	private GameState _state;
-	private BeaverController _beaver;
+	private AxeController _axe;
 	private ShopStation _activeStation;
 	private int _lastShownWood;
 	private bool _woodSynced;
@@ -166,6 +166,7 @@ public sealed class WoodHud : Component
 
 		DrawCrosshair( hud );
 		DrawComboPips( hud );
+		DrawContextHint( hud );
 		DrawWoodPanel( hud );
 		DrawBackpackPanel( hud );
 		DrawTierBadge( hud );
@@ -188,9 +189,9 @@ public sealed class WoodHud : Component
 	// le joueur perçoive qu'il combo).
 	private void DrawComboPips( Sandbox.Rendering.HudPainter hud )
 	{
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-		if ( !_beaver.IsValid() ) return;
-		int chain = _beaver.ChainLevel;
+		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		if ( !_axe.IsValid() ) return;
+		int chain = _axe.ChainLevel;
 		int maxChain = Tunables.ChopComboMaxLevels;
 
 		float cx = Screen.Width * 0.5f;
@@ -230,9 +231,9 @@ public sealed class WoodHud : Component
 		// Target locked (HasAimTarget = tree under reticle inside SwingRange) =
 		// HotColor + opaque + larger gap + thicker arms. Reads as a meaty
 		// "this swing will connect" signal without crowding the screen when
-		// the beaver is just walking around.
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-		bool locked = _beaver.IsValid() && _beaver.HasAimTarget;
+		// the player is just walking around.
+		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		bool locked = _axe.IsValid() && _axe.HasAimTarget;
 
 		float cx = Screen.Width * 0.5f;
 		float cy = Screen.Height * 0.5f;
@@ -246,6 +247,62 @@ public sealed class WoodHud : Component
 		hud.DrawRect( new Rect( cx + gap, cy - armThick * 0.5f, armLen, armThick ), tint );
 		hud.DrawRect( new Rect( cx - armThick * 0.5f, cy - armLen - gap, armThick, armLen ), tint );
 		hud.DrawRect( new Rect( cx - armThick * 0.5f, cy + gap, armThick, armLen ), tint );
+	}
+
+	private void DrawContextHint( Sandbox.Rendering.HudPainter hud )
+	{
+		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		if ( !_axe.IsValid() || _state is null ) return;
+
+		string label = "";
+		Color tint = TextColor.WithAlpha( 0.72f );
+		if ( _axe.HasAimTarget )
+		{
+			label = _axe.AimTargetLabel;
+			tint = _axe.AimTargetTooHard ? HotColor.WithAlpha( 0.92f ) : TextColor.WithAlpha( 0.84f );
+		}
+		else if ( _activeStation.IsValid() && _activeStation.Kind == StationKind.Sell )
+		{
+			label = _state.BackpackTotal > 0 ? "SELL CARGO" : "BACKPACK EMPTY";
+			tint = _state.BackpackTotal > 0 ? TextColor.WithAlpha( 0.82f ) : TextColor.WithAlpha( 0.42f );
+		}
+		else if ( _state.BackpackFull )
+		{
+			label = "BACKPACK FULL";
+			tint = HotColor.WithAlpha( 0.85f );
+		}
+		else if ( TryGetNearestWoodItem( out var nearestWood, out float distance ) )
+		{
+			string typeName = Tunables.WoodTypeNames[(int)nearestWood.Type].ToUpper();
+			label = distance < Tunables.WoodItemMagnetRange ? $"PICKUP {typeName}" : $"{typeName} NEARBY";
+			tint = Color.Lerp( TextColor, Tunables.WoodTypeTints[(int)nearestWood.Type], 0.65f ).WithAlpha( 0.78f );
+		}
+
+		if ( string.IsNullOrEmpty( label ) ) return;
+
+		float fontSize = 14f;
+		float cx = Screen.Width * 0.5f;
+		float cy = Screen.Height * 0.5f + 44f;
+		float w = MathF.Min( 240f, Screen.Width * 0.42f );
+		var rect = new Rect( cx - w * 0.5f, cy, w, fontSize * 1.5f );
+		hud.DrawRect( rect, new Color( 0f, 0f, 0f, 0.26f ) );
+		hud.DrawText( new TextRendering.Scope( label, tint, fontSize ), rect, TextFlag.Center );
+	}
+
+	private bool TryGetNearestWoodItem( out WoodItem nearest, out float nearestDistance )
+	{
+		nearest = null;
+		nearestDistance = float.MaxValue;
+		var playerPos = _axe.WorldPosition;
+		foreach ( var item in Scene?.GetAllComponents<WoodItem>() ?? Enumerable.Empty<WoodItem>() )
+		{
+			if ( !item.IsValid() ) continue;
+			float d = item.WorldPosition.Distance( playerPos );
+			if ( d >= Tunables.WoodItemHintRange || d >= nearestDistance ) continue;
+			nearest = item;
+			nearestDistance = d;
+		}
+		return nearest.IsValid();
 	}
 
 	private void DrawWoodPanel( Sandbox.Rendering.HudPainter hud )
@@ -461,7 +518,7 @@ public sealed class WoodHud : Component
 
 	private void DrawSellHint( Sandbox.Rendering.HudPainter hud )
 	{
-		string header = _state.BackpackWood > 0
+		string header = _state.BackpackTotal > 0
 			? $"SELL — auto on entry · [E] / [1] to flush again ({_state.BackpackWood} carried)"
 			: "SELL — backpack empty, go chop";
 		DrawStationHintFrame( hud, 0, header,

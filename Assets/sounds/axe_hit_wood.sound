@@ -1,38 +1,46 @@
 {
   "UI": false,
-  "Volume": "1.0",
+  "Volume": "1.1",
   "Pitch": "1.0",
-  "Decibels": 82,
+  "Decibels": 88,
   "SelectionMode": "Random",
   "Sounds": [
-    "sounds/swing.vsnd"
+    "sounds/cc0/wood/wood_hit_01.vsnd",
+    "sounds/cc0/wood/wood_hit_02.vsnd",
+    "sounds/cc0/wood/wood_hit_03.vsnd",
+    "sounds/cc0/wood/wood_hit_04.vsnd",
+    "sounds/cc0/wood/wood_hit_05.vsnd",
+    "sounds/cc0/wood/wood_hit_06.vsnd",
+    "sounds/cc0/wood/wood_hit_07.vsnd",
+    "sounds/cc0/wood/wood_hit_08.vsnd",
+    "sounds/cc0/wood/wood_hit_09.vsnd"
   ],
   "Occlusion": false,
   "AirAbsorption": false,
   "Transmission": false,
   "OcclusionRadius": 64,
   "DistanceAttenuation": true,
-  "Distance": 4000,
+  "Distance": 7000,
   "Falloff": [
     {
       "x": 0,
       "y": 1,
       "in": 0,
-      "out": -1.8,
+      "out": -0.6,
       "mode": "Mirrored"
     },
     {
-      "x": 0.05,
-      "y": 0.72,
-      "in": 3.5,
-      "out": -3.5,
+      "x": 0.08,
+      "y": 0.58,
+      "in": 1.2,
+      "out": -1.2,
       "mode": "Mirrored"
     },
     {
-      "x": 0.2,
-      "y": 0.24,
-      "in": 0.16,
-      "out": -0.16,
+      "x": 0.28,
+      "y": 0.12,
+      "in": 0.22,
+      "out": -0.22,
       "mode": "Mirrored"
     },
     {

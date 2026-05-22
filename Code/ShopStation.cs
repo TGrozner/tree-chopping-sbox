@@ -16,7 +16,7 @@ public sealed class ShopStation : Component
 	[Property, ReadOnly] public bool PlayerInside { get; private set; }
 
 	private GameState _state;
-	private BeaverController _beaver;
+	private AxeController _axe;
 	private bool _wasInside;
 	private bool _justEntered;
 
@@ -58,10 +58,10 @@ public sealed class ShopStation : Component
 	protected override void OnUpdate()
 	{
 		_state ??= GameState.Get( Scene );
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-		if ( !_beaver.IsValid() ) { PlayerInside = false; return; }
+		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		if ( !_axe.IsValid() ) { PlayerInside = false; return; }
 
-		float dxy = (_beaver.WorldPosition.WithZ( 0f ) - WorldPosition.WithZ( 0f )).Length;
+		float dxy = (_axe.WorldPosition.WithZ( 0f ) - WorldPosition.WithZ( 0f )).Length;
 		bool newInside = dxy < Radius;
 		_justEntered = newInside && !_wasInside;
 		_wasInside = newInside;
@@ -86,17 +86,25 @@ public sealed class ShopStation : Component
 		// disc entry (false→true PlayerInside transition) so the loop reads
 		// as "fill bag → run home → it just sells", and again on [E]/[1]
 		// after that (in case the player carried more wood back).
-		if ( _justEntered ) TryAutoSell();
-		if ( Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) ) TryAutoSell();
+		if ( _justEntered ) TryAutoSell( false );
+		if ( Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) ) TryAutoSell( true );
 	}
 
-	private void TryAutoSell()
+	private void TryAutoSell( bool manual )
 	{
 		int sold = _state.TrySell();
-		if ( sold <= 0 ) return;
 		var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
+		if ( sold <= 0 )
+		{
+			if ( manual )
+			{
+				if ( hud.IsValid() ) hud.ShowUpgradeBanner( "BACKPACK EMPTY" );
+				Sfx.Play( "sounds/upgrade_denied.sound", WorldPosition, volume: 0.55f, pitchMin: 0.70f, pitchMax: 0.88f );
+			}
+			return;
+		}
 		if ( hud.IsValid() ) hud.ShowSellFlash( sold );
-		Sfx.Play( "sounds/log_break.sound", WorldPosition, volume: 0.85f, pitchMin: 1.10f, pitchMax: 1.35f );
+		Sfx.Play( "sounds/shop_sell.sound", WorldPosition, volume: 0.85f, pitchMin: 1.05f, pitchMax: 1.25f );
 	}
 
 	// Project the label position to screen via manual world→screen math.
@@ -152,16 +160,18 @@ public sealed class ShopStation : Component
 		// Tools station — phase C : axe tier + 2 per-tool sub-stats (range,
 		// speed-recover). [E] auto-buys the cheapest. [1] axe, [2] range,
 		// [3] speed.
-		bool bought = false; string banner = null; string sfx = "sounds/chop_wood.sound"; float pmin = 0.95f, pmax = 1.10f;
+		bool requested = Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) || Input.Pressed( "Slot2" ) || Input.Pressed( "Slot3" );
+		bool bought = false; string banner = null; string sfx = "sounds/upgrade_buy.sound"; float pmin = 0.95f, pmax = 1.10f;
 		if ( Input.Pressed( "Use" ) )
 		{
 			(bought, banner, sfx, pmin, pmax) = BuyCheapestTool();
 		}
-		else if ( Input.Pressed( "Slot1" ) ) { if ( _state.TryUpgradeAxe()       ) { bought = true; banner = $"AXE → {Tunables.AxeTierName[_state.AxeTier].ToUpper()}"; } }
-		else if ( Input.Pressed( "Slot2" ) ) { if ( _state.TryUpgradeToolRange() ) { bought = true; banner = $"RANGE → T{_state.ToolRangeTier} (×{Tunables.ToolRangeMul[_state.ToolRangeTier]:0.00})"; sfx = "sounds/swing.sound"; pmin = 1.45f; pmax = 1.60f; } }
-		else if ( Input.Pressed( "Slot3" ) ) { if ( _state.TryUpgradeToolSpeed() ) { bought = true; banner = $"SWING SPEED → T{_state.ToolSpeedTier}"; sfx = "sounds/swing.sound"; pmin = 1.80f; pmax = 2.10f; } }
+		else if ( Input.Pressed( "Slot1" ) ) { if ( _state.TryUpgradeAxe()       ) { bought = true; banner = $"AXE → {Tunables.AxeTierName[_state.AxeTier].ToUpper()}"; pmin = 0.90f; pmax = 1.05f; } }
+		else if ( Input.Pressed( "Slot2" ) ) { if ( _state.TryUpgradeToolRange() ) { bought = true; banner = $"RANGE → T{_state.ToolRangeTier} (×{Tunables.ToolRangeMul[_state.ToolRangeTier]:0.00})"; pmin = 1.25f; pmax = 1.45f; } }
+		else if ( Input.Pressed( "Slot3" ) ) { if ( _state.TryUpgradeToolSpeed() ) { bought = true; banner = $"SWING SPEED → T{_state.ToolSpeedTier}"; pmin = 1.45f; pmax = 1.70f; } }
 
 		if ( bought ) AnnounceBuy( banner, sfx, pmin, pmax );
+		else if ( requested ) AnnounceDenied();
 	}
 
 	private (bool bought, string banner, string sfx, float pmin, float pmax) BuyCheapestTool()
@@ -171,9 +181,9 @@ public sealed class ShopStation : Component
 		int cSpd   = _state.ToolSpeedTier < Tunables.MaxToolStatTier  ? Tunables.ToolSpeedCosts[_state.ToolSpeedTier + 1] : int.MaxValue;
 		int cheapest = Math.Min( cAxe, Math.Min( cRange, cSpd ) );
 		if ( cheapest == int.MaxValue || _state.Wood < cheapest ) return (false, null, null, 0f, 0f);
-		if ( cheapest == cAxe   && _state.TryUpgradeAxe()       ) return (true, $"AXE → {Tunables.AxeTierName[_state.AxeTier].ToUpper()}", "sounds/chop_wood.sound", 0.95f, 1.10f);
-		if ( cheapest == cRange && _state.TryUpgradeToolRange() ) return (true, $"RANGE → T{_state.ToolRangeTier} (×{Tunables.ToolRangeMul[_state.ToolRangeTier]:0.00})", "sounds/swing.sound", 1.45f, 1.60f);
-		if ( cheapest == cSpd   && _state.TryUpgradeToolSpeed() ) return (true, $"SWING SPEED → T{_state.ToolSpeedTier}", "sounds/swing.sound", 1.80f, 2.10f);
+		if ( cheapest == cAxe   && _state.TryUpgradeAxe()       ) return (true, $"AXE → {Tunables.AxeTierName[_state.AxeTier].ToUpper()}", "sounds/upgrade_buy.sound", 0.90f, 1.05f);
+		if ( cheapest == cRange && _state.TryUpgradeToolRange() ) return (true, $"RANGE → T{_state.ToolRangeTier} (×{Tunables.ToolRangeMul[_state.ToolRangeTier]:0.00})", "sounds/upgrade_buy.sound", 1.25f, 1.45f);
+		if ( cheapest == cSpd   && _state.TryUpgradeToolSpeed() ) return (true, $"SWING SPEED → T{_state.ToolSpeedTier}", "sounds/upgrade_buy.sound", 1.45f, 1.70f);
 		return (false, null, null, 0f, 0f);
 	}
 
@@ -182,22 +192,24 @@ public sealed class ShopStation : Component
 		// Upgrades station = stats + pet. [E] auto-buys cheapest stat.
 		// [1] speed, [2] luck, [3] power, [4] pet — matches the order of
 		// the worldspace mini-menu drawn by WoodHud.
+		bool requested = Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) || Input.Pressed( "Slot2" ) || Input.Pressed( "Slot3" ) || Input.Pressed( "Slot4" ) || Input.Pressed( "Slot5" );
 		bool bought = false;
 		string banner = null;
-		string sfx = "sounds/log_break.sound";
+		string sfx = "sounds/upgrade_buy.sound";
 		float pmin = 1.2f, pmax = 1.4f;
 
 		if ( Input.Pressed( "Use" ) )
 		{
 			(bought, banner, sfx, pmin, pmax) = BuyCheapestStat();
 		}
-		else if ( Input.Pressed( "Slot1" ) ) { if ( _state.TryUpgradeSpeed() )    { bought = true; banner = $"SPEED → T{_state.SpeedTier}"; sfx = "sounds/swing.sound"; pmin = 1.30f; pmax = 1.55f; } }
+		else if ( Input.Pressed( "Slot1" ) ) { if ( _state.TryUpgradeSpeed() )    { bought = true; banner = $"SPEED → T{_state.SpeedTier}"; pmin = 1.30f; pmax = 1.55f; } }
 		else if ( Input.Pressed( "Slot2" ) ) { if ( _state.TryUpgradeLuck()  )    { bought = true; banner = $"LUCK → T{_state.LuckTier}"; pmin = 1.50f; pmax = 1.70f; } }
 		else if ( Input.Pressed( "Slot3" ) ) { if ( _state.TryUpgradePower() )    { bought = true; banner = $"POWER → T{_state.PowerTier}"; pmin = 0.70f; pmax = 0.90f; } }
 		else if ( Input.Pressed( "Slot4" ) ) { if ( _state.TryUpgradeBackpack() ) { bought = true; banner = $"BACKPACK → T{_state.BackpackTier} ({_state.BackpackCapacity} cap)"; pmin = 1.10f; pmax = 1.30f; } }
 		else if ( Input.Pressed( "Slot5" ) ) { if ( _state.TryUpgradePet()   )    { bought = true; banner = $"PET → T{_state.PetTier}"; pmin = 1.80f; pmax = 2.10f; } }
 
 		if ( bought ) AnnounceBuy( banner, sfx, pmin, pmax );
+		else if ( requested ) AnnounceDenied();
 	}
 
 	private void HandlePrestige()
@@ -206,6 +218,7 @@ public sealed class ShopStation : Component
 		if ( !Input.Pressed( "Use" ) && !Input.Pressed( "Slot1" ) ) return;
 		int before = _state.Spirits;
 		if ( _state.TryPrestige() ) FirePrestigeBurst( _state.Spirits - before );
+		else AnnounceDenied();
 	}
 
 	private void AnnounceBuy( string banner, string sfx, float pitchMin, float pitchMax )
@@ -218,6 +231,11 @@ public sealed class ShopStation : Component
 		}
 	}
 
+	private void AnnounceDenied()
+	{
+		Sfx.Play( "sounds/upgrade_denied.sound", WorldPosition, volume: 0.75f, pitchMin: 0.75f, pitchMax: 0.95f );
+	}
+
 	private (bool bought, string banner, string sfx, float pmin, float pmax) BuyCheapestStat()
 	{
 		int cSpeed = _state.SpeedTier    < Tunables.MaxStatTier     ? Tunables.SpeedCosts[_state.SpeedTier + 1]       : int.MaxValue;
@@ -227,19 +245,19 @@ public sealed class ShopStation : Component
 		int cPet   = _state.PetTier      < Tunables.MaxPetTier      ? Tunables.PetCosts[_state.PetTier + 1]           : int.MaxValue;
 		int cheapest = Math.Min( Math.Min( Math.Min( cSpeed, cLuck ), Math.Min( cPower, cBack ) ), cPet );
 		if ( cheapest == int.MaxValue || _state.Wood < cheapest ) return (false, null, null, 0f, 0f);
-		if ( cheapest == cSpeed && _state.TryUpgradeSpeed()    ) return (true, $"SPEED → T{_state.SpeedTier}",                                 "sounds/swing.sound",     1.30f, 1.55f);
-		if ( cheapest == cLuck  && _state.TryUpgradeLuck()     ) return (true, $"LUCK → T{_state.LuckTier}",                                   "sounds/log_break.sound", 1.50f, 1.70f);
-		if ( cheapest == cPower && _state.TryUpgradePower()    ) return (true, $"POWER → T{_state.PowerTier}",                                 "sounds/log_break.sound", 0.70f, 0.90f);
-		if ( cheapest == cBack  && _state.TryUpgradeBackpack() ) return (true, $"BACKPACK → T{_state.BackpackTier} ({_state.BackpackCapacity} cap)", "sounds/log_break.sound", 1.10f, 1.30f);
-		if ( cheapest == cPet   && _state.TryUpgradePet()      ) return (true, $"PET → T{_state.PetTier}",                                     "sounds/log_break.sound", 1.80f, 2.10f);
+		if ( cheapest == cSpeed && _state.TryUpgradeSpeed()    ) return (true, $"SPEED → T{_state.SpeedTier}",                                 "sounds/upgrade_buy.sound", 1.30f, 1.55f);
+		if ( cheapest == cLuck  && _state.TryUpgradeLuck()     ) return (true, $"LUCK → T{_state.LuckTier}",                                   "sounds/upgrade_buy.sound", 1.50f, 1.70f);
+		if ( cheapest == cPower && _state.TryUpgradePower()    ) return (true, $"POWER → T{_state.PowerTier}",                                 "sounds/upgrade_buy.sound", 0.70f, 0.90f);
+		if ( cheapest == cBack  && _state.TryUpgradeBackpack() ) return (true, $"BACKPACK → T{_state.BackpackTier} ({_state.BackpackCapacity} cap)", "sounds/upgrade_buy.sound", 1.10f, 1.30f);
+		if ( cheapest == cPet   && _state.TryUpgradePet()      ) return (true, $"PET → T{_state.PetTier}",                                     "sounds/upgrade_buy.sound", 1.80f, 2.10f);
 		return (false, null, null, 0f, 0f);
 	}
 
 	private void FirePrestigeBurst( int spiritsGained )
 	{
-		var beaver = Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-		var pos = beaver.IsValid()
-			? beaver.WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.5f)
+		var player = Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		var pos = player.IsValid()
+			? player.WorldPosition + Vector3.Up * (Tunables.PlayerEyeHeight * 0.5f)
 			: WorldPosition;
 		ChipBurst.SpawnLeaves( Scene, pos, Vector3.Forward,  28, Tunables.MythicCanopyTint );
 		ChipBurst.SpawnLeaves( Scene, pos, Vector3.Backward, 24, Tunables.MythicTrunkTint );

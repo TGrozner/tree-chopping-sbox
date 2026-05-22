@@ -7,8 +7,8 @@ public static class Tunables
 	// (CubeBase, CubeBase, CubeBase).
 	public const float CubeBase = 50f;
 
-	// Beaver / player.
-	public const float BeaverEyeHeight = 56f;
+	// Player / player.
+	public const float PlayerEyeHeight = 56f;
 
 	// Tree geometry. Per-spawn scale jitter hashed on foot XY gives the
 	// forest natural variation — small saplings to towering veterans share
@@ -31,6 +31,7 @@ public static class Tunables
 	public static readonly int[] TreeKindWeightsEasy  = {   5,   90,     0,     5 };
 	public static readonly int[] TreeKindWeightsHard  = {  35,    5,    50,    10 };
 	public static readonly float[] TreeKindScaleMul   = { 1.0f, 0.55f, 1.6f,    1.0f };
+	public static readonly float[] TreeKindVisualTrunkWidthMul = { 0.78f, 0.88f, 0.62f, 0.72f };
 	// Veteran mass capped at 2.2× — higher values send neighbors flying on
 	// trunk-on-trunk impact (rigid-body impulse goes superlinear).
 	public static readonly float[] TreeKindMassMul    = { 1.0f, 0.30f, 2.2f,    0.8f };
@@ -110,7 +111,7 @@ public static class Tunables
 
 	// Per-kind chop SFX pitch multipliers — Sapling = high pitched crackle
 	// (light/thin wood), Veteran = deep thunk (dense/old wood), Brittle = dry
-	// crack. Multiplies BeaverController.ApplyImpactFeedback chop_wood pitch
+	// crack. Multiplies AxeController.ApplyImpactFeedback chop_wood pitch
 	// range. Indices match TreeKind enum (Normal/Sapling/Veteran/Brittle).
 	public static readonly float[] TreeKindChopPitchMul = { 1.00f, 1.25f, 0.75f, 1.10f };
 
@@ -251,6 +252,7 @@ public static class Tunables
 	// se voir avant que le snap commence.
 	public const float WoodItemMagnetGrace = 0.5f;
 	public const float WoodItemDespawnDelay = 60f;
+	public const float WoodItemHintRange = 170f;
 	public static readonly Color WoodLogTint = new( 0.55f, 0.38f, 0.22f, 1f );
 	public static readonly Color WoodItemTint = new( 0.70f, 0.50f, 0.28f, 1f );
 	public static readonly Color MythicTrunkTint = new( 0.78f, 0.55f, 0.18f, 1f );
@@ -276,11 +278,11 @@ public static class Tunables
 	// build-up (Valheim feel). 2026-05-21 : initial 5%→2%, duration 0.32→0.7s
 	// after scrapping the scripted creak pause (the visual-then-physics
 	// handoff created a velocity discontinuity — physics-only is smoother).
-	public const float FellTorque = 110000f;
+	public const float FellTorque = 98000f;
 	public const float FellPush = 2400f;
 	public const float SlowTipInitialFrac = 0.02f;
-	public const float SlowTipRampFrac = 0.42f;
-	public const float SlowTipDuration = 0.7f;
+	public const float SlowTipRampFrac = 0.52f;
+	public const float SlowTipDuration = 1.05f;
 	// Initial angular velocity injectée au StartFell pour casser l'équilibre
 	// instable (COM pile au-dessus du pivot). Sans ça, l'arbre reste droit
 	// jusqu'à ce que le perso le pousse — la gravité gravity-torque est nulle
@@ -294,7 +296,9 @@ public static class Tunables
 	// grandes pour reproduire le ratio exact avec un seul impulse, donc on set
 	// les deux séparément. ~4 u/s ≈ ce que Valheim donne par rapport à sa
 	// trunkHeight.
-	public const float InitialFellLurchSpeed = 4f;
+	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
+	public const float InitialFellTopImpulseSpeed = 10f;
+	public const float InitialFellLurchSpeed = 6f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.
@@ -331,10 +335,14 @@ public static class Tunables
 	// linearDrag ≈ 0.05 — logs continue to roll/slide for several seconds.
 	// Notre 1.0/0.45 etait trop damped (logs s'arrêtaient en 1s).
 	// Réduit pour matcher Valheim feel : logs roulent ~3-5s avant rest.
-	public const float TreeAngularDampLanded = 0.30f;
-	public const float TreeLinearDampLanded = 0.20f;
+	public const float TreeAngularDampLanded = 0.22f;
+	public const float TreeLinearDampLanded = 0.14f;
 	// Tree is "landed" once its up-axis tilts past this dot threshold.
-	public const float TreeFallenUpDotMax = 0.6f;
+	public const float TreeFallenUpDotMax = 0.28f;
+	public const float TreeRestingTiltUpDotMax = 0.75f;
+	public const float TreeRestingLandingDelay = 1.4f;
+	public const float TreeRestingLandingSpeed = 90f;
+	public const float TreeRestingLandingAngularSpeed = 0.22f;
 
 	// Swing range : axe-arm reach. 130u ≈ 3.3m — generous melee, slightly past
 	// realistic arm length but close enough that the player has to be at the
@@ -350,8 +358,11 @@ public static class Tunables
 	// Tunés pour "le log réagit" sans "le log s'envole" : ~70u/250u donne un
 	// rocking visible sans déplacer la masse loin de l'impact. À ajuster
 	// avec la filmstrip après les chops du tronc landed.
-	public const float LandedLogKickImpulse = 70f;
-	public const float LandedLogKickTorque = 250f;
+	public const float LandedLogKickImpulse = 110f;
+	public const float LandedLogKickTorque = 420f;
+	public const float LandedLogHitPointTorqueMul = 0.55f;
+	public const float LogDropAxisSpreadFrac = 0.42f;
+	public const float LogDropSideSpread = 26f;
 
 	// Valheim ImpactEffect pattern : `damage = m_damages × LerpStep(min, max, speed)`.
 	// Tree.OnCollisionStart calcule un damage scalé par la vitesse, l'applique au
@@ -361,7 +372,14 @@ public static class Tunables
 	// Min/Max in u/s sbox : équivalent Valheim m_minVelocity~3m/s, m_maxVelocity~15m/s.
 	public const float ImpactMinSpeed = 250f;
 	public const float ImpactMaxSpeed = 1500f;
+	public const float ImpactSoftMinSpeed = 90f;
+	public const float ImpactHardScale = 0.35f;
+	public const float ImpactViolentScale = 0.62f;
 	public const int ImpactBaseDamage = 6;
+	public const float CascadeSweepInterval = 0.18f;
+	public const float CascadeSweepMinSpeed = 160f;
+	public const float CascadeSweepRadius = 34f;
+	public const float CascadeSweepDamageMul = 0.85f;
 	// Le falling tree subit-il aussi le damage (m_damageToSelf) ?
 	// True = TreeLog crash sur sol = peut s'auto-split sur impact violent.
 	public const bool ImpactDamageSelf = true;
@@ -389,10 +407,10 @@ public static class Tunables
 	public const float SwingRecoveryDuration = 0.40f;
 	public const float SwingFovPunch = 6f;
 	public const float SwingFovDecayPerSec = 14f;
-	// Hit-stop : pure freeze (TimeScale=0) for 4 frames @ 60fps (~67 ms wall).
-	// Frame-counted so the duration isn't itself scaled by the freeze.
+	// Valheim Attack.m_freezeFrameDuration = 0.15s. Frame-counted so the
+	// duration isn't itself scaled by the freeze.
 	public const float HitstopTimeScale = 0f;
-	public const int HitstopFrames = 4;
+	public const int HitstopFrames = 9;
 
 	// Impact chips — small cubes spawned at the contact point. Custom physics
 	// (no Rigidbody — see deleted ChopParticles for the perf history).
@@ -413,6 +431,8 @@ public static class Tunables
 	public const float ArenaCenterKeepout = 120f;
 	public const float ArenaNoiseScale = 400f;
 	public const float ArenaDensityThreshold = 0.05f;
+	public const float ForestClearingNoiseScale = 760f;
+	public const float ForestClearingThreshold = 0.18f;
 
 	// Terrain : Sandbox.Terrain generated at bootstrap from a 3-octave FBM
 	// value-noise heightmap. Smooth rolling hills + valleys ; tagged "ground"

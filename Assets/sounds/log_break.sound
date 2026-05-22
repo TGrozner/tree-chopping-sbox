@@ -1,8 +1,8 @@
 {
   "UI": false,
-  "Volume": "1.2",
+  "Volume": "0.9",
   "Pitch": "1.0",
-  "Decibels": 78,
+  "Decibels": 74,
   "SelectionMode": "Random",
   "Sounds": [
     "sounds/log_break.vsnd",

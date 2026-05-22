@@ -356,12 +356,12 @@ public sealed class GameState : Component
 	// Wood gain multiplier — axe tier × Spirits permanent boost. Luck is a
 	// separate roll-for-double check inside Tree.GiveWoodOnce.
 	public float WoodMultiplier => Tunables.AxeTierWoodMul[AxeTier] * (1f + Spirits * 0.01f);
-	// Player walk speed multiplier — applied by BeaverController to the
+	// Player walk speed multiplier — applied by AxeController to the
 	// underlying PlayerController.WalkSpeed.
 	public float SpeedMultiplier => Tunables.SpeedMul[SpeedTier];
 	// Chance per chop to double the wood drop (0..1).
 	public float LuckChance => Tunables.LuckChance[LuckTier];
-	// Per-tool sub-stats applied to BeaverController swing path.
+	// Per-tool sub-stats applied to AxeController swing path.
 	public float SwingRangeMultiplier => Tunables.ToolRangeMul[ToolRangeTier];
 	public float SwingSpeedMultiplier => Tunables.ToolSpeedMul[ToolSpeedTier];
 

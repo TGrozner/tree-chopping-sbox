@@ -35,14 +35,14 @@ dotnet build Code/tree_chopping.csproj
 
 | Fichier | Rôle |
 |---|---|
-| `Code/SceneStarter.cs` | Bootstrap : singletons, terrain procédural, mountain borders, beaver spawn, forêt biome-biased, hub/shop stations |
+| `Code/SceneStarter.cs` | Bootstrap : singletons, terrain procédural, mountain borders, player spawn, forêt biome-biased, hub/shop stations |
 | `Code/Tree.cs` | Multi-chop + StartFell + landed-log split + wood item drops. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
-| `Code/BeaverController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
+| `Code/AxeController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
 | `Code/GameState.cs` | Persistence (FileSystem.Data/progress_{steamId}.json) : Wood, AxeTier 0..6, Speed/Luck/Power tiers 0..5, PetTier 0..5, Spirits + TotalWoodEarned (prestige), GatesBroken (ring unlock). Derived : ChopPower, WoodMultiplier, SpeedMultiplier, LuckChance |
 | `Code/ShopStation.cs` | Stations Tools / Sell / Upgrades / Prestige autour du hub |
 | `Code/WoodItem.cs` | Items bois pickables, magnet de proximité, backpack |
 | `Code/WoodHud.cs` | HUD immediate-mode (crosshair, wood balance pulse, axe tier badge, shop hint, teleport hint) |
-| `Code/AutoPlay.cs` | Autonomous chop-loop in-forest driver (Active=true via MCP bridge). Teleporte le castor vers le tree le plus proche, swing until fell, repeat |
+| `Code/AutoPlay.cs` | Autonomous chop-loop in-forest driver (Active=true via MCP bridge). Teleporte le player vers le tree le plus proche, swing until fell, repeat |
 | `Code/PerfProbe.cs` | Rolling-window FPS + renderer/tree counts via `[Property, ReadOnly]`. Lisible par MCP bridge sans toucher au HUD debug |
 | `Code/SelfTest.cs` | Headless harness phases : Init → Approach → Swing → Verify(Wood>0). Wait-on-condition, pas time-based |
 | `Code/TerrainHeightmap.cs` | Procedural cone + 3-octave FBM noise terrain (Sandbox.Terrain), MaterialOverride sur `materials/ground.vmat` |
@@ -73,7 +73,7 @@ dotnet build Code/tree_chopping.csproj
 Patterns + non-negotiables dans `AGENTS.md` (root) et `Code/AGENTS.md` (chargé quand on touche `Code/`). Hook automation :
 
 - **PostToolUse hook** : `dotnet build` après chaque edit sur `Code/**/*.cs`. Échec → blocking message.
-- **Stop hook** : `tools/selftest.ps1` si `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `WoodItem.cs` / `ShopStation.cs` modifiés. Échec → bloque le stop.
+- **Stop hook** : `tools/selftest.ps1` si `Tree.cs` / `SceneStarter.cs` / `AxeController.cs` / `GameState.cs` / `WoodItem.cs` / `ShopStation.cs` modifiés. Échec → bloque le stop.
 
 Hooks dans `.codex/hooks.json` (et `.claude/settings.json` en compat legacy), scripts `tools/hooks/`.
 

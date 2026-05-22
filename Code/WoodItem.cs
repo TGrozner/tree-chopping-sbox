@@ -15,10 +15,15 @@ public sealed class WoodItem : Component
 	[Property] public WoodType Type { get; set; } = WoodType.Wood;
 
 	private TimeSince _timeSinceSpawn;
-	private BeaverController _beaver;
+	private AxeController _axe;
 	private bool _magnetized;
 
 	public static WoodItem SpawnAt( Scene scene, Vector3 pos, float scaleMul = 1f, WoodType type = WoodType.Wood )
+	{
+		return SpawnAt( scene, pos, scaleMul, type, Vector3.Zero );
+	}
+
+	public static WoodItem SpawnAt( Scene scene, Vector3 pos, float scaleMul, WoodType type, Vector3 burstDir )
 	{
 		var go = scene.CreateObject();
 		go.Name = "WoodItem";
@@ -62,12 +67,17 @@ public sealed class WoodItem : Component
 				Game.Random.Float( -120f, 120f ),
 				Game.Random.Float( -120f, 120f ),
 				Game.Random.Float( 180f, 320f ) );
+			if ( burstDir.LengthSquared > 0.001f )
+			{
+				burst += burstDir.Normal * Game.Random.Float( 90f, 180f );
+			}
 			rb.Velocity = burst;
 			rb.AngularVelocity = new Vector3(
 				Game.Random.Float( -8f, 8f ),
 				Game.Random.Float( -8f, 8f ),
 				Game.Random.Float( -8f, 8f ) );
 		}
+		Sfx.Play( "sounds/wood_drop.sound", go.WorldPosition, volume: 0.25f, pitchMin: 0.85f, pitchMax: 1.20f );
 		return item;
 	}
 
@@ -86,11 +96,11 @@ public sealed class WoodItem : Component
 		// la grace, gravity + damping naturels font tomber l'item au sol.
 		if ( (float)_timeSinceSpawn < Tunables.WoodItemMagnetGrace ) return;
 
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
-		if ( !_beaver.IsValid() ) return;
+		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
+		if ( !_axe.IsValid() ) return;
 
-		var toBeaver = (_beaver.WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.4f)) - WorldPosition;
-		float dist = toBeaver.Length;
+		var toPlayer = (_axe.WorldPosition + Vector3.Up * (Tunables.PlayerEyeHeight * 0.4f)) - WorldPosition;
+		float dist = toPlayer.Length;
 
 		// Magnetic flight kicks in inside MagnetRange ; once magnetized stays
 		// so until consumed (no flicker if player walks back and forth past
@@ -98,6 +108,7 @@ public sealed class WoodItem : Component
 		if ( !_magnetized && dist < Tunables.WoodItemMagnetRange )
 		{
 			_magnetized = true;
+			Sfx.Play( "sounds/wood_magnet.sound", WorldPosition, volume: 0.30f, pitchMin: 1.20f, pitchMax: 1.55f );
 			// Disable the rigidbody's gravity influence so the item flies in a
 			// straight line toward the player instead of arcing down.
 			if ( Body.IsValid() )
@@ -110,7 +121,7 @@ public sealed class WoodItem : Component
 
 		if ( _magnetized && Body.IsValid() )
 		{
-			var dir = toBeaver.Normal;
+			var dir = toPlayer.Normal;
 			Body.Velocity = dir * Tunables.WoodItemMagnetSpeed;
 		}
 
@@ -132,13 +143,14 @@ public sealed class WoodItem : Component
 					// Backpack full — show the warning, bail without consuming
 					// so the item lingers until the player flushes the bag.
 					if ( hud.IsValid() ) hud.ShowBackpackFullHint();
+					Sfx.Play( "sounds/backpack_full.sound", WorldPosition, volume: 0.60f, pitchMin: 0.65f, pitchMax: 0.85f );
 					return;
 				}
 				// Pass type pour que le toast affiche "Wood / Finewood / CoreWood".
 				if ( hud.IsValid() ) hud.ShowWoodPickupToast( banked, Type );
 			}
 			// Tiny "blip" pitch on consume for the satisfaction-tick feel.
-			Sfx.Play( "sounds/swing.sound", WorldPosition,
+			Sfx.Play( "sounds/wood_pickup.sound", WorldPosition,
 				volume: 0.35f, pitchMin: 2.10f, pitchMax: 2.30f );
 			GameObject?.Destroy();
 		}

@@ -1,12 +1,12 @@
 # Codex / Claude Code Stop hook
 # Fires when the agent tries to end the turn. If any of the critical runtime
-# files (Tree / SceneStarter / BeaverController / GameState / WoodItem / ShopStation)
+# files (Tree / SceneStarter / AxeController / GameState / WoodItem / ShopStation)
 # have been modified vs HEAD, run tools\selftest.ps1. Failure -> exit 2,
 # blocks the stop and forces the agent to keep working.
 #
 # Enforces AGENTS.md non-negotiable #2 ("relance le selftest apres TOUT
 # changement dans Tree / GameState / SceneStarter.SpawnForest /
-# BeaverController swing path") automatically.
+# AxeController swing path") automatically.
 #
 # Escape hatch: stop_hook_active=true on the second Stop attempt -- after
 # one block, the agent is allowed to stop on the next try so the user is not
@@ -41,7 +41,7 @@ if ( -not $gitStatus ) { exit 0 }
 $critical = @(
     'Tree.cs',
     'SceneStarter.cs',
-    'BeaverController.cs',
+    'AxeController.cs',
     'GameState.cs',
     'WoodItem.cs',
     'ShopStation.cs'

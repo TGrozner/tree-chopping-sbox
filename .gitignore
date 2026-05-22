@@ -22,6 +22,7 @@ Properties/
 *.log
 *.tmp
 .tmp/
+_captures/
 
 # Exported builds
 Exports/
@@ -35,3 +36,7 @@ _valheim-decompile/
 .valheim-audio-ref/
 _valheim-audio-ref/
 _valheim-visual-ref/
+_valheim-ref/
+_ref-frames/
+_videoref/
+tree_chopping.zip

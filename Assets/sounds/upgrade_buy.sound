@@ -1,0 +1,31 @@
+{
+  "UI": false,
+  "Volume": "0.85",
+  "Pitch": "1.0",
+  "Decibels": 78,
+  "SelectionMode": "Random",
+  "Sounds": [
+    "sounds/raw/Audio/impactBell_heavy_000.vsnd",
+    "sounds/raw/Audio/impactBell_heavy_001.vsnd",
+    "sounds/raw/Audio/impactBell_heavy_002.vsnd",
+    "sounds/raw/Audio/impactBell_heavy_003.vsnd",
+    "sounds/raw/Audio/impactBell_heavy_004.vsnd"
+  ],
+  "Occlusion": false,
+  "AirAbsorption": false,
+  "Transmission": false,
+  "OcclusionRadius": 64,
+  "DistanceAttenuation": true,
+  "Distance": 5000,
+  "Falloff": [
+    { "x": 0, "y": 1, "in": 0, "out": -0.8, "mode": "Mirrored" },
+    { "x": 0.24, "y": 0.25, "in": 0.4, "out": -0.4, "mode": "Mirrored" },
+    { "x": 1, "y": 0, "in": 0, "out": 0, "mode": "Mirrored" }
+  ],
+  "DefaultMixer": {
+    "Name": "unknown",
+    "Id": "00000000-0000-0000-0000-000000000000"
+  },
+  "__references": [],
+  "__version": 1
+}

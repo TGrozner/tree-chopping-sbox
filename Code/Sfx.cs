@@ -1,10 +1,8 @@
 namespace TreeChopping;
 
-// Tiny try/catch-wrapped Sound.Play. Used across the codebase so failing to
-// resolve an audio asset never crashes gameplay — at most we lose a sound.
-// Audit hook : DebugLog=true → chaque Play écrit une ligne dans
-// FileSystem.Data/audio_log.txt (path + pos + volume + pitch range + time).
-// Used pour audit Valheim feel alignment côté audio.
+// Small wrapper around Sound.Play. Audio assets should never crash gameplay;
+// failed playback becomes a no-op. DebugLog is used by FilmStrip to print every
+// Sfx.Play event while auditing the chop feel.
 public static class Sfx
 {
 	public static bool DebugLog { get; set; }
@@ -23,25 +21,24 @@ public static class Sfx
 			}
 			if ( DebugLog )
 			{
+				string line = $"{Time.Now:F3}\t{path}\tvol={volume:F2}\tpitch=[{pitchMin:F2}..{pitchMax:F2}]->{actualPitch:F2}\tpos={pos.x:F0},{pos.y:F0},{pos.z:F0}";
+				Log.Info( $"[TC_SFX] {line}" );
 				try
 				{
-					string line = $"{Time.Now:F3}\t{path}\tvol={volume:F2}\tpitch=[{pitchMin:F2}..{pitchMax:F2}]→{actualPitch:F2}\tpos={pos.x:F0},{pos.y:F0},{pos.z:F0}\n";
 					string existing = FileSystem.Data.FileExists( LogFile )
 						? FileSystem.Data.ReadAllText( LogFile )
-						: "# audio_log — Sfx.Play events\n";
-					FileSystem.Data.WriteAllText( LogFile, existing + line );
+						: "# audio_log - Sfx.Play events\n";
+					FileSystem.Data.WriteAllText( LogFile, existing + line + "\n" );
 				}
 				catch { }
 			}
 		}
-		catch { /* asset missing or playback failure — no-op */ }
+		catch { }
 	}
 
-	// Pre-cycle reset — clear le log avant un cycle filmstrip pour avoir un
-	// fichier propre à analyser ensuite.
 	public static void ClearAudioLog()
 	{
-		try { FileSystem.Data.WriteAllText( LogFile, "# audio_log — Sfx.Play events\n" ); }
+		try { FileSystem.Data.WriteAllText( LogFile, "# audio_log - Sfx.Play events\n" ); }
 		catch { }
 	}
 }

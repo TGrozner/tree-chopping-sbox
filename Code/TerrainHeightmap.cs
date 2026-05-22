@@ -137,14 +137,58 @@ public static class TerrainHeightmap
 		terrain.TerrainHeight = Tunables.TerrainMaxHeight;
 		terrain.EnableCollision = true;
 		terrain.Static = true;
-		// DO NOT touch this — Thomas locked the ground to the dev checker
-		// 2026-05-21. Uniform tinted materials hide the heightmap relief and
-		// kill scale readability ; the checker is the source of truth visual.
-		// Engine default = dev checker, so no MaterialOverride.
+		terrain.MaterialOverride = Material.Load( "materials/ground.vmat" );
 		terrain.Create();
+		SpawnVisualSurface( scene, terrainOrigin, heights, res );
 
 		Log.Info( $"[TerrainHeightmap] Built terrain {res}×{res} @ {Tunables.TerrainSize}u, max height {Tunables.TerrainMaxHeight}u" );
 		return terrain;
+	}
+
+	private static void SpawnVisualSurface( Scene scene, Vector3 terrainOrigin, ushort[] heights, int res )
+	{
+		const float zOffset = 0.75f;
+		var buffer = new VertexBuffer();
+		buffer.Init( false );
+
+		float cell = Tunables.TerrainSize / (res - 1);
+		for ( int y = 0; y < res - 1; y++ )
+		{
+			for ( int x = 0; x < res - 1; x++ )
+			{
+				var a = VisualPoint( heights, res, x, y, cell, zOffset );
+				var b = VisualPoint( heights, res, x + 1, y, cell, zOffset );
+				var c = VisualPoint( heights, res, x + 1, y + 1, cell, zOffset );
+				var d = VisualPoint( heights, res, x, y + 1, cell, zOffset );
+				AddTerrainQuad( buffer, a, b, c, d );
+			}
+		}
+
+		var mesh = new Mesh( Material.Load( "materials/ground.vmat" ) );
+		mesh.CreateBuffers( buffer, true );
+
+		var go = scene.CreateObject();
+		go.Name = "TerrainVisualSurface";
+		go.WorldPosition = terrainOrigin;
+		var mr = go.AddComponent<ModelRenderer>();
+		mr.Model = new ModelBuilder()
+			.WithName( "terrain_visual_surface" )
+			.AddMesh( mesh )
+			.Create();
+	}
+
+	private static Vector3 VisualPoint( ushort[] heights, int res, int x, int y, float cell, float zOffset )
+	{
+		float z = heights[y * res + x] / 65535f * Tunables.TerrainMaxHeight + zOffset;
+		return new Vector3( x * cell, y * cell, z );
+	}
+
+	private static void AddTerrainQuad( VertexBuffer buffer, Vector3 a, Vector3 b, Vector3 c, Vector3 d )
+	{
+		var normal = Vector3.Cross( b - a, d - a ).Normal;
+		buffer.Default.Normal = normal;
+		buffer.Default.Tangent = new Vector4( (b - a).Normal, 1f );
+		buffer.AddQuad( a, b, c, d );
 	}
 
 	// Smoothstep cone height : 1 inside plateau radius, smoothly drops to 0

@@ -1,0 +1,31 @@
+{
+  "UI": false,
+  "Volume": "0.5",
+  "Pitch": "1.0",
+  "Decibels": 72,
+  "SelectionMode": "Random",
+  "Sounds": [
+    "sounds/raw/Audio/impactWood_light_000.vsnd",
+    "sounds/raw/Audio/impactWood_light_001.vsnd",
+    "sounds/raw/Audio/impactWood_light_002.vsnd",
+    "sounds/raw/Audio/impactWood_light_003.vsnd",
+    "sounds/raw/Audio/impactWood_light_004.vsnd"
+  ],
+  "Occlusion": true,
+  "AirAbsorption": true,
+  "Transmission": true,
+  "OcclusionRadius": 64,
+  "DistanceAttenuation": true,
+  "Distance": 3200,
+  "Falloff": [
+    { "x": 0, "y": 1, "in": 0, "out": -1, "mode": "Mirrored" },
+    { "x": 0.18, "y": 0.2, "in": 0.3, "out": -0.3, "mode": "Mirrored" },
+    { "x": 1, "y": 0, "in": 0, "out": 0, "mode": "Mirrored" }
+  ],
+  "DefaultMixer": {
+    "Name": "unknown",
+    "Id": "00000000-0000-0000-0000-000000000000"
+  },
+  "__references": [],
+  "__version": 1
+}

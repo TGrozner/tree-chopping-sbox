@@ -11,7 +11,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 2. **Headless est le loop par défaut, pas l'éditeur :**
    - `dotnet build C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj` pour valider les types.
    - `sbox-server.exe +game <sbproj> +maxplayers 1` pour le lifecycle + physique (pas de rendu, pas d'input client). `Log.Info` → stdout.
-   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT en ~12 s. Phases : Init → Approach → Swing → Verify (wood gained, target tree no longer standing). **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / BeaverController swing path.** Build clean ≠ scénario vert.
+   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT en ~12 s. Phases : Init → Approach → Swing → Verify (wood gained, target tree no longer standing). **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
    - `sbox.exe` ne marche PAS sur projets locaux (traite le sbproj comme un cloud package et 404). Seuls `sbox-dev.exe` (éditeur) et `sbox-server.exe` (headless) gèrent du dev non shippé.
 
 3. **`System.Environment.*` est sur le deny-list de la whitelist du compiler s&box.** `GetEnvironmentVariable`, `GetCommandLineArgs`, etc. font échouer la compile avec `"is not allowed when whitelist is enabled"`. Pour les flags de lancement → `[ConVar("name")]`, set via `sbox-server.exe ... +name value`.
@@ -24,9 +24,9 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 
 7. **`SetCursorPos` dans le viewport Play envoie de l'`Input.AnalogLook`** — chaque move souris pivote la caméra. Donc "click puis screenshot stable" ne marche pas, le click déplace d'abord le curseur. Privilégier le headless selftest pour valider la logique. GUI screenshot ([[sbox-screenshot-runtime]]) seulement quand il faut des pixels.
 
-8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le castor les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` flippe la valeur à `true` quand `ChopsRemaining` tombe à 0 (multi-chop). **Conséquence directe : un tronc qui tombe ne peut PAS knock down ses voisins debout par collision physique** (target kinematic ne se déplace pas). Le domino "Valheim-style" actuellement annoncé en commentaire dans `Tree.cs` n'existe pas dans le code — Phase 8 ajoute un wake scripté (`OnCollisionStart` sur le tronc qui tombe → force `StartFell` sur le voisin debout, direction = direction de l'impact). Garde le kinematic-standing, ajoute la chaîne au-dessus.
+8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le player les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` flippe la valeur à `true` quand `ChopsRemaining` tombe à 0 (multi-chop). **Conséquence directe : un tronc qui tombe ne peut PAS knock down ses voisins debout par collision physique** (target kinematic ne se déplace pas). Le domino "Valheim-style" actuellement annoncé en commentaire dans `Tree.cs` n'existe pas dans le code — Phase 8 ajoute un wake scripté (`OnCollisionStart` sur le tronc qui tombe → force `StartFell` sur le voisin debout, direction = direction de l'impact). Garde le kinematic-standing, ajoute la chaîne au-dessus.
 
-9. **Un test qui prend un raccourci passe pendant que le chemin réel est cassé.** Le premier SelfTest appelait `Tree.Chop()` direct et a caché 2 bugs prod (`GetAllComponents<Component>` retournant 0, `Tree.IChoppable.IsValid` excluant les landed logs). Chaque phase de selftest DOIT exercer au moins un code path joueur réel — `BeaverController.DebugSwing → ChooseSwingTarget → Chop`, pas `Chop()` direct. **Corollaire TDD : quand tu ajoutes un nouveau pipeline runtime, écris d'abord la phase de selftest qui DOIT échouer sans ton impl, puis ajoute l'impl. Si la phase passe avant que tu codes l'impl, elle ne teste rien.**
+9. **Un test qui prend un raccourci passe pendant que le chemin réel est cassé.** Le premier SelfTest appelait `Tree.Chop()` direct et a caché 2 bugs prod (`GetAllComponents<Component>` retournant 0, `Tree.IChoppable.IsValid` excluant les landed logs). Chaque phase de selftest DOIT exercer au moins un code path joueur réel — `AxeController.DebugSwing → ChooseSwingTarget → Chop`, pas `Chop()` direct. **Corollaire TDD : quand tu ajoutes un nouveau pipeline runtime, écris d'abord la phase de selftest qui DOIT échouer sans ton impl, puis ajoute l'impl. Si la phase passe avant que tu codes l'impl, elle ne teste rien.**
 
 10. **Conventions Source 2.** Z is up (pas Y). Unités = inches (`Tunables.UnitsPerMeter = 39.37`). `Vector3.Forward = +X`. Spawn de cubes via `WorldScale = wantedSize / Tunables.CubeBase` parce que `Model.Cube` est le dev cube natif 50u. Quaternions = (x, y, z, w).
 
@@ -47,7 +47,7 @@ Workflow type pour un changement runtime :
 
 **Harness automation (`.codex/hooks.json`)** :
 - **PostToolUse hook** lance `dotnet build Code/tree_chopping.csproj` après chaque Edit/Write/MultiEdit sur `Code/**/*.cs`. Échec → exit 2 + stderr remonté ici comme blocking message. Étape 1 du workflow appliquée automatiquement.
-- **Stop hook** lance `tools\selftest.ps1` (1 seed, ~12s) si `Tree.cs` / `GameState.cs` / `SceneStarter.cs` / `BeaverController.cs` / `WoodItem.cs` / `ShopStation.cs` apparaissent dans `git status`. Échec → bloque le stop une fois ; appel de Stop suivant override (`stop_hook_active` guard). Étape 2 partiellement appliquée — seulement pour les fichiers du chop/wood path.
+- **Stop hook** lance `tools\selftest.ps1` (1 seed, ~12s) si `Tree.cs` / `GameState.cs` / `SceneStarter.cs` / `AxeController.cs` / `WoodItem.cs` / `ShopStation.cs` apparaissent dans `git status`. Échec → bloque le stop une fois ; appel de Stop suivant override (`stop_hook_active` guard). Étape 2 partiellement appliquée — seulement pour les fichiers du chop/wood path.
 - **Limitation à connaître :** le Stop hook utilise `git status`, pas le track des fichiers édités cette session. Si la branche a des changements pendants sur un fichier critical avant que tu démarres, le hook se déclenchera quand même. Pour bypass délibéré : commit/stash avant, ou Stop deux fois (la 2e passe).
 - Scripts : `tools/hooks/post-edit-build.ps1` et `tools/hooks/stop-selftest.ps1` — modifie-les si la couverture ne te convient pas.
 
@@ -115,8 +115,8 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 **Si tu changes du visuel (HUD, particles, camera shake, tree fall feel, banner timing, log break sfx…) le selftest headless ne voit RIEN.** Avant 2026-05-21 ça forçait à demander à Thomas "lance Play et check" — boucle lente, jugement délégué. La filmstrip ferme cette boucle : le directeur in-game scripte un swing canonique et tu captures ~12 frames pour juger toi-même.
 
 **Côté C# (`Code/FilmStrip.cs`)** — Component spawné inconditionnellement par `SceneStarter` (no-op tant que `Active=false`). Quand activé :
-1. `Init` (10 ticks delay) → find beaver + state, optionally `ResetForTest`
-2. `Setup` → pick le sapling le plus proche (fallback : nearest tree), teleport beaver à 80u en face
+1. `Init` (10 ticks delay) → find player + state, optionally `ResetForTest`
+2. `Setup` → pick le sapling le plus proche (fallback : nearest tree), teleport player à 80u en face
 3. `Ready` (0.6s linger) → frame "before", idle pose visible
 4. `Swinging` → trigger `DebugRequestSwing`, re-swing every 0.75s pour multi-chop
 5. `Falling` → wait until tree leaves Standing+Falling state
@@ -151,7 +151,7 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 | `tree_chopping.slnx` | Solution VS qui pointe vers `Code/`, `Editor/`, et les addons sbox dans `Program Files (x86)\Steam\steamapps\common\sbox\`. |
 | `Code/` | Assembly de jeu. Namespace `TreeChopping`. `Assembly.cs` = global usings. **`Code/AGENTS.md`** = patterns API s&box / Source 2 / hotload, chargé seulement quand tu touches `Code/**/*.cs`. |
 | `Editor/` | Assembly **éditeur** séparée (`tree_chopping.editor.csproj`) — code outils, pas sandboxé. Actuellement vide à part les usings. |
-| `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, overridden au runtime par SceneStarter.SetupLighting) + `Skybox` (SkyBox2D, warm orange tint) + `Fog` (GradientFog, copper-orange `0.92,0.62,0.42`) + `Ground` (plane initial — désactivé au boot, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter, TreeCount=400, MinSpacing=180, BeaverSpawn=(-1000,0,80), SpawnPadRadius=180) + `Camera` (FieldOfView=72, Tonemapping HableFilmic + Bloom + ColorGrading). Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopStation, WoodHud, GameState, AutoPlay) est spawné au runtime par `SceneStarter`. |
+| `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, overridden au runtime par SceneStarter.SetupLighting) + `Skybox` (SkyBox2D, warm orange tint) + `Fog` (GradientFog, copper-orange `0.92,0.62,0.42`) + `Ground` (plane initial — désactivé au boot, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter, TreeCount=400, MinSpacing=180, PlayerSpawn=(-1000,0,80), SpawnPadRadius=180) + `Camera` (FieldOfView=72, Tonemapping HableFilmic + Bloom + ColorGrading). Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopStation, WoodHud, GameState, AutoPlay) est spawné au runtime par `SceneStarter`. |
 | `ProjectSettings/Input.config` | Bindings clavier/gamepad. **Tu lis ces noms** dans `Input.Pressed("Jump")` etc. "Use" (E) vend le backpack dans la station Sell ; "Reload" (R) téléporte le joueur au spawn shop. |
 | `ProjectSettings/Collision.config` | Matrice de collision. |
 | `Libraries/` | Libs externes. Contient `claudebridge/` (MCP bridge addon — cf. section "Avec l'éditeur"). `tree_chopping.sbproj.PackageReferences = ["facepunch.woodaxe"]` — sbox-dev DL au project-open, pas de fichier local. |
@@ -180,15 +180,15 @@ SceneStarter.OnStart()
  │   · SelfTest? (gated par tc_selftest) · FilmStrip (always, no-op tant que Active=false)
  ├─ SetupLighting() — warm sun ×1.7 + sky fill ×2 + soft shadows
  ├─ DisableSceneGround() — la plane par défaut s'efface, le terrain heightmap la remplace
- ├─ TerrainHeightmap.Spawn(scene, seed, BeaverSpawn) — cône radial + 3-octave FBM noise,
+ ├─ TerrainHeightmap.Spawn(scene, seed, PlayerSpawn) — cône radial + 3-octave FBM noise,
  │   plateau au sommet pour le shop, tagged "ground"
  ├─ MapBorders.Spawn(scene, Vector3.Zero) — 40 segments en anneau (BorderRadius=2750)
  │   au-delà de la forêt, tagged "border" (pas "ground" pour pas que les trees y spawnent dessus)
- ├─ ResolveBeaverSpawnGround() — raycast au point BeaverSpawn pour poser le castor au sol
- ├─ SpawnBeaver(camera) : Player GameObject + Sandbox.PlayerController (third-person,
+ ├─ ResolvePlayerSpawnGround() — raycast au point PlayerSpawn pour poser le player au sol
+ ├─ SpawnPlayerCharacter(camera) : Player GameObject + Sandbox.PlayerController (third-person,
  │   camera + input + animator owned) + child SkinnedModelRenderer (Citizen vmdl) +
- │   BeaverController + axe (facepunch.woodaxe) parenté à hand_R
- ├─ SpawnShop() : HubAmphitheatre + HubProps au ResolvedBeaverSpawn, + 4× ShopStation
+ │   AxeController + axe (facepunch.woodaxe) parenté à hand_R
+ ├─ SpawnShop() : HubAmphitheatre + HubProps au ResolvedPlayerSpawn, + 4× ShopStation
  │   (Tools / Sell / Upgrades / Prestige) en cercle autour, + totem vertical 1200u
  │   avec cap doré (Mythic tint) visible from distance comme nav-marker
  ├─ SpawnForest() : trees dans la bande [SpawnPadRadius .. InitialOuterRadius=1200u]
@@ -200,11 +200,11 @@ SceneStarter.OnStart()
  │                    └─ Tree.SpawnAt(scene, pos, biomeDifficulty)
  ├─ SpawnGateAtBoundary(1200u) : 4 Tree.SpawnGate aux cardinaux NSEW (Tree.IsGate=true,
  │   ChopsRemaining = 20 × 1.5^GatesBroken, cross-beams perpendiculaires au radial)
- └─ SpawnPet(beaver) : Pet GameObject orbite le castor (auto-sync avec GameState.PetTier)
+ └─ SpawnPet(player) : Pet GameObject orbite le player (auto-sync avec GameState.PetTier)
 
-Player loop (Sandbox.PlayerController + BeaverController) :
+Player loop (Sandbox.PlayerController + AxeController) :
   PlayerController : WASD + souris + jump + third-person camera. On ne touche pas.
-  BeaverController.UpdateSwing :
+  AxeController.UpdateSwing :
     ├─ State machine : Idle → WindUp (anim b_attack) → Impact → Recovery → Idle
     ├─ Cooldown via Recovery (Tunables.SwingRecoveryDuration=0.18s)
     ├─ Aim : sphere-sweep depuis le reticle (WYSIWYG), fallback cone+range
@@ -212,7 +212,7 @@ Player loop (Sandbox.PlayerController + BeaverController) :
     │   (Tunables.AxeTierChopPower[tier], T0=1, T1=2, T2=3, T3=5)
     └─ Si ChopsRemaining tombe à 0 → Tree.StartFell
 
-  Reload (R) : BeaverController.TeleportTo(SpawnShop) — pour remonter au shop fast.
+  Reload (R) : AxeController.TeleportTo(SpawnShop) — pour remonter au shop fast.
 
 Tree pipeline (Phase F/G — Valheim two-stage chop) :
   Tree.Chop(direction, chopPower) — sur standing tree :
@@ -247,7 +247,7 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
   WoodItem (small physics cube, MassOverride=0.5, brown WoodItemTint) :
     ├─ Spawn velocity = burst up+out, gravity-on initially
     ├─ MAGNET PROXIMITY : in radius < WoodItemMagnetRange → Gravity=off, damping bumped,
-    │   velocity = (toBeaver).Normal × WoodItemMagnetSpeed (fly-to-mouth depuis loin actuel ;
+    │   velocity = (toPlayer).Normal × WoodItemMagnetSpeed (fly-to-mouth depuis loin actuel ;
     │   Phase 8 = ramener à magnet de proximité only, ~30u, no fly-from-far)
     ├─ Pickup quand dist < WoodItemPickupRange : GameState.AddBackpack(round(WoodMultiplier))
     │   ├─ Backpack full → ShowBackpackFullHint + item linger (not consumed)
@@ -274,13 +274,13 @@ Shop / progression (GameState + ShopStation) :
     ├─ AxeTier : 0..6 (Hands/Stone/Bronze/Iron/Steel/Lumberjack/Chainsaw)
     ├─ SpeedTier / LuckTier / PowerTier / BackpackTier : 0..5 (personal stats)
     ├─ ToolRangeTier / ToolSpeedTier : 0..N (per-tool sub-stats appliquées
-    │   par BeaverController au swing path — range et recovery speed)
+    │   par AxeController au swing path — range et recovery speed)
     ├─ PetTier : 0..5 (cosmetic companion, no gameplay effect)
     ├─ Spirits + GatesBroken : prestige + ring-unlock counters
     ├─ ChopPower = AxeTierChopPower[axe] + PowerBonus[power]
     ├─ WoodMultiplier = AxeTierWoodMul[axe] × (1 + 0.01·Spirits) (appliqué au
     │   pickup d'un WoodItem, pas au fell)
-    ├─ SpeedMultiplier (applied to PlayerController.WalkSpeed by BeaverController)
+    ├─ SpeedMultiplier (applied to PlayerController.WalkSpeed by AxeController)
     └─ LuckChance (rolled UNE FOIS dans Tree.SplitIntoLogs pour +50% items
         sur le drop entier, plus dans Tree.GiveWoodOnce qui n'existe plus)
   ShopStation × 4 (à la HubAmphitheatre — supplante l'ex-ShopArea single-menu) :
@@ -345,7 +345,7 @@ Self-test (headless, mow-the-lawn + upgrade + prestige scenario) :
 - Manager singleton → ajouter une `EnsureSingleton<T>(name)` dans `SceneStarter.OnStart()`.
 - Entité gameplay → spawner method statique, appelée par `SceneStarter.SpawnXxx`.
 - Drop persistant (décor lourd, lumière) → main.scene via éditeur ou MCP bridge.
-- Nouveau tool ou kind → étendre `ToolKind` enum (BeaverController.cs) + `IChoppable.AcceptsTool` + Tunables array, plus la sélection biome-biased si applicable.
+- Nouveau tool ou kind → étendre `ToolKind` enum (AxeController.cs) + `IChoppable.AcceptsTool` + Tunables array, plus la sélection biome-biased si applicable.
 
 ## Alignement Valheim (mandate continu)
 

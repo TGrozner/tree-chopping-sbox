@@ -17,7 +17,7 @@
 #
 # Either way, the C# side is FilmStrip.cs in the runtime assembly — a
 # Component spawned unconditionally by SceneStarter. When Active=true it
-# walks the beaver through a deterministic
+# walks the player through a deterministic
 #   Setup → Ready(0.6s idle linger) → Swing → Falling → Landed(1.5s linger)
 # sequence. Phase + Elapsed are exposed as runtime properties for polling.
 

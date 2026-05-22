@@ -1,6 +1,6 @@
 namespace TreeChopping;
 
-// Headless-friendly autoplay driver. Toggle Active=true to make the beaver
+// Headless-friendly autoplay driver. Toggle Active=true to make the player
 // walk to the nearest standing tree, swing until it fells, then repeat.
 // Used both by gameplay validation runs (bridge sets Active=true, frames
 // captured by screenshot loop) and as a stress harness for cascade physics.
@@ -11,7 +11,7 @@ public sealed class AutoPlay : Component
 	[Property, ReadOnly] public string CurrentAction { get; set; } = "idle";
 	[Property, ReadOnly] public int TreesFelled { get; set; }
 
-	private BeaverController _beaver;
+	private AxeController _axe;
 	private Tree _target;
 	private TimeSince _sinceLastSwing = 999f;
 	private TimeSince _sinceShopArrived = 999f;
@@ -24,19 +24,19 @@ public sealed class AutoPlay : Component
 
 	protected override void OnUpdate()
 	{
-		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
+		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
 
-		if ( LookBack && _beaver.IsValid() )
+		if ( LookBack && _axe.IsValid() )
 		{
-			// One-shot : yaw the beaver in place to face the shop spawn point.
+			// One-shot : yaw the player in place to face the shop spawn point.
 			// No teleport, no vertical movement — just rotation so the camera
 			// (third-person, follows player yaw) frames the totem behind.
-			var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn ?? Vector3.Zero;
-			var dir = (spawn - _beaver.WorldPosition).WithZ( 0f );
+			var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedPlayerSpawn ?? Vector3.Zero;
+			var dir = (spawn - _axe.WorldPosition).WithZ( 0f );
 			if ( dir.LengthSquared > 1f )
 			{
 				float yaw = Rotation.LookAt( dir.Normal ).Yaw();
-				_beaver.TeleportTo( _beaver.WorldPosition, yaw );
+				_axe.TeleportTo( _axe.WorldPosition, yaw );
 				CurrentAction = "looking back at shop";
 			}
 			LookBack = false;
@@ -48,7 +48,7 @@ public sealed class AutoPlay : Component
 			return;
 		}
 
-		if ( !_beaver.IsValid() ) { CurrentAction = "no beaver"; return; }
+		if ( !_axe.IsValid() ) { CurrentAction = "no player"; return; }
 
 		switch ( _step )
 		{
@@ -86,13 +86,13 @@ public sealed class AutoPlay : Component
 
 	private void TickApproach()
 	{
-		// Park beaver ~60u from target on the line beaver→target, facing target.
-		var dir = (_target.WorldPosition - _beaver.WorldPosition).WithZ( 0f );
+		// Park player ~60u from target on the line player→target, facing target.
+		var dir = (_target.WorldPosition - _axe.WorldPosition).WithZ( 0f );
 		if ( dir.LengthSquared < 1f ) dir = Vector3.Forward;
 		dir = dir.Normal;
 		var pos = _target.WorldPosition - dir * 60f + Vector3.Up * 40f;
 		float yaw = Rotation.LookAt( dir ).Yaw();
-		_beaver.TeleportTo( pos, yaw );
+		_axe.TeleportTo( pos, yaw );
 		_sinceLastSwing = 999f;
 		CurrentAction = "approached";
 		_step = 2;
@@ -111,15 +111,15 @@ public sealed class AutoPlay : Component
 			return;
 		}
 		if ( (float)_sinceLastSwing < 0.45f ) return;
-		_beaver.DebugSwing();
+		_axe.DebugSwing();
 		_sinceLastSwing = 0f;
 		CurrentAction = $"swing — chops left {_target.ChopsRemaining}";
 	}
 
 	private void TickGoShop()
 	{
-		var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn ?? Vector3.Zero;
-		_beaver.TeleportTo( spawn, 0f );
+		var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedPlayerSpawn ?? Vector3.Zero;
+		_axe.TeleportTo( spawn, 0f );
 		_sinceShopArrived = 0f;
 		CurrentAction = "arrived at shop";
 		_step = StepBuyShop;
@@ -129,7 +129,7 @@ public sealed class AutoPlay : Component
 	{
 		// Pause 1s on the shop disk so the upgrade transition reads in the
 		// gameplay video — without the wait the screenshot capture would
-		// catch the beaver still mid-teleport.
+		// catch the player still mid-teleport.
 		if ( (float)_sinceShopArrived < 1f ) return;
 		if ( ShopStation.TryBuyCheapestAcrossAll( Scene ) )
 		{
@@ -153,10 +153,10 @@ public sealed class AutoPlay : Component
 
 	private Tree PickNearestStandingTree()
 	{
-		var beaverPos = _beaver.WorldPosition;
+		var playerPos = _axe.WorldPosition;
 		return Scene.GetAllComponents<Tree>()
 			.Where( t => t.IsValid() && t.IsStanding )
-			.OrderBy( t => beaverPos.Distance( t.WorldPosition ) )
+			.OrderBy( t => playerPos.Distance( t.WorldPosition ) )
 			.FirstOrDefault();
 	}
 }

@@ -1,8 +1,8 @@
 namespace TreeChopping;
 
 // Headless test of the mow-the-lawn loop. Phases :
-//   Init           — locate beaver + tree + game state
-//   Approach       — park beaver in front of a target tree
+//   Init           — locate player + tree + game state
+//   Approach       — park player in front of a target tree
 //   Swing          — call DebugSwingVerbose until target tree fells
 //   Verify         — assert : GameState.Wood increased, target tree felled
 //   TestStats      — assert : TryUpgradeSpeed pays wood + bumps tier
@@ -17,7 +17,7 @@ public sealed class SelfTest : Component
 	enum Phase
 	{
 		Init, Approach, Swing, Verify,
-		TestStump, TestSplit, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage,
+		TestStump, TestSplit, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestSellFlush, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
@@ -29,7 +29,7 @@ public sealed class SelfTest : Component
 	private Phase _phase = Phase.Init;
 	private TimeSince _phaseTime;
 	private int _frame;
-	private BeaverController _beaver;
+	private AxeController _axe;
 	private GameState _state;
 	private Tree _targetTree;
 	private Vector3 _targetTreePos;
@@ -49,6 +49,11 @@ public sealed class SelfTest : Component
 	private Tree _autoSplitTree;
 	private TimeSince _autoSplitStartTime;
 	private bool _autoSplitSpawned;
+	private Tree _cascadeSource;
+	private Tree _cascadeNeighbor;
+	private TimeSince _cascadeCollisionStartTime;
+	private bool _cascadeCollisionSpawned;
+	private int _cascadeNeighborHpBefore;
 	// État pour TestStumpRespawn
 	private TreeStump _respawnStump;
 	private TimeSince _respawnStartTime;
@@ -80,6 +85,7 @@ public sealed class SelfTest : Component
 			case Phase.TestPhysicsAutoSplit: TickTestPhysicsAutoSplit(); break;
 			case Phase.TestStumpRespawn: TickTestStumpRespawn(); break;
 			case Phase.TestCascadeDamage: TickTestCascadeDamage(); break;
+			case Phase.TestCascadeCollision: TickTestCascadeCollision(); break;
 			case Phase.TestAxeTierGate: TickTestAxeTierGate(); break;
 			case Phase.TestChopPowerScaling: TickTestChopPowerScaling(); break;
 			case Phase.TestImpactBelowMin: TickTestImpactBelowMin(); break;
@@ -131,35 +137,35 @@ public sealed class SelfTest : Component
 	private void TickInit()
 	{
 		if ( _frame < 10 ) return;
-		_beaver = Scene.GetAllComponents<BeaverController>().FirstOrDefault();
+		_axe = Scene.GetAllComponents<AxeController>().FirstOrDefault();
 		_state = GameState.Get( Scene );
 
 		// Reset state so we test from a known baseline regardless of prior
 		// saves on disk.
 		if ( _state.IsValid() ) _state.ResetForTest();
 
-		// Pick a small tree (low ChopsRemaining) close to beaver for a quick
+		// Pick a small tree (low ChopsRemaining) close to player for a quick
 		// felling. Saplings (kind=1) have 1 chop ; preferred.
 		_targetTree = Scene.GetAllComponents<Tree>()
 			.Where( t => t.IsValid() && t.IsStanding )
-			.OrderBy( t => (_beaver.IsValid() ? _beaver.WorldPosition : Vector3.Zero).Distance( t.WorldPosition ) )
+			.OrderBy( t => (_axe.IsValid() ? _axe.WorldPosition : Vector3.Zero).Distance( t.WorldPosition ) )
 			.FirstOrDefault();
-		if ( !_beaver.IsValid() || !_state.IsValid() || !_targetTree.IsValid() )
+		if ( !_axe.IsValid() || !_state.IsValid() || !_targetTree.IsValid() )
 		{
-			Log.Error( $"[TC_TEST] FAIL: missing entities beaver={_beaver.IsValid()} state={_state.IsValid()} tree={_targetTree.IsValid()}" );
+			Log.Error( $"[TC_TEST] FAIL: missing entities player={_axe.IsValid()} state={_state.IsValid()} tree={_targetTree.IsValid()}" );
 			Finish();
 			return;
 		}
 		_targetTreePos = _targetTree.WorldPosition;
 		_woodBeforeSwings = _state.Wood;
-		Log.Info( $"[TC_TEST] INIT beaverPos={_beaver.WorldPosition} treePos={_targetTreePos} kind={_targetTree.Kind} chops={_targetTree.ChopsRemaining} wood={_state.Wood} tier={_state.AxeTier}" );
+		Log.Info( $"[TC_TEST] INIT playerPos={_axe.WorldPosition} treePos={_targetTreePos} kind={_targetTree.Kind} chops={_targetTree.ChopsRemaining} wood={_state.Wood} tier={_state.AxeTier}" );
 		Transition( Phase.Approach );
 	}
 
 	private void TickApproach()
 	{
-		ParkBeaverInFrontOfTarget();
-		Log.Info( $"[TC_TEST] APPROACH parked beaverPos={_beaver.WorldPosition}" );
+		ParkPlayerInFrontOfTarget();
+		Log.Info( $"[TC_TEST] APPROACH parked playerPos={_axe.WorldPosition}" );
 		Transition( Phase.Swing );
 	}
 
@@ -179,8 +185,8 @@ public sealed class SelfTest : Component
 		if ( (float)_lastSwingTime < 0.45f ) return;
 		_lastSwingTime = 0f;
 
-		ParkBeaverInFrontOfTarget();
-		var hit = _beaver.DebugSwingVerbose();
+		ParkPlayerInFrontOfTarget();
+		var hit = _axe.DebugSwingVerbose();
 		_swingsFired++;
 		Log.Info( $"[TC_TEST] SWING #{_swingsFired} hit={(hit == null ? "null" : hit.GetType().Name)} treeStanding={_targetTree.IsStanding} chopsLeft={(_targetTree.IsValid() ? _targetTree.ChopsRemaining : -1)}" );
 
@@ -265,8 +271,8 @@ public sealed class SelfTest : Component
 		{
 			if ( (float)_lastSwingTime < 0.45f ) return;
 			_lastSwingTime = 0f;
-			ParkBeaverInFrontOfTarget();
-			_beaver.DebugSwingVerbose();
+			ParkPlayerInFrontOfTarget();
+			_axe.DebugSwingVerbose();
 			_swingsFired++;
 			if ( _swingsFired > 30 )
 			{
@@ -336,21 +342,21 @@ public sealed class SelfTest : Component
 
 	private void TickTestWoodPickup()
 	{
-		// Spawn un WoodItem juste au-dessus du castor. Avec Valheim grace 0.5s,
+		// Spawn un WoodItem juste au-dessus du player. Avec Valheim grace 0.5s,
 		// le magnet n'engage pas tout de suite : pendant 0.5s l'item subit
 		// gravité + sa burst velocity (peut s'envoler hors range). On override
-		// la velocity à zéro pour garder l'item près du castor pendant grace.
+		// la velocity à zéro pour garder l'item près du player pendant grace.
 		// Vérifie que BackpackWood s'incrémente après grace+magnet (~0.6-1s).
 		if ( !_pickupSpawned )
 		{
 			_pickupSpawned = true;
 			_state.ResetForTest();
 			_backpackBeforePickup = _state.BackpackWood;
-			// Spawn 60u devant le castor (hors de son collider qui sinon push
+			// Spawn 60u devant le player (hors de son collider qui sinon push
 			// l'item à dist aléatoire >80u et bypasse magnet). Avec gravity=false
 			// + vel=0, l'item reste à 60u → magnet engage post-grace, fly à
-			// 700u/s vers beaver, pickup à <30u dans ~0.04s. Total ~0.54s.
-			var spawnPos = _beaver.WorldPosition + new Vector3( 60f, 0f, 30f );
+			// 700u/s vers player, pickup à <30u dans ~0.04s. Total ~0.54s.
+			var spawnPos = _axe.WorldPosition + new Vector3( 60f, 0f, 30f );
 			var item = WoodItem.SpawnAt( Scene, spawnPos );
 			if ( item.Body.IsValid() )
 			{
@@ -359,12 +365,12 @@ public sealed class SelfTest : Component
 				item.Body.Gravity = false;
 			}
 			_pickupSpawnTime = 0f;
-			Log.Info( $"[TC_TEST] WoodPickup : spawned item at {spawnPos} (60u from beaver, vel+gravity zeroed), backpack before={_backpackBeforePickup}" );
+			Log.Info( $"[TC_TEST] WoodPickup : spawned item at {spawnPos} (60u from player, vel+gravity zeroed), backpack before={_backpackBeforePickup}" );
 			return;
 		}
 
 		// Wait up to 2.5s for the item to magnet + pickup (incl 0.5s grace +
-		// the item-vs-beaver-collider push-out drifts to ~35-40u typically,
+		// the item-vs-player-collider push-out drifts to ~35-40u typically,
 		// still within MagnetRange 80u → magnet engages reliably).
 		if ( _state.BackpackWood > _backpackBeforePickup )
 		{
@@ -379,7 +385,7 @@ public sealed class SelfTest : Component
 				.ToList();
 			Log.Error( $"[TC_TEST] FAIL TestWoodPickup: backpack stayed at {_state.BackpackWood} after 2.5s. Scene WoodItems valid={items.Count}" );
 			foreach ( var it in items.Take( 5 ) )
-				Log.Error( $"[TC_TEST]    item pos={it.WorldPosition}, dist={it.WorldPosition.Distance( _beaver.WorldPosition ):F1}u" );
+				Log.Error( $"[TC_TEST]    item pos={it.WorldPosition}, dist={it.WorldPosition.Distance( _axe.WorldPosition ):F1}u" );
 			Finish();
 			return;
 		}
@@ -511,7 +517,55 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] CASCADE_DAMAGE PASS  sapling HP {hpBefore} - {hpBefore + 5} damage → fell (IsStanding=false)" );
-		Transition( Phase.TestAxeTierGate );
+		Transition( Phase.TestCascadeCollision );
+	}
+
+	private void TickTestCascadeCollision()
+	{
+		if ( !_cascadeCollisionSpawned )
+		{
+			var neighborPos = _targetTreePos + new Vector3( -1050f, 360f, 0f );
+			if ( TryGetGroundZ( neighborPos.x, neighborPos.y, out var gzNeighbor ) )
+				neighborPos = neighborPos.WithZ( gzNeighbor );
+
+			var sourcePos = neighborPos - Vector3.Forward * 150f;
+			if ( TryGetGroundZ( sourcePos.x, sourcePos.y, out var gzSource ) )
+				sourcePos = sourcePos.WithZ( gzSource );
+
+			_cascadeNeighbor = Tree.SpawnAt( Scene, neighborPos, 0f, TreeKind.Sapling );
+			_cascadeSource = Tree.SpawnAt( Scene, sourcePos, 0f, TreeKind.Sapling );
+			_cascadeNeighborHpBefore = _cascadeNeighbor.ChopsRemaining;
+			_cascadeSource.StartFell( Vector3.Forward );
+			if ( _cascadeSource.Body.IsValid() )
+			{
+				_cascadeSource.Body.Velocity = Vector3.Forward * (Tunables.ImpactMaxSpeed * 1.1f);
+				_cascadeSource.Body.AngularVelocity = Vector3.Up.Cross( Vector3.Forward ).Normal * Tunables.InitialFellOmega;
+			}
+			_cascadeCollisionStartTime = 0f;
+			_cascadeCollisionSpawned = true;
+			Log.Info( $"[TC_TEST] CascadeCollision : source={sourcePos} neighbor={neighborPos} hp={_cascadeNeighborHpBefore}" );
+			return;
+		}
+
+		if ( !_cascadeNeighbor.IsValid() || !_cascadeNeighbor.IsStanding )
+		{
+			Log.Info( $"[TC_TEST] CASCADE_COLLISION PASS  falling tree collision woke neighbor (HP before={_cascadeNeighborHpBefore}, valid={_cascadeNeighbor.IsValid()}, standing={(_cascadeNeighbor.IsValid() ? _cascadeNeighbor.IsStanding : false)})" );
+			Transition( Phase.TestAxeTierGate );
+			return;
+		}
+
+		if ( _cascadeNeighbor.ChopsRemaining < _cascadeNeighborHpBefore )
+		{
+			Log.Info( $"[TC_TEST] CASCADE_COLLISION PASS  falling tree collision damaged neighbor HP {_cascadeNeighborHpBefore}→{_cascadeNeighbor.ChopsRemaining}" );
+			Transition( Phase.TestAxeTierGate );
+			return;
+		}
+
+		if ( (float)_cascadeCollisionStartTime > 2.0f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestCascadeCollision: neighbor unchanged after falling tree collision window (HP={_cascadeNeighbor.ChopsRemaining}/{_cascadeNeighborHpBefore}, sourceValid={_cascadeSource.IsValid()})" );
+			Finish();
+		}
 	}
 
 	private void TickTestAxeTierGate()
@@ -723,10 +777,10 @@ public sealed class SelfTest : Component
 	private void TickTestComboFinalDamage()
 	{
 		// Combo Valheim m_attackChainLevels=3 — verify : (a) Tunables sanity,
-		// (b) BeaverController.ChainLevel exposed et starts in [0..maxLevels-1],
+		// (b) AxeController.ChainLevel exposed et starts in [0..maxLevels-1],
 		// (c) Tree.Chop accepts un chopPower multiplié par ChopComboFinalDamageMul
 		// et applique le damage correct. Test ne simule pas la chain timing
-		// dans BeaverController (nécessiterait input simulation through full
+		// dans AxeController (nécessiterait input simulation through full
 		// swing cycle), mais verrouille la formule mathématique.
 		if ( RuntimeValue( Tunables.ChopComboMaxLevels ) != 3 )
 		{
@@ -746,10 +800,16 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		// BeaverController.ChainLevel exists + within bounds
-		if ( _beaver.ChainLevel < 0 || _beaver.ChainLevel >= Tunables.ChopComboMaxLevels )
+		if ( RuntimeValue( Tunables.HitstopFrames ) != 9 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: BeaverController.ChainLevel={_beaver.ChainLevel} hors bounds [0..{Tunables.ChopComboMaxLevels - 1}]" );
+			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: HitstopFrames={Tunables.HitstopFrames} (expected 9 = Valheim 0.15s @ 60fps)" );
+			Finish();
+			return;
+		}
+		// AxeController.ChainLevel exists + within bounds
+		if ( _axe.ChainLevel < 0 || _axe.ChainLevel >= Tunables.ChopComboMaxLevels )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: AxeController.ChainLevel={_axe.ChainLevel} hors bounds [0..{Tunables.ChopComboMaxLevels - 1}]" );
 			Finish();
 			return;
 		}
@@ -1018,6 +1078,12 @@ public sealed class SelfTest : Component
 			return;
 		}
 		// TreeKindWoodTypeMix : 4 kinds × 3 types, sums ~1.0
+		if ( RuntimeValue( Tunables.InitialFellTopImpulseSpeed ) <= 0f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: InitialFellTopImpulseSpeed={Tunables.InitialFellTopImpulseSpeed} (expected > 0 for Valheim top impulse)" );
+			Finish();
+			return;
+		}
 		if ( Tunables.TreeKindWoodTypeMix.Length != 4 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeKindWoodTypeMix has {Tunables.TreeKindWoodTypeMix.Length} kinds (expected 4)" );
@@ -1418,7 +1484,7 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		// Sanity-check the derived multipliers wired into BeaverController +
+		// Sanity-check the derived multipliers wired into AxeController +
 		// Tree paths.
 		if ( !(_state.SpeedMultiplier > 1f) )
 		{
@@ -1500,10 +1566,10 @@ public sealed class SelfTest : Component
 		return true;
 	}
 
-	private void ParkBeaverInFrontOfTarget()
+	private void ParkPlayerInFrontOfTarget()
 	{
 		var pos = _targetTreePos + new Vector3( 60f, 0f, 40f );
-		_beaver.TeleportTo( pos, 180f ); // face -X (toward tree at -60 relative)
+		_axe.TeleportTo( pos, 180f ); // face -X (toward tree at -60 relative)
 	}
 
 	private void Finish()

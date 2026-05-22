@@ -1,6 +1,6 @@
 namespace TreeChopping;
 
-// Mow-the-lawn bootstrap : spawn beaver at the summit, drop a ShopArea
+// Mow-the-lawn bootstrap : spawn player at the summit, drop a ShopArea
 // marker on the plateau, scatter a forest with biome bias (close trees =
 // saplings/easy ; far trees = veterans/hard). No daily seed — random per
 // boot, continuous play.
@@ -12,7 +12,7 @@ public sealed class SceneStarter : Component
 	[Property] public int TreeCount { get; set; } = 100;
 	[Property] public float MinSpacing { get; set; } = 220f;
 	[Property] public int Seed { get; set; } = 0xCA5C;
-	[Property] public Vector3 BeaverSpawn { get; set; } = new( -1000f, 0f, 80f );
+	[Property] public Vector3 PlayerSpawn { get; set; } = new( -1000f, 0f, 80f );
 	// Pad needs > ShopStationArcRadius + station footprint AND room around
 	// the player so the spawn feels respirable (no trees in their face).
 	[Property] public float SpawnPadRadius { get; set; } = 1100f;
@@ -24,7 +24,7 @@ public sealed class SceneStarter : Component
 	[ConVar( "tc_selftest_seed", Help = "If >0, overrides SceneStarter.Seed before bootstrap." )]
 	public static int SeedOverride { get; set; }
 
-	public Vector3 ResolvedBeaverSpawn { get; private set; }
+	public Vector3 ResolvedPlayerSpawn { get; private set; }
 	private static readonly Vector3 AuthoredSpawn = new( -1000f, 0f, 80f );
 
 	protected override void OnStart()
@@ -46,24 +46,24 @@ public sealed class SceneStarter : Component
 
 			SetupLighting();
 			DisableSceneGround();
-			TerrainHeightmap.Spawn( Scene, Seed, BeaverSpawn );
+			TerrainHeightmap.Spawn( Scene, Seed, PlayerSpawn );
 			int borders = MapBorders.Spawn( Scene, Vector3.Zero );
 			Log.Info( $"[SceneStarter] Placed {borders} border-mountain segments" );
 
-			ResolveBeaverSpawnGround();
+			ResolvePlayerSpawnGround();
 
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
-			var beaver = SpawnBeaver( camera );
+			var player = SpawnPlayerCharacter( camera );
 			SpawnShop();
-			HubProps.Spawn( Scene, ResolvedBeaverSpawn, ShopStationArcRadius );
+			HubProps.Spawn( Scene, ResolvedPlayerSpawn, ShopStationArcRadius );
 			// HubAmphitheatre dropped 2026-05-21 : "vire tous les trucs en
 			// pierre du spawn". Hub is now just terrain + wooden props + the
 			// 4 invisible station zones with their worldspace labels.
 			SpawnForest();
 			SpawnTestSapling();
-			SpawnPet( beaver );
+			SpawnPet( player );
 
-			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
+			Log.Info( $"[SceneStarter] Bootstrap OK — player pos={player?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
 		}
 		catch ( System.Exception ex )
 		{
@@ -92,18 +92,18 @@ public sealed class SceneStarter : Component
 			sun.Shadows = true;
 			sun.ShadowHardness = 0.45f;
 			sun.FogMode = DirectionalLight.FogInfluence.Enabled;
-			sun.FogStrength = 0.45f;
+			sun.FogStrength = 0.12f;
 		}
 		var sky = Scene.GetAllComponents<SkyBox2D>().FirstOrDefault();
 		if ( sky.IsValid() ) sky.Tint = new Color( 1.00f, 0.96f, 0.88f, 1f );
 		var fog = Scene.GetAllComponents<GradientFog>().FirstOrDefault();
 		if ( fog.IsValid() )
 		{
-			fog.Color = new Color( 0.78f, 0.86f, 0.95f, 1f );
-			fog.StartDistance = 1400f;
-			fog.EndDistance = 3600f;
+			fog.Color = new Color( 0.76f, 0.80f, 0.76f, 1f );
+			fog.StartDistance = 3000f;
+			fog.EndDistance = 7000f;
 		}
-		Log.Info( "[SceneStarter] Daylight palette applied (sun ×2.5, sky-blue fill ×1.4, fog 1400→3600u soft-blue)" );
+		Log.Info( "[SceneStarter] Daylight palette applied (sun ×2.5, sky-blue fill ×1.4, fog 3000→7000u neutral)" );
 	}
 
 	private void DisableSceneGround()
@@ -131,28 +131,28 @@ public sealed class SceneStarter : Component
 		return go.AddComponent<T>();
 	}
 
-	private void ResolveBeaverSpawnGround()
+	private void ResolvePlayerSpawnGround()
 	{
 		const float clearance = 80f;
 		const float driftLimit = 200f;
-		var spawn = BeaverSpawn;
+		var spawn = PlayerSpawn;
 		var drift = new Vector2( spawn.x - AuthoredSpawn.x, spawn.y - AuthoredSpawn.y );
 		if ( drift.Length > driftLimit )
 		{
-			Log.Warning( $"[SceneStarter] BeaverSpawn drift ({spawn}) — falling back to authored {AuthoredSpawn}" );
+			Log.Warning( $"[SceneStarter] PlayerSpawn drift ({spawn}) — falling back to authored {AuthoredSpawn}" );
 			spawn = AuthoredSpawn;
 		}
 		float z = spawn.z;
 		if ( TryGetGroundZ( spawn.x, spawn.y, out float groundZ ) )
 			z = groundZ + clearance;
-		ResolvedBeaverSpawn = new Vector3( spawn.x, spawn.y, z );
+		ResolvedPlayerSpawn = new Vector3( spawn.x, spawn.y, z );
 	}
 
-	private BeaverController SpawnBeaver( CameraComponent existingCamera )
+	private AxeController SpawnPlayerCharacter( CameraComponent existingCamera )
 	{
 		var go = Scene.CreateObject();
 		go.Name = "Player";
-		go.WorldPosition = ResolvedBeaverSpawn;
+		go.WorldPosition = ResolvedPlayerSpawn;
 
 		var modelGo = Scene.CreateObject();
 		modelGo.Name = "PlayerModel";
@@ -165,30 +165,33 @@ public sealed class SceneStarter : Component
 		animHelper.Target = renderer;
 		animHelper.HoldType = Sandbox.Citizen.CitizenAnimationHelper.HoldTypes.Swing;
 
-		var player = go.AddComponent<PlayerController>();
-		player.Renderer = renderer;
-		player.ThirdPerson = true;
-		player.UseAnimatorControls = true;
-		player.UseCameraControls = true;
-		player.UseInputControls = true;
-		player.UseLookControls = true;
+		var motor = go.AddComponent<PlayerController>();
+		motor.Renderer = renderer;
+		motor.ThirdPerson = true;
+		motor.UseAnimatorControls = true;
+		motor.UseCameraControls = true;
+		motor.UseInputControls = true;
+		motor.UseLookControls = true;
 
-		var beaver = go.AddComponent<BeaverController>();
-		beaver.Player = player;
-		beaver.PlayerRenderer = renderer;
+		var axe = go.AddComponent<AxeController>();
+		axe.Player = motor;
+		axe.PlayerRenderer = renderer;
+
+		var axeView = modelGo.AddComponent<PlayerAxeView>();
+		axeView.PlayerRenderer = renderer;
 
 		var cam = existingCamera;
-		if ( cam.IsValid() ) beaver.Camera = cam;
+		if ( cam.IsValid() ) axe.Camera = cam;
 
-		return beaver;
+		return axe;
 	}
 
-	private void SpawnPet( BeaverController beaver )
+	private void SpawnPet( AxeController player )
 	{
 		var go = Scene.CreateObject();
 		go.Name = "Pet";
 		var pet = go.AddComponent<Pet>();
-		pet.Beaver = beaver;
+		pet.FollowTarget = player;
 	}
 
 	private void SpawnShop()
@@ -209,7 +212,7 @@ public sealed class SceneStarter : Component
 		float rad = arcAngleDeg * MathF.PI / 180f;
 		float dx = MathF.Cos( rad ) * ShopStationArcRadius;
 		float dy = MathF.Sin( rad ) * ShopStationArcRadius;
-		var pos = new Vector3( ResolvedBeaverSpawn.x + dx, ResolvedBeaverSpawn.y + dy, ResolvedBeaverSpawn.z );
+		var pos = new Vector3( ResolvedPlayerSpawn.x + dx, ResolvedPlayerSpawn.y + dy, ResolvedPlayerSpawn.z );
 		// Drop to the local ground at the station's XY so the disc sits flush
 		// on the terrain instead of floating where the spawn plateau ends.
 		if ( TryGetGroundZ( pos.x, pos.y, out float groundZ ) ) pos.z = groundZ + 60f;
@@ -226,7 +229,7 @@ public sealed class SceneStarter : Component
 			var go = t.GameObject;
 			if ( go.IsValid() ) { go.Enabled = false; go.Destroy(); }
 		}
-		ResolveBeaverSpawnGround();
+		ResolvePlayerSpawnGround();
 		SpawnForest();
 		Log.Info( $"[SceneStarter] Forest regenerated, trees={Scene.GetAllComponents<Tree>().Count()}" );
 	}
@@ -256,8 +259,8 @@ public sealed class SceneStarter : Component
 		int spawned = 0;
 		int maxAttempts = targetCount * 80;
 		float padRSq = SpawnPadRadius * SpawnPadRadius;
-		float padXY_X = ResolvedBeaverSpawn.x;
-		float padXY_Y = ResolvedBeaverSpawn.y;
+		float padXY_X = ResolvedPlayerSpawn.x;
+		float padXY_Y = ResolvedPlayerSpawn.y;
 		float bandWidth = outerR - innerR;
 
 		while ( spawned < targetCount && attempts < maxAttempts )
@@ -275,10 +278,14 @@ public sealed class SceneStarter : Component
 
 			float density = ValueNoise2D( x / Tunables.ArenaNoiseScale, y / Tunables.ArenaNoiseScale, Seed );
 			if ( density < Tunables.ArenaDensityThreshold ) continue;
+			float clearing = ValueNoise2D( x / Tunables.ForestClearingNoiseScale + 31.7f, y / Tunables.ForestClearingNoiseScale - 11.3f, Seed ^ 0x5A17 );
+			if ( clearing < Tunables.ForestClearingThreshold && density < 0.72f ) continue;
 
 			if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
 
-			float spacing = MathX.Lerp( MinSpacing * 1.4f, MinSpacing * 0.7f, density );
+			float cluster = ((density - Tunables.ArenaDensityThreshold) / (1f - Tunables.ArenaDensityThreshold)).Clamp( 0f, 1f );
+			if ( clearing > 0.76f ) cluster = MathF.Min( 1f, cluster + 0.18f );
+			float spacing = MathX.Lerp( MinSpacing * 1.55f, MinSpacing * 0.58f, cluster );
 			var pos = new Vector3( x, y, groundZ );
 			if ( placed.Any( p => p.Distance( pos ) < spacing ) ) continue;
 
@@ -298,9 +305,9 @@ public sealed class SceneStarter : Component
 	private void SpawnTestSapling()
 	{
 		const float distAhead = 120f;
-		float x = ResolvedBeaverSpawn.x + distAhead;
-		float y = ResolvedBeaverSpawn.y;
-		if ( !TryGetGroundZ( x, y, out float z ) ) z = ResolvedBeaverSpawn.z;
+		float x = ResolvedPlayerSpawn.x + distAhead;
+		float y = ResolvedPlayerSpawn.y;
+		if ( !TryGetGroundZ( x, y, out float z ) ) z = ResolvedPlayerSpawn.z;
 		var pos = new Vector3( x, y, z );
 		Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: TreeKind.Sapling );
 		Log.Info( $"[SceneStarter] Test sapling spawned at {pos}" );

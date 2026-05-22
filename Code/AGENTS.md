@@ -29,7 +29,7 @@ Ordre : `OnAwake` → `OnStart` → `OnEnabled` → (loop `OnUpdate`/`OnFixedUpd
 ```csharp
 go.Components.Get<T>()                          // 1er match
 go.Components.GetAll<T>()                       // tous
-go.Components.Get<T>( FindMode.EverythingInSelfAndDescendants ) // ce qu'utilise BeaverController
+go.Components.Get<T>( FindMode.EverythingInSelfAndDescendants ) // ce qu'utilise AxeController
 Scene.GetAllComponents<T>().FirstOrDefault()    // global scène (ce qu'on fait pour Inventory/Hud)
 ```
 

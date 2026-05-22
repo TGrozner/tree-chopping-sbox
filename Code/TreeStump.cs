@@ -95,6 +95,7 @@ public sealed class TreeStump : Component
 				// m_respawnEffect Valheim — fire à la fin de la grow animation.
 				ChipBurst.SpawnLeaves( Scene, SpawnFootPos + Vector3.Up * 30f, Vector3.Up, 8,
 					new Color( 0.62f, 0.82f, 0.40f, 1f ) );
+				Sfx.Play( "sounds/stump_respawn.sound", SpawnFootPos + Vector3.Up * 30f, volume: 0.55f, pitchMin: 0.85f, pitchMax: 1.15f );
 				GameObject?.Destroy();
 			}
 			return;

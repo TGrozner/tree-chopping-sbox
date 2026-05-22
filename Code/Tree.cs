@@ -12,9 +12,45 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	[Property] public int ChopsRemaining { get; set; } = 3;
 	[Property] public TreeKind Kind { get; set; } = TreeKind.Normal;
 	[Property] public bool IsMythic { get; set; }
-	// Expose le trunk tint pour que BeaverController puisse passer la couleur
+	// Expose le trunk tint pour que AxeController puisse passer la couleur
 	// aux ChipBurst (Valheim chips reflect tree wood color).
 	public Color TrunkTint => _trunkTint;
+	public Vector3 LogCenter
+	{
+		get
+		{
+			var axis = WorldRotation.Up;
+			if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+			return WorldPosition + axis.Normal * ((_trunkLen > 0f ? _trunkLen : Tunables.TreeHeight) * 0.5f);
+		}
+	}
+
+	public Vector3 GetChopPointFrom( Vector3 origin )
+	{
+		float halfWidth = MathF.Max( _trunkWidth * 0.5f, Tunables.TreeRadius * 0.25f );
+		if ( !_landed )
+		{
+			var fromTree = (origin - WorldPosition).WithZ( 0f );
+			if ( fromTree.LengthSquared < 0.001f ) fromTree = -Vector3.Forward;
+			float z = origin.z.Clamp( WorldPosition.z + 20f, WorldPosition.z + _trunkLen * 0.75f );
+			return WorldPosition.WithZ( z ) + fromTree.Normal * halfWidth;
+		}
+
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		var a = WorldPosition + axis * (_trunkLen * 0.08f);
+		var b = WorldPosition + axis * (_trunkLen * 0.92f);
+		var ab = b - a;
+		float t = ab.LengthSquared > 0.001f
+			? (origin - a).Dot( ab ) / ab.LengthSquared
+			: 0f;
+		var closest = a + ab * t.Clamp( 0f, 1f );
+		var radial = origin - closest;
+		if ( radial.LengthSquared < 0.001f ) radial = Vector3.Up.Cross( axis );
+		if ( radial.LengthSquared < 0.001f ) radial = Vector3.Right;
+		return closest + radial.Normal * halfWidth;
+	}
 
 	private bool _chopped;
 	private bool _landed;
@@ -40,6 +76,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private Color _canopyTint;
 	private float _ambientPhase;
 	private bool _highlighted;
+	private bool _landingSnapApplied;
 	private Vector3 _spawnFootPos;
 	private float _biomeDifficulty;
 	// Cached at spawn so SplitIntoLogs can spawn WoodLogs that actually
@@ -59,6 +96,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// Valheim ImpactEffect.m_interval (0.5s) â€” cooldown entre 2 impacts cascade
 	// successifs. Ã‰vite spam quand un log roule sur un voisin et re-fire OnCollisionStart.
 	private TimeSince _timeSinceLastImpactDamage = 999f;
+	private TimeSince _timeSinceLastCascadeSweep = 999f;
 
 	public static Tree SpawnAt( Scene scene, Vector3 footPosition, float biomeDifficulty = 0.5f, TreeKind? forceKind = null )
 	{
@@ -98,6 +136,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		}
 
 		float trunkW = Tunables.TreeRadius * 1.4f * scaleMul;
+		float trunkVisualW = trunkW * Tunables.TreeKindVisualTrunkWidthMul[kindIdx];
 		float trunkH = Tunables.TreeHeight * scaleMul;
 
 		// Cube-trunk fallback : a slight base flare (root) + main column + a
@@ -107,22 +146,23 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		rootBase.Name = "TreeRoot";
 		rootBase.SetParent( go );
 		rootBase.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.04f );
-		rootBase.LocalScale = new Vector3( trunkW * 1.30f, trunkW * 1.30f, trunkH * 0.08f ) / Tunables.CubeBase;
+		rootBase.LocalScale = new Vector3( trunkVisualW * 1.30f, trunkVisualW * 1.30f, trunkH * 0.08f ) / Tunables.CubeBase;
 		var rootMr = Mat.AddTintedCube( rootBase, new Color( tint.r * 0.78f, tint.g * 0.78f, tint.b * 0.78f, 1f ) );
 
 		var lower = scene.CreateObject();
 		lower.Name = "TreeTrunk";
 		lower.SetParent( go );
 		lower.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.32f );
-		lower.LocalScale = new Vector3( trunkW, trunkW, trunkH * 0.56f ) / Tunables.CubeBase;
+		lower.LocalScale = new Vector3( trunkVisualW, trunkVisualW, trunkH * 0.56f ) / Tunables.CubeBase;
 		var lowerMr = Mat.AddTintedCube( lower, tint );
 
 		var upper = scene.CreateObject();
 		upper.Name = "TreeTrunkUpper";
 		upper.SetParent( go );
 		upper.LocalPosition = new Vector3( 0f, 0f, trunkH * 0.78f );
-		upper.LocalScale = new Vector3( trunkW * 0.78f, trunkW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
+		upper.LocalScale = new Vector3( trunkVisualW * 0.78f, trunkVisualW * 0.78f, trunkH * 0.36f ) / Tunables.CubeBase;
 		var upperMr = Mat.AddTintedCube( upper, new Color( MathF.Min( 1f, tint.r * 1.08f ), MathF.Min( 1f, tint.g * 1.08f ), MathF.Min( 1f, tint.b * 1.08f ), 1f ) );
+		SpawnTrunkDetails( scene, lower, upper, tint );
 
 		int canopyHash = (hash >> 16) & 0xFF;
 		var canopyTint = isMythic
@@ -167,11 +207,33 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		tree._spawnFootPos = footPosition;
 		tree._biomeDifficulty = biomeDifficulty;
 		tree._trunkLen = trunkH;
-		tree._trunkWidth = trunkW;
+		tree._trunkWidth = trunkVisualW;
 		tree._trunkTint = tint;
 		// Stagger ambient sway so adjacent trees don't beat in lockstep.
 		tree._ambientPhase = ((uint)hash & 0xFFFFu) / 65535f * MathF.PI * 2f;
 		return tree;
+	}
+
+	private static void SpawnTrunkDetails( Scene scene, GameObject lower, GameObject upper, Color tint )
+	{
+		var dark = new Color( tint.r * 0.56f, tint.g * 0.50f, tint.b * 0.44f, 1f );
+		var mid = new Color( tint.r * 0.70f, tint.g * 0.62f, tint.b * 0.52f, 1f );
+		AddTrunkDetail( scene, lower, "BarkSideA", new Vector3( 0.515f, -0.10f, 0.00f ), new Vector3( 0.06f, 0.28f, 0.92f ), dark );
+		AddTrunkDetail( scene, lower, "BarkSideB", new Vector3( -0.515f, 0.12f, -0.06f ), new Vector3( 0.05f, 0.24f, 0.72f ), dark );
+		AddTrunkDetail( scene, lower, "BarkFace", new Vector3( -0.10f, 0.515f, 0.08f ), new Vector3( 0.38f, 0.055f, 0.66f ), mid );
+		AddTrunkDetail( scene, lower, "LogBandLower", new Vector3( 0f, 0f, -0.46f ), new Vector3( 0.88f, 0.88f, 0.035f ), dark );
+		AddTrunkDetail( scene, upper, "BarkSideUpper", new Vector3( 0.515f, 0.02f, -0.02f ), new Vector3( 0.055f, 0.22f, 0.82f ), dark );
+		AddTrunkDetail( scene, upper, "LogBandUpper", new Vector3( 0f, 0f, 0.47f ), new Vector3( 0.90f, 0.90f, 0.04f ), mid );
+	}
+
+	private static void AddTrunkDetail( Scene scene, GameObject parent, string name, Vector3 localPos, Vector3 localScale, Color tint )
+	{
+		var go = scene.CreateObject();
+		go.Name = name;
+		go.SetParent( parent );
+		go.LocalPosition = localPos;
+		go.LocalScale = localScale;
+		Mat.AddTintedCube( go, tint );
 	}
 
 	private static TreeKind PickKindFromHash( int hash, float biomeDifficulty )
@@ -271,13 +333,27 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 	public void SetAimHighlight( bool on )
 	{
-		if ( _highlighted == on || !_primaryCanopy.IsValid() ) return;
+		if ( _highlighted == on ) return;
 		_highlighted = on;
-		var mr = _primaryCanopy.Components.Get<ModelRenderer>();
-		if ( !mr.IsValid() ) return;
-		mr.Tint = on
-			? new Color( MathF.Min( 1f, _canopyTint.r * 1.55f ), MathF.Min( 1f, _canopyTint.g * 1.55f ), MathF.Min( 1f, _canopyTint.b * 1.55f ), 1f )
-			: _canopyTint;
+		if ( _primaryCanopy.IsValid() )
+		{
+			var mr = _primaryCanopy.Components.Get<ModelRenderer>();
+			if ( mr.IsValid() )
+			{
+				mr.Tint = on
+					? new Color( MathF.Min( 1f, _canopyTint.r * 1.55f ), MathF.Min( 1f, _canopyTint.g * 1.55f ), MathF.Min( 1f, _canopyTint.b * 1.55f ), 1f )
+					: _canopyTint;
+			}
+		}
+		SetTrunkHighlight( on );
+	}
+
+	private void SetTrunkHighlight( bool on )
+	{
+		if ( !_landed ) return;
+		if ( _trunkLowerMr.IsValid() ) _trunkLowerMr.Tint = on ? Color.Lerp( _trunkTint, Color.White, _landed ? 0.35f : 0.18f ) : _trunkTint;
+		if ( _trunkUpperMr.IsValid() ) _trunkUpperMr.Tint = on ? Color.Lerp( _trunkTint, Color.White, _landed ? 0.28f : 0.14f ) : _trunkTint;
+		if ( _rootMr.IsValid() ) _rootMr.Tint = on ? Color.Lerp( _trunkTint, Color.White, 0.16f ) : _trunkTint;
 	}
 
 	// Player chop : remove ChopPower from ChopsRemaining. If it hits 0, fell.
@@ -322,7 +398,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			{
 				// Valheim 1:1 : TreeBase.RPC_Damage return BEFORE Shake() si
 				// CheckToolTier fail. Le feedback "axe bounced" vient du weapon
-				// side (chip burst + thunk Sfx dÃ©clenchÃ©s par BeaverController).
+				// side (chip burst + thunk Sfx dÃ©clenchÃ©s par AxeController).
 				var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
 				if ( hud.IsValid() )
 				{
@@ -361,19 +437,29 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 					WoodHud.DamageTextBonus, isBonus: true );
 			}
 		}
-		if ( ChopsRemaining > 0 )
+		if ( _landed )
+		{
+			ApplyLandedKick( direction, hitPoint );
+			SpawnLandedChopScar( hitPoint, direction, chopPower, ChopsRemaining <= 0 );
+		}
+		else
 		{
 			DarkenTrunkOnce();
-			SpawnChopNotch();
-			// Standing tree = scripted lean (kinematic so we can drive WorldRotation).
-			// Landed log = rigidbody kick (driving WorldRotation would fight physics).
-			if ( _landed ) ApplyLandedKick( direction, hitPoint );
-			else KickWobble( direction );
+			SpawnChopNotch( hitPoint, direction, chopPower, ChopsRemaining <= 0 );
+			KickWobble( direction );
+		}
+
+		if ( ChopsRemaining > 0 )
+		{
 			return;
 		}
 
 		// HP=0 reached â€” branch on phase.
-		if ( !_landed ) StartFell( direction );
+		if ( !_landed )
+		{
+			EmitBreakYield( direction, hitPoint );
+			StartFell( direction );
+		}
 		else SplitIntoLogs();
 	}
 
@@ -381,23 +467,104 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// per hit so a near-felled tree has visible damage scars instead of just
 	// a global darkening. Parented to the lower-trunk renderer so it inherits
 	// the trunk's scale and the wobble/fell rotations.
-	private void SpawnChopNotch()
+	private void SpawnChopNotch( Vector3 hitPoint, Vector3 direction, int chopPower, bool finalHit )
 	{
 		if ( !_trunkLowerMr.IsValid() ) return;
 		var trunkGO = _trunkLowerMr.GameObject;
 		var notch = Scene.CreateObject();
 		notch.Name = "ChopNotch";
 		notch.SetParent( trunkGO );
-		// Trunk is a normalised [-0.5,0.5] cube scaled by LocalScale ; child
-		// LocalPosition is in the same normalised space. Angle = random ring
-		// around the trunk so chops stack visually across the circumference.
-		float angle = Game.Random.Float( 0f, MathF.PI * 2f );
+
+		var radial = hitPoint.LengthSquared > 0.01f
+			? (hitPoint - WorldPosition).WithZ( 0f )
+			: -direction.WithZ( 0f );
+		if ( radial.LengthSquared < 0.001f ) radial = -Vector3.Forward;
+		radial = radial.Normal;
+
+		float x = radial.Dot( WorldRotation.Forward );
+		float y = radial.Dot( WorldRotation.Right );
+		float angle = MathF.Atan2( y, x );
+		float lowerCenterZ = WorldPosition.z + _trunkLen * 0.32f;
+		float lowerHeight = MathF.Max( 1f, _trunkLen * 0.56f );
+		float localZ = ((hitPoint.z - lowerCenterZ) / lowerHeight).Clamp( -0.36f, 0.34f );
+
 		notch.LocalPosition = new Vector3(
 			MathF.Cos( angle ) * 0.55f,
 			MathF.Sin( angle ) * 0.55f,
-			Game.Random.Float( -0.30f, 0.25f ) );
-		notch.LocalScale = new Vector3( 0.28f, 0.28f, 0.14f );
+			localZ );
+		float bite = MathX.Lerp( 1f, 1.45f, MathF.Min( chopPower, 6f ) / 6f );
+		if ( finalHit ) bite *= 1.25f;
+		float variantWide = Game.Random.Float( 0.85f, 1.35f );
+		float variantTall = Game.Random.Float( 0.70f, 1.25f );
+		notch.LocalScale = new Vector3( 0.22f * bite * variantWide, 0.34f * bite, 0.13f * bite * variantTall );
+		notch.LocalRotation = Rotation.FromYaw( angle.RadianToDegree() + Game.Random.Float( -18f, 18f ) );
 		Mat.AddTintedCube( notch, new Color( 0.08f, 0.04f, 0.02f, 1f ) );
+
+		if ( chopPower > 1 || finalHit )
+		{
+			var chipCut = Scene.CreateObject();
+			chipCut.Name = "ChopCut";
+			chipCut.SetParent( trunkGO );
+			chipCut.LocalPosition = notch.LocalPosition + new Vector3( 0f, 0f, Game.Random.Float( -0.08f, 0.10f ) );
+			chipCut.LocalScale = new Vector3( 0.10f * bite, 0.52f * bite, 0.055f * bite );
+			chipCut.LocalRotation = Rotation.FromYaw( angle.RadianToDegree() + 70f + Game.Random.Float( -12f, 12f ) );
+			Mat.AddTintedCube( chipCut, new Color( 0.13f, 0.065f, 0.025f, 1f ) );
+		}
+
+		if ( finalHit )
+		{
+			var split = Scene.CreateObject();
+			split.Name = "ChopSplit";
+			split.SetParent( trunkGO );
+			split.LocalPosition = notch.LocalPosition + new Vector3( 0f, 0f, 0.10f );
+			split.LocalScale = new Vector3( 0.12f, 0.46f, 0.08f );
+			split.LocalRotation = Rotation.FromYaw( angle.RadianToDegree() + 90f );
+			Mat.AddTintedCube( split, new Color( 0.04f, 0.02f, 0.01f, 1f ) );
+		}
+	}
+
+	private void SpawnLandedChopScar( Vector3 hitPoint, Vector3 direction, int chopPower, bool finalHit )
+	{
+		if ( !_trunkLowerMr.IsValid() ) return;
+		var trunkGO = _trunkLowerMr.GameObject;
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		var basePoint = WorldPosition + axis * (_trunkLen * 0.08f);
+		var along = hitPoint.LengthSquared > 0.01f
+			? ((hitPoint - basePoint).Dot( axis ) / MathF.Max( _trunkLen, 1f )).Clamp( 0.08f, 0.92f )
+			: 0.5f;
+		var scar = Scene.CreateObject();
+		scar.Name = finalHit ? "LogSplitScar" : "LogChopScar";
+		scar.SetParent( trunkGO );
+		scar.LocalPosition = new Vector3( Game.Random.Float( -0.18f, 0.18f ), 0.54f, MathX.Lerp( -0.42f, 0.42f, along ) );
+		float bite = MathX.Lerp( 1f, 1.45f, MathF.Min( chopPower, 6f ) / 6f );
+		if ( finalHit ) bite *= 1.3f;
+		scar.LocalScale = new Vector3( 0.42f * bite, 0.055f, 0.10f * bite );
+		scar.LocalRotation = Rotation.FromYaw( Game.Random.Float( -16f, 16f ) );
+		Mat.AddTintedCube( scar, finalHit ? new Color( 0.04f, 0.02f, 0.01f, 1f ) : new Color( 0.10f, 0.05f, 0.02f, 1f ) );
+	}
+
+	private void EmitBreakYield( Vector3 direction, Vector3 hitPoint )
+	{
+		var point = hitPoint.LengthSquared > 0.01f
+			? hitPoint
+			: WorldPosition + Vector3.Up * (_trunkLen * 0.38f);
+		var dir = direction.WithZ( 0f );
+		if ( dir.LengthSquared < 0.001f ) dir = _fellDir.LengthSquared > 0.001f ? _fellDir : Vector3.Forward;
+		dir = dir.Normal;
+		ChipBurst.Spawn( Scene, point, dir, Tunables.ChipBurstCount + Tunables.ChipBurstCount / 2, _trunkTint );
+		ChipBurst.SpawnLeaves( Scene, point + Vector3.Up * 12f, dir, 10, new Color( 0.52f, 0.40f, 0.28f, 1f ) );
+		Sfx.Play( "sounds/log_break.sound", point,
+			volume: 0.60f, pitchMin: 0.92f * Tunables.TreeKindGroanPitchMul[(int)Kind], pitchMax: 1.10f * Tunables.TreeKindGroanPitchMul[(int)Kind] );
+		if ( _trunkUpperMr.IsValid() )
+		{
+			var upper = _trunkUpperMr.GameObject;
+			var side = Vector3.Cross( Vector3.Up, dir );
+			if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+			upper.LocalRotation *= Rotation.FromAxis( side.Normal, 4f );
+			upper.LocalPosition += dir * 3f;
+		}
 	}
 
 	// Each hit multiplies trunk renderers' tint by ~0.92 â€” accumulates so
@@ -440,6 +607,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		var flat = chopDirection.WithZ( 0f );
 		if ( flat.LengthSquared < 0.001f ) flat = Vector3.Forward;
 		flat = flat.Normal;
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
 		// Mimicke Valheim TreeLog.RPC_Damage : `hit.m_dir * hit.m_pushForce * 2f`
 		// â€” m_pushForce vient de la HitData de l'arme et scale avec son tier. Ici
 		// on multiplie par (1 + 0.3*ChopPower) â†’ T0 hands = Ã—1.3, T6 chainsaw =
@@ -451,10 +621,19 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// hit point disponible (DebugSwing, fallback) â†’ ancre fixe au-dessus.
 		var applyPoint = hitPoint.LengthSquared > 0.01f
 			? hitPoint
-			: WorldPosition + Vector3.Up * 20f;
-		Body.PhysicsBody.ApplyImpulseAt( applyPoint, flat * Tunables.LandedLogKickImpulse * powerScale );
-		var spinAxis = Vector3.Cross( Vector3.Up, flat ).Normal;
-		Body.PhysicsBody.ApplyAngularImpulse( spinAxis * Tunables.LandedLogKickTorque * powerScale );
+			: LogCenter + Vector3.Up * 8f;
+		var centerToHit = applyPoint - LogCenter;
+		float lever = (centerToHit.Length / MathF.Max( _trunkLen * 0.5f, 1f )).Clamp( 0.25f, 1.0f );
+		var side = Vector3.Cross( axis, flat );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Cross( Vector3.Up, flat );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+		var impulseDir = (flat * 0.82f + side * Game.Random.Float( -0.22f, 0.22f ) + Vector3.Up * 0.10f).Normal;
+		Body.PhysicsBody.ApplyImpulseAt( applyPoint, impulseDir * Tunables.LandedLogKickImpulse * powerScale );
+		var spinAxis = Vector3.Cross( centerToHit.Normal, impulseDir );
+		if ( spinAxis.LengthSquared < 0.001f ) spinAxis = Vector3.Cross( Vector3.Up, flat );
+		if ( spinAxis.LengthSquared < 0.001f ) spinAxis = side;
+		Body.PhysicsBody.ApplyAngularImpulse( spinAxis.Normal * Tunables.LandedLogKickTorque * powerScale * MathX.Lerp( 0.8f, 1.0f + Tunables.LandedLogHitPointTorqueMul, lever ) );
 	}
 
 	// Valheim TreeBase.ShakeAnimation (RPC_Shake) â€” coroutine lignes 194-209.
@@ -551,6 +730,12 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			var spinAxis = Vector3.Up.Cross( _fellDir ).Normal;
 			float kindMul = Tunables.TreeKindInitialFellOmegaMul[(int)Kind];
 			Body.AngularVelocity = spinAxis * Tunables.InitialFellOmega * kindMul;
+			if ( Body.PhysicsBody.IsValid() )
+			{
+				float mass = Body.PhysicsBody.Mass;
+				var topPoint = WorldPosition + Vector3.Up * (_trunkLen * 0.78f);
+				Body.PhysicsBody.ApplyImpulseAt( topPoint, _fellDir * mass * Tunables.InitialFellTopImpulseSpeed * kindMul );
+			}
 			// Lurch linÃ©aire â€” Valheim TreeBase.SpawnLog applique un AddForceAtPosition
 			// haut sur le tronc qui crÃ©e Ã  la fois rotation + slide. On le dÃ©compose
 			// en deux pour avoir le contrÃ´le (nos unitÃ©s sont trop grandes pour
@@ -630,7 +815,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
 
 		float impactSpeed = _preCollisionVelocity.Length;
-		if ( impactSpeed < Tunables.ImpactMinSpeed ) return;
+		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
 		_timeSinceLastImpactDamage = 0f;
 
 		// Valheim feel : cascade impact crÃ©e un thud + dust burst au point de
@@ -638,20 +823,18 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// silencieux. Volume + leaf count scalÃ©s par impactSpeed (= dommage).
 		float impactScale = ((impactSpeed - Tunables.ImpactMinSpeed)
 			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
-		var contactPoint = WorldPosition + Vector3.Up * 30f; // approximation foot+30u
-		Sfx.Play( "sounds/log_break.sound", contactPoint,
-			volume: 0.6f + impactScale * 0.4f,
-			pitchMin: 0.55f, pitchMax: 0.75f );
-		int dustCount = 4 + (int)(impactScale * 10f);
-		var dustTint = new Color( 0.55f, 0.42f, 0.30f, 1f ); // brown dust
-		ChipBurst.SpawnLeaves( Scene, contactPoint, Vector3.Up, dustCount, dustTint );
+		float softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed)
+			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
+		var contactPoint = EstimateImpactPoint( null );
 
 		// Valheim ImpactEffect.OnCollisionEnter formula verbatim :
 		//   damageFactor = LerpStep(minVelocity, maxVelocity, magnitude)
 		//   damage = m_damages Ã— damageFactor
 		float damageFactor = ((impactSpeed - Tunables.ImpactMinSpeed)
 			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
-		int damage = Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * damageFactor ) );
+		int damage = impactSpeed >= Tunables.ImpactMinSpeed
+			? Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * damageFactor ) )
+			: 0;
 
 		// Cascade â€” damage l'autre tronc s'il est un Tree (Valheim TreeLog
 		// crash dans TreeBase voisin = damage standing tree HP, peut le fell).
@@ -662,23 +845,153 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			neighbor = otherGo.Components.Get<Tree>()
 				?? otherGo.Components.Get<Tree>( FindMode.InAncestors );
 		}
+		var cascadeVelocity = _preCollisionVelocity;
+		if ( neighbor.IsValid() )
+		{
+			cascadeVelocity -= neighbor._preCollisionVelocity;
+			float relativeImpactSpeed = cascadeVelocity.Length;
+			impactSpeed = relativeImpactSpeed;
+			impactScale = ((impactSpeed - Tunables.ImpactMinSpeed)
+				/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
+			softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed)
+				/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
+			contactPoint = EstimateImpactPoint( neighbor );
+			EmitLogImpactFeedback( contactPoint, softScale, impactScale );
+			damage = impactSpeed >= Tunables.ImpactMinSpeed
+				? Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * impactScale ) )
+				: 0;
+		}
+		else
+		{
+			EmitLogImpactFeedback( contactPoint, softScale, impactScale );
+		}
 		if ( neighbor.IsValid() && neighbor != this )
 		{
-			var dirOther = _preCollisionVelocity.WithZ( 0f );
+			var dirOther = cascadeVelocity.WithZ( 0f );
 			if ( dirOther.LengthSquared < 0.01f )
 				dirOther = (neighbor.WorldPosition - WorldPosition).WithZ( 0f );
 			if ( dirOther.LengthSquared > 0.01f )
-				neighbor.ApplyImpactDamage( damage, dirOther.Normal );
+			{
+				if ( damage > 0 ) neighbor.ApplyImpactDamage( damage, dirOther.Normal );
+				else neighbor.ReactToSoftImpact( dirOther.Normal, contactPoint );
+			}
 		}
 
 		// Self damage (m_damageToSelf=true Valheim TreeLog) : crash dur peut
 		// auto-split le tronc qui tombe sans chop manuel.
-		if ( Tunables.ImpactDamageSelf )
+		if ( Tunables.ImpactDamageSelf && damage > 0 )
 		{
-			var selfDir = _preCollisionVelocity.WithZ( 0f );
-			if ( selfDir.LengthSquared < 0.01f ) selfDir = Vector3.Forward;
-			ApplyImpactDamage( damage, selfDir.Normal );
+			float splitSpeed = Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)Kind];
+			if ( _landed || impactSpeed >= splitSpeed || impactScale >= Tunables.ImpactViolentScale )
+			{
+				var selfDir = _preCollisionVelocity.WithZ( 0f );
+				if ( selfDir.LengthSquared < 0.01f ) selfDir = Vector3.Forward;
+				ApplyImpactDamage( damage, selfDir.Normal );
+			}
 		}
+	}
+
+	private Vector3 EstimateImpactPoint( Tree neighbor )
+	{
+		if ( neighbor.IsValid() ) return (LogCenter + neighbor.LogCenter) * 0.5f;
+		return LogCenter + Vector3.Up * 8f;
+	}
+
+	private void EmitLogImpactFeedback( Vector3 contactPoint, float softScale, float damageScale )
+	{
+		bool violent = damageScale >= Tunables.ImpactViolentScale;
+		bool hard = damageScale >= Tunables.ImpactHardScale;
+		float vol = hard ? 0.70f + damageScale * 0.45f : 0.32f + softScale * 0.35f;
+		Sfx.Play( hard ? "sounds/log_break.sound" : "sounds/axe_hit_wood.sound", contactPoint,
+			volume: vol,
+			pitchMin: violent ? 0.50f : (hard ? 0.62f : 0.72f),
+			pitchMax: violent ? 0.68f : (hard ? 0.84f : 0.95f) );
+		int dustCount = hard ? 8 + (int)(damageScale * 18f) : 2 + (int)(softScale * 5f);
+		var dustTint = hard
+			? new Color( 0.62f, 0.48f, 0.35f, 1f )
+			: new Color( 0.48f, 0.42f, 0.34f, 1f );
+		ChipBurst.SpawnLeaves( Scene, contactPoint, Vector3.Up, dustCount, dustTint );
+		if ( violent )
+		{
+			var sideDir = _preCollisionVelocity.WithZ( 0f );
+			if ( sideDir.LengthSquared > 0.01f )
+				ChipBurst.SpawnLeaves( Scene, contactPoint, sideDir.Normal, dustCount / 2, _trunkTint );
+		}
+	}
+
+	private void ReactToSoftImpact( Vector3 dir, Vector3 contactPoint )
+	{
+		if ( _logSplit ) return;
+		if ( !_chopped )
+		{
+			KickWobble( dir );
+			return;
+		}
+		if ( _landed ) ApplyLandedKick( dir, contactPoint );
+	}
+
+	private void SweepNearbyCascadeTargets()
+	{
+		if ( (float)_timeSinceLastCascadeSweep < Tunables.CascadeSweepInterval ) return;
+		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
+		if ( !Body.IsValid() ) return;
+
+		float motionSpeed = Body.Velocity.Length + Body.AngularVelocity.Length * MathF.Max( _trunkLen, Tunables.TreeHeight ) * 0.20f;
+		if ( motionSpeed < Tunables.CascadeSweepMinSpeed ) return;
+
+		_timeSinceLastCascadeSweep = 0f;
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		var a = WorldPosition + axis * (_trunkLen * 0.10f);
+		var b = WorldPosition + axis * (_trunkLen * 0.92f);
+		Tree best = null;
+		Vector3 bestPoint = default;
+		float bestDist = float.MaxValue;
+
+		foreach ( var other in Scene.GetAllComponents<Tree>() )
+		{
+			if ( !other.IsValid() || other == this || other._logSplit ) continue;
+			if ( !other.IsStanding && !other.IsFallenLog ) continue;
+			var probe = other.IsStanding ? other.WorldPosition + Vector3.Up * (other._trunkLen * 0.35f) : other.LogCenter;
+			var p = ClosestPointOnSegment( a, b, probe );
+			float dist = (probe - p).Length;
+			float reach = (_trunkWidth + other._trunkWidth) * 0.55f + Tunables.CascadeSweepRadius;
+			if ( dist > reach || dist >= bestDist ) continue;
+			best = other;
+			bestPoint = p;
+			bestDist = dist;
+		}
+
+		if ( !best.IsValid() ) return;
+
+		_timeSinceLastImpactDamage = 0f;
+		float impactScale = ((motionSpeed - Tunables.ImpactMinSpeed)
+			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
+		float softScale = ((motionSpeed - Tunables.ImpactSoftMinSpeed)
+			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
+		var contactPoint = (bestPoint + best.LogCenter) * 0.5f;
+		EmitLogImpactFeedback( contactPoint, softScale, impactScale );
+
+		var dir = Body.Velocity.WithZ( 0f );
+		if ( dir.LengthSquared < 0.01f ) dir = (best.WorldPosition - WorldPosition).WithZ( 0f );
+		if ( dir.LengthSquared < 0.01f ) dir = _fellDir;
+		if ( dir.LengthSquared < 0.01f ) dir = Vector3.Forward;
+
+		int damage = motionSpeed >= Tunables.ImpactMinSpeed
+			? Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * impactScale * Tunables.CascadeSweepDamageMul ) )
+			: 0;
+		if ( damage > 0 ) best.ApplyImpactDamage( damage, dir.Normal );
+		else best.ReactToSoftImpact( dir.Normal, contactPoint );
+	}
+
+	private static Vector3 ClosestPointOnSegment( Vector3 a, Vector3 b, Vector3 p )
+	{
+		var ab = b - a;
+		float lenSq = ab.LengthSquared;
+		if ( lenSq < 0.001f ) return a;
+		float t = (p - a).Dot( ab ) / lenSq;
+		return a + ab * t.Clamp( 0f, 1f );
 	}
 
 
@@ -740,6 +1053,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		var torqueAxis = Vector3.Up.Cross( _fellDir );
 		Body.ApplyTorque( torqueAxis * Tunables.FellTorque * frac * Time.Delta * massScale );
 		var upDot = WorldRotation.Up.Dot( Vector3.Up );
+		SweepNearbyCascadeTargets();
 
 		// Whoosh SFX une fois quand le tree passe past ~45Â° tilt. Match Valheim
 		// trees qui ont un whoosh audible en plein air pendant la chute. Pitch
@@ -748,7 +1062,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		{
 			_whooshFired = true;
 			float pitchMul = Tunables.TreeKindChopPitchMul[(int)Kind];
-			Sfx.Play( "sounds/swing.sound", WorldPosition + Vector3.Up * 100f,
+			Sfx.Play( "sounds/tree_fall_whoosh.sound", WorldPosition + Vector3.Up * 100f,
 				volume: 0.55f, pitchMin: 0.55f * pitchMul, pitchMax: 0.75f * pitchMul );
 		}
 
@@ -781,10 +1095,18 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			}
 		}
 
-		// Land naturally once tilted past the threshold, OR force-land if the
-		// tree is stuck against a neighbour (>5s falling without reaching the
-		// threshold). Without the timeout, a stuck trunk never pays out wood.
-		if ( upDot < Tunables.TreeFallenUpDotMax || _slowTipElapsed > 5f )
+		bool restingOnSomething =
+			_slowTipElapsed > Tunables.TreeRestingLandingDelay
+			&& upDot < Tunables.TreeRestingTiltUpDotMax
+			&& Body.Velocity.Length < Tunables.TreeRestingLandingSpeed
+			&& Body.AngularVelocity.Length < Tunables.TreeRestingLandingAngularSpeed;
+
+		// Land naturally once tilted past the threshold, or once it has clearly
+		// come to rest against ground/terrain/another trunk. Valheim's TreeLog
+		// is already a physical log after spawn; our single-object transition
+		// needs this contact-rest escape hatch so large trunks don't hang in a
+		// "falling but stopped" limbo until timeout.
+		if ( upDot < Tunables.TreeFallenUpDotMax || restingOnSomething || _slowTipElapsed > 5f )
 			BecomeLandedLog();
 	}
 
@@ -799,21 +1121,48 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			Body.AngularDamping = Tunables.TreeAngularDampLanded;
 			Body.LinearDamping = Tunables.TreeLinearDampLanded;
 		}
-		float speedFrac = (landingSpeed / 400f).Clamp( 0.4f, 1.3f );
-		Sfx.Play( "sounds/log_break.sound", WorldPosition,
-			volume: 0.7f * speedFrac,
-			pitchMin: 0.78f * speedFrac, pitchMax: 1.05f * speedFrac );
-
-		var dustTint = new Color( 0.62f, 0.48f, 0.35f, 1f );
-		int dustCount = (int)(10 + speedFrac * 8f);
-		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 8f, Vector3.Up,       dustCount, dustTint );
-		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Right,    dustCount / 2, dustTint );
-		ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Left,     dustCount / 2, dustTint );
+		float impactScale = ((landingSpeed - Tunables.ImpactMinSpeed)
+			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
+		float softScale = ((landingSpeed - Tunables.ImpactSoftMinSpeed)
+			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
+		EmitLogImpactFeedback( LogCenter, softScale, impactScale );
+		if ( impactScale >= Tunables.ImpactHardScale )
+		{
+			var dustTint = new Color( 0.62f, 0.48f, 0.35f, 1f );
+			int dustCount = (int)(10 + impactScale * 16f);
+			ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 8f, Vector3.Up,       dustCount, dustTint );
+			ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Right,    dustCount / 2, dustTint );
+			ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Left,     dustCount / 2, dustTint );
+			SnapTrunkOnImpact( impactScale );
+		}
 
 		// Phase F : DON'T credit wood here anymore. Reset ChopsRemaining
 		// to the kind's log HP â€” the player has to actively chop the landed
 		// log to split it into WoodLogs (which then drop pickup items).
 		ChopsRemaining = Tunables.LogChopHP[(int)Kind];
+	}
+
+	private void SnapTrunkOnImpact( float speedFrac )
+	{
+		if ( _landingSnapApplied ) return;
+		_landingSnapApplied = true;
+
+		float snap = MathX.Lerp( 5f, 14f, (speedFrac - 0.4f).Clamp( 0f, 0.9f ) / 0.9f );
+		var side = Vector3.Cross( Vector3.Up, _fellDir.WithZ( 0f ) );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+
+		if ( _trunkUpperMr.IsValid() )
+		{
+			var upper = _trunkUpperMr.GameObject;
+			upper.LocalRotation *= Rotation.FromAxis( side, snap );
+			upper.LocalPosition += side * Game.Random.Float( 2f, 6f );
+		}
+		if ( _primaryCanopy.IsValid() )
+		{
+			_primaryCanopy.LocalRotation *= Rotation.FromAxis( side, snap * 0.65f );
+			_primaryCanopy.LocalPosition += side * Game.Random.Float( 4f, 10f );
+		}
 	}
 
 	// Valheim TreeLog.Destroy : Ã  HP=0 du landed log, drop directement les
@@ -852,8 +1201,13 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 		float trunkH = _trunkLen > 0f ? _trunkLen : Tunables.TreeHeight;
 		var axis = WorldRotation.Up;
-		var trunkCenter = WorldPosition + axis * (trunkH * 0.5f);
-		float spread = trunkH * 0.4f;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		var trunkCenter = LogCenter;
+		var side = Vector3.Cross( Vector3.Up, axis );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+		float spread = trunkH * Tunables.LogDropAxisSpreadFrac;
 
 		// Spawn items along the trunk axis avec offset random (TreeLog.Destroy
 		// pattern : position = transform.position + transform.up Ã— Random(-d, d)
@@ -866,10 +1220,18 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		var mix = Tunables.TreeKindWoodTypeMix[kindIdx];
 		for ( int i = 0; i < totalItems; i++ )
 		{
-			float off = Game.Random.Float( -spread, spread );
-			var pos = trunkCenter + axis * off + Vector3.Up * (8f + i * 4f);
+			float t = totalItems <= 1 ? 0.5f : (i + Game.Random.Float( 0.18f, 0.82f )) / totalItems;
+			float off = MathX.Lerp( -spread, spread, t );
+			float sideSign = (i & 1) == 0 ? 1f : -1f;
+			float sideOff = sideSign * Game.Random.Float( MathF.Max( _trunkWidth * 0.42f, Tunables.LogDropSideSpread * 0.35f ), MathF.Max( _trunkWidth * 0.85f, Tunables.LogDropSideSpread ) );
+			var burstDir = (side * sideSign * 1.15f + axis * MathF.Sign( off == 0f ? sideSign : off ) * 0.42f + Vector3.Up * 0.25f).Normal;
+			var pos = trunkCenter + axis * off + side * sideOff + burstDir * Game.Random.Float( 6f, 16f ) + Vector3.Up * Game.Random.Float( 8f, 20f );
 			WoodType type = PickWoodType( mix );
-			WoodItem.SpawnAt( Scene, pos, itemScaleMul, type );
+			WoodItem.SpawnAt( Scene, pos, itemScaleMul, type, burstDir );
+			if ( i < 8 )
+			{
+				ChipBurst.Spawn( Scene, pos, -burstDir, 3, _trunkTint );
+			}
 		}
 
 		Sfx.Play( "sounds/log_break.sound", WorldPosition,
@@ -909,4 +1271,4 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	}
 }
 
-// IChoppable + ToolKind live in BeaverController.cs.
+// IChoppable + ToolKind live in AxeController.cs.

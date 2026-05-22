@@ -1,6 +1,6 @@
 namespace TreeChopping;
 
-// Deterministic visual capture scenario — drives the beaver through a clean
+// Deterministic visual capture scenario — drives the player through a clean
 // "idle → swing → tree fall → wood banner" sequence so an orchestrator
 // (Claude session via the Sbox-Claude bridge) can grab 12-15 screenshots at
 // fixed intervals and judge swing *feel* frame-by-frame.
@@ -40,6 +40,8 @@ public sealed class FilmStrip : Component
 	[Property, ReadOnly] public float Elapsed { get; set; }
 	[Property, ReadOnly] public int WoodAtFinish { get; set; }
 	[Property, ReadOnly] public int SwingsFired { get; set; }
+	[Property, ReadOnly] public int HitsConfirmed { get; set; }
+	[Property, ReadOnly] public int MissedSwings { get; set; }
 	// ResetState wipes Wood/tiers so the captured swing reads as "tier-0 starter
 	// at a sapling" — the cleanest first impression. Save() is gated on
 	// IsActiveRequest so this doesn't touch the user's persisted progress.
@@ -52,11 +54,13 @@ public sealed class FilmStrip : Component
 	// Review capture should be repeatable and readable: by default each run
 	// spawns a fresh target instead of reusing whatever crowded tree is nearest.
 	[Property] public bool SpawnFreshTarget { get; set; } = true;
+	[Property] public bool ApproachPreview { get; set; } = true;
+	[Property] public bool ForceTooHard { get; set; }
 	// Audio audit hook : quand true, chaque Sfx.Play écrit dans FileSystem.Data/audio_log.txt.
 	// Permet d'examiner Bash-side les events audio firés pendant ce cycle.
 	[Property] public bool AudioLog { get; set; }
 
-	private BeaverController _beaver;
+	private AxeController _axe;
 	private GameState _state;
 	private Tree _target;
 	private Vector3 _targetDir = Vector3.Forward;
@@ -65,6 +69,11 @@ public sealed class FilmStrip : Component
 	private TimeSince _totalTime;
 	private TimeSince _readyStart = 999f;
 	private TimeSince _lastReSwing = 999f;
+	private TimeSince _lastTelemetry = 999f;
+	private TimeSince _timeSinceSwingRequest = 999f;
+	private int _hpAtLastSwing;
+	private bool _awaitingHitConfirm;
+	private bool _approachParkedClose;
 	private bool _wasActive;
 
 	protected override void OnAwake()
@@ -93,6 +102,7 @@ public sealed class FilmStrip : Component
 			_wasActive = true;
 		}
 		_frame++;
+		EmitTelemetry();
 
 		switch ( Phase )
 		{
@@ -114,11 +124,18 @@ public sealed class FilmStrip : Component
 		Elapsed = 0f;
 		WoodAtFinish = 0;
 		SwingsFired = 0;
+		HitsConfirmed = 0;
+		MissedSwings = 0;
 		_frame = 0;
 		_phaseTime = 0f;
 		_totalTime = 0f;
 		_readyStart = 999f;
 		_lastReSwing = 999f;
+		_lastTelemetry = 999f;
+		_timeSinceSwingRequest = 999f;
+		_hpAtLastSwing = 0;
+		_awaitingHitConfirm = false;
+		_approachParkedClose = false;
 		_target = null;
 		_targetDir = Vector3.Forward;
 		Sfx.DebugLog = false;
@@ -133,13 +150,13 @@ public sealed class FilmStrip : Component
 
 	private void TickInit()
 	{
-		// Wait a few ticks so SceneStarter has time to spawn beaver + forest.
+		// Wait a few ticks so SceneStarter has time to spawn player + forest.
 		if ( _frame < 10 ) return;
-		_beaver = Scene.GetAllComponents<BeaverController>().FirstOrDefault();
+		_axe = Scene.GetAllComponents<AxeController>().FirstOrDefault();
 		_state = GameState.Get( Scene );
-		if ( !_beaver.IsValid() || !_state.IsValid() )
+		if ( !_axe.IsValid() || !_state.IsValid() )
 		{
-			Log.Error( $"[TC_FILM] missing entities beaver={_beaver.IsValid()} state={_state.IsValid()}" );
+			Log.Error( $"[TC_FILM] missing entities player={_axe.IsValid()} state={_state.IsValid()}" );
 			Phase = FilmPhase.Done;
 			return;
 		}
@@ -155,21 +172,21 @@ public sealed class FilmStrip : Component
 	{
 		// Pick le Tree le plus proche matching TargetKind (Property runtime-settable
 		// pour multi-scénario). Fallback : si aucun match, on spawn-en un fresh à
-		// proximité du beaver pour garantir la capture (utile pour Veteran/Brittle
+		// proximité du player pour garantir la capture (utile pour Veteran/Brittle
 		// qui sont rares près du spawn).
 		_target = null;
 		if ( !SpawnFreshTarget )
 		{
 			_target = Scene.GetAllComponents<Tree>()
 				.Where( t => t.IsValid() && t.IsStanding && t.Kind == TargetKind )
-				.OrderBy( t => _beaver.WorldPosition.Distance( t.WorldPosition ) )
+				.OrderBy( t => _axe.WorldPosition.Distance( t.WorldPosition ) )
 				.FirstOrDefault();
 		}
 		if ( !_target.IsValid() )
 		{
-			// Spawn-on-demand : pose un tree du TargetKind à 200u devant le beaver.
+			// Spawn-on-demand : pose un tree du TargetKind à 200u devant le player.
 			var starter = Scene.GetAllComponents<SceneStarter>().FirstOrDefault();
-			var basePos = starter.IsValid() ? starter.ResolvedBeaverSpawn : _beaver.WorldPosition;
+			var basePos = starter.IsValid() ? starter.ResolvedPlayerSpawn : _axe.WorldPosition;
 			var spawnPos = basePos + new Vector3( 0f, -1600f, 0f );
 			if ( TryGetGroundZ( spawnPos.x, spawnPos.y, out float groundZ ) )
 			{
@@ -183,7 +200,7 @@ public sealed class FilmStrip : Component
 		// gate bloque les chops et le fell n'arrive jamais). Skip si ResetState=false
 		// ou si on a déjà le tier suffisant.
 		int neededTier = Tunables.TreeKindMinAxeTier[(int)_target.Kind];
-		if ( _state.AxeTier < neededTier )
+		if ( !ForceTooHard && _state.AxeTier < neededTier )
 		{
 			int wood = 0, fw = 0, cw = 0;
 			for ( int i = _state.AxeTier + 1; i <= neededTier; i++ )
@@ -203,13 +220,23 @@ public sealed class FilmStrip : Component
 			Phase = FilmPhase.Done;
 			return;
 		}
-		var dir = (_target.WorldPosition - _beaver.WorldPosition).WithZ( 0f );
+		var dir = (_target.WorldPosition - _axe.WorldPosition).WithZ( 0f );
 		if ( dir.LengthSquared < 1f ) dir = Vector3.Forward;
 		dir = dir.Normal;
 		_targetDir = dir;
-		var pos = _target.WorldPosition - dir * 80f + Vector3.Up * 40f;
-		float yaw = Rotation.LookAt( dir ).Yaw();
-		_beaver.TeleportTo( pos, yaw );
+		var side = Vector3.Cross( Vector3.Up, dir );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+		float readyDistance = ParkDistanceForKind( _target.Kind );
+		if ( ApproachPreview ) readyDistance += 150f;
+		var pos = _target.WorldPosition
+			- dir * readyDistance
+			+ side * ParkSideOffsetForKind( _target.Kind )
+			+ Vector3.Up * 40f;
+		var look = (_target.WorldPosition - pos).WithZ( 0f );
+		if ( look.LengthSquared < 0.001f ) look = dir;
+		float yaw = Rotation.LookAt( look.Normal ).Yaw();
+		_axe.TeleportTo( pos, yaw );
 
 		Log.Info( $"[TC_FILM] SETUP target={_target.WorldPosition} kind={_target.Kind} chops={_target.ChopsRemaining}" );
 		_readyStart = 0f;
@@ -221,10 +248,14 @@ public sealed class FilmStrip : Component
 		// Linger 0.6s on the idle pose so the orchestrator captures a clean
 		// "before" frame at the head of the strip. This is what makes the
 		// first frame recognizable as the baseline.
-		if ( (float)_readyStart < 0.6f ) return;
-		_beaver.DebugRequestSwing = true;
-		SwingsFired = 1;
-		_lastReSwing = 0f;
+		if ( ApproachPreview && !_approachParkedClose && (float)_readyStart > 0.32f )
+		{
+			ParkForStandingTarget( close: false );
+			_approachParkedClose = true;
+			Log.Info( "[TC_FILM] approach preview -> chop distance" );
+		}
+		if ( (float)_readyStart < (ApproachPreview ? 0.85f : 0.6f) ) return;
+		RequestSwingAtTarget();
 		Log.Info( "[TC_FILM] SWING #1 triggered" );
 		Transition( FilmPhase.Swinging );
 	}
@@ -232,6 +263,7 @@ public sealed class FilmStrip : Component
 	private void TickSwinging()
 	{
 		if ( !_target.IsValid() ) { Phase = FilmPhase.Done; return; }
+		ConfirmPendingHit( allowMiss: ForceTooHard );
 
 		if ( _target.IsFalling || !_target.IsStanding )
 		{
@@ -239,23 +271,31 @@ public sealed class FilmStrip : Component
 			return;
 		}
 
+		if ( ForceTooHard && SwingsFired >= 2 && (float)_phaseTime > 2.0f )
+		{
+			Log.Info( $"[TC_FILM] TOOHARD COMPLETE kind={_target.Kind} hp={_target.ChopsRemaining} axeTier={_state.AxeTier}" );
+			Phase = FilmPhase.Done;
+			return;
+		}
+
 		// Multi-chop tree (Normal/Veteran/Brittle) : re-fire swings every 0.75s
 		// (above WindUp+Recovery total) until ChopsRemaining hits 0.
+		if ( _awaitingHitConfirm ) return;
 		if ( (float)_lastReSwing < 0.75f ) return;
+		if ( !_axe.IsSwingIdle ) return;
 		if ( SwingsFired >= 15 )
 		{
 			Log.Warning( "[TC_FILM] gave up after 15 swings — chops left likely > expected" );
 			Phase = FilmPhase.Done;
 			return;
 		}
-		_beaver.DebugRequestSwing = true;
-		SwingsFired++;
-		_lastReSwing = 0f;
+		RequestSwingAtTarget();
 		Log.Info( $"[TC_FILM] SWING #{SwingsFired} (chops left={_target.ChopsRemaining})" );
 	}
 
 	private void TickFalling()
 	{
+		ConfirmPendingHit( allowMiss: false );
 		if ( !_target.IsValid() || (!_target.IsStanding && !_target.IsFalling) )
 		{
 			Transition( FilmPhase.Landed );
@@ -284,6 +324,7 @@ public sealed class FilmStrip : Component
 	{
 		if ( !_target.IsValid() )
 		{
+			ConfirmPendingHit( allowMiss: false );
 			Log.Info( "[TC_FILM] trunk split → pickup phase" );
 			_lastReSwing = 0.999f;
 			Transition( FilmPhase.Pickup );
@@ -295,12 +336,50 @@ public sealed class FilmStrip : Component
 			Phase = FilmPhase.Done;
 			return;
 		}
+		ConfirmPendingHit( allowMiss: false );
+		if ( _awaitingHitConfirm ) return;
 		if ( (float)_lastReSwing < 0.75f ) return;
+		if ( !_axe.IsSwingIdle ) return;
 		ParkForLandedTrunk();
-		_beaver.DebugRequestSwing = true;
+		RequestSwingAtTarget();
+		Log.Info( $"[TC_FILM] TRUNK SWING #{SwingsFired} (chops left={_target.ChopsRemaining})" );
+	}
+
+	private void RequestSwingAtTarget()
+	{
+		if ( !_axe.IsValid() || !_target.IsValid() ) return;
+		_hpAtLastSwing = _target.ChopsRemaining;
+		_awaitingHitConfirm = true;
+		_timeSinceSwingRequest = 0f;
+		_axe.DebugRequestSwing = true;
 		SwingsFired++;
 		_lastReSwing = 0f;
-		Log.Info( $"[TC_FILM] TRUNK SWING #{SwingsFired} (chops left={_target.ChopsRemaining})" );
+	}
+
+	private void ConfirmPendingHit( bool allowMiss )
+	{
+		if ( !_awaitingHitConfirm ) return;
+		if ( !_axe.IsSwingIdle || (float)_timeSinceSwingRequest < 0.2f ) return;
+
+		if ( !_target.IsValid() || _target.ChopsRemaining < _hpAtLastSwing )
+		{
+			HitsConfirmed++;
+			_awaitingHitConfirm = false;
+			return;
+		}
+
+		if ( allowMiss )
+		{
+			_awaitingHitConfirm = false;
+			return;
+		}
+
+		MissedSwings++;
+		Log.Warning( $"[TC_FILM] swing miss kind={_target.Kind} hp={_target.ChopsRemaining} phase={Phase}; reparking closer" );
+		if ( _target.IsFallenLog ) ParkForLandedTrunk();
+		else ParkForStandingTarget( close: true );
+		_awaitingHitConfirm = false;
+		_lastReSwing = 0.999f;
 	}
 
 	private void TickPickup()
@@ -319,15 +398,33 @@ public sealed class FilmStrip : Component
 			Phase = FilmPhase.Done;
 			return;
 		}
-		// Walk-into : teleport beaver next to nearest item, let the proximity
+		// Walk-into : teleport player next to nearest item, let the proximity
 		// magnet (55u radius) snap it. Repeat each tick on the new nearest
 		// item until none remain.
-		var item = items.OrderBy( i => _beaver.WorldPosition.Distance( i.WorldPosition ) ).First();
-		float d = _beaver.WorldPosition.Distance( item.WorldPosition );
+		var item = items.OrderBy( i => _axe.WorldPosition.Distance( i.WorldPosition ) ).First();
+		float d = _axe.WorldPosition.Distance( item.WorldPosition );
 		if ( d > 40f )
 		{
-			_beaver.TeleportTo( item.WorldPosition + Vector3.Up * 30f, 0f );
+			_axe.TeleportTo( item.WorldPosition + Vector3.Up * 30f, 0f );
 		}
+	}
+
+	private void EmitTelemetry()
+	{
+		if ( (float)_lastTelemetry < 0.1f ) return;
+		_lastTelemetry = 0f;
+
+		if ( !_target.IsValid() )
+		{
+			Log.Info( $"[TC_FEEL] t={(float)_totalTime:F2} phase={Phase} target=none swings={SwingsFired} hits={HitsConfirmed} misses={MissedSwings}" );
+			return;
+		}
+
+		float upDot = _target.WorldRotation.Up.Dot( Vector3.Up );
+		float tiltDeg = MathF.Acos( upDot.Clamp( -1f, 1f ) ) * 180f / MathF.PI;
+		float speed = _target.Body.IsValid() ? _target.Body.Velocity.Length : 0f;
+		float ang = _target.Body.IsValid() ? _target.Body.AngularVelocity.Length : 0f;
+		Log.Info( $"[TC_FEEL] t={(float)_totalTime:F2} phase={Phase} kind={_target.Kind} hp={_target.ChopsRemaining} tilt={tiltDeg:F1} speed={speed:F1} ang={ang:F2} swings={SwingsFired} hits={HitsConfirmed} misses={MissedSwings}" );
 	}
 
 	private bool TryGetGroundZ( float x, float y, out float groundZ )
@@ -347,14 +444,59 @@ public sealed class FilmStrip : Component
 
 	private void ParkForLandedTrunk()
 	{
-		if ( !_beaver.IsValid() || !_target.IsValid() ) return;
+		if ( !_axe.IsValid() || !_target.IsValid() ) return;
 
 		var dir = _targetDir.WithZ( 0f );
 		if ( dir.LengthSquared < 0.001f ) dir = Vector3.Forward;
 		dir = dir.Normal;
-		var pos = _target.WorldPosition + dir * 80f + Vector3.Up * 40f;
-		float yaw = Rotation.LookAt( -dir ).Yaw();
-		_beaver.TeleportTo( pos, yaw );
+		var side = Vector3.Cross( Vector3.Up, dir );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+		var pos = _target.WorldPosition + side * MathF.Max( 110f, ParkDistanceForKind( _target.Kind ) * 0.75f ) + Vector3.Up * 45f;
+		var look = (_target.WorldPosition - pos).WithZ( 0f );
+		if ( look.LengthSquared < 0.001f ) look = -side;
+		float yaw = Rotation.LookAt( look.Normal ).Yaw();
+		_axe.TeleportTo( pos, yaw );
+	}
+
+	private void ParkForStandingTarget( bool close )
+	{
+		if ( !_axe.IsValid() || !_target.IsValid() ) return;
+
+		var dir = _targetDir.WithZ( 0f );
+		if ( dir.LengthSquared < 0.001f ) dir = Vector3.Forward;
+		dir = dir.Normal;
+		var side = Vector3.Cross( Vector3.Up, dir );
+		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
+		side = side.Normal;
+		float distance = close ? ParkDistanceForKind( _target.Kind ) * 0.82f : ParkDistanceForKind( _target.Kind );
+		var pos = _target.WorldPosition
+			- dir * distance
+			+ side * ParkSideOffsetForKind( _target.Kind ) * 0.5f
+			+ Vector3.Up * 40f;
+		var look = (_target.WorldPosition - pos).WithZ( 0f );
+		if ( look.LengthSquared < 0.001f ) look = dir;
+		_axe.TeleportTo( pos, Rotation.LookAt( look.Normal ).Yaw() );
+	}
+
+	private static float ParkDistanceForKind( TreeKind kind )
+	{
+		return kind switch
+		{
+			TreeKind.Sapling => 85f,
+			TreeKind.Veteran => 155f,
+			_ => 120f
+		};
+	}
+
+	private static float ParkSideOffsetForKind( TreeKind kind )
+	{
+		return kind switch
+		{
+			TreeKind.Sapling => 20f,
+			TreeKind.Veteran => 35f,
+			_ => 30f
+		};
 	}
 
 	private void ClearCaptureLane( Vector3 center, float radius )
