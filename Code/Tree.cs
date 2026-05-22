@@ -378,21 +378,27 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// param sÃ©parÃ©. Pattern Valheim 1:1.
 	public void Damage( HitData hit )
 	{
-		Chop( hit.Direction, hit.ChopPower, hit.HitPoint );
+		Chop( hit.Direction, hit.ChopPower, hit.HitPoint, hit.ToolTier );
 	}
 
 	public void Chop( Vector3 direction, int chopPower, Vector3 hitPoint )
 	{
+		Chop( direction, chopPower, hitPoint, null );
+	}
+
+	private void Chop( Vector3 direction, int chopPower, Vector3 hitPoint, int? toolTierOverride )
+	{
 		// Mid-fall : no chops accepted (tree is in physics flight). Split-
 		// destroyed trees also short-circuit (handled by GameObject destroy).
 		if ( IsFalling || _logSplit ) return;
+		if ( _landed && (float)_timeSinceLanded < Tunables.WoodLogChopGrace ) return;
 
 		// Axe-tier gate (Phase E) only on the standing tree â€” once it's a
 		// FallenLog the kind tier doesn't matter (any axe can chop a log).
 		if ( !_landed )
 		{
 			var gs = GameState.Get( Scene );
-			int axeTier = gs.IsValid() ? gs.AxeTier : 0;
+			int axeTier = toolTierOverride ?? (gs.IsValid() ? gs.AxeTier : 0);
 			int neededTier = Tunables.TreeKindMinAxeTier[(int)Kind];
 			if ( axeTier < neededTier )
 			{

@@ -39,7 +39,7 @@ function Get-ExpectedPhases {
     }
 
     @( 'Init', 'TestSpawnDistribution', 'Approach', 'Swing', 'Verify',
-        'TestStump', 'TestSplit', 'TestBonusDrop', 'TestWoodPickup', 'TestPhysicsAutoSplit', 'TestStumpRespawn', 'TestCascadeDamage', 'TestCascadeCollision',
+        'TestStump', 'TestSplit', 'TestLandedLogChopGrace', 'TestBonusDrop', 'TestWoodPickup', 'TestPhysicsAutoSplit', 'TestStumpRespawn', 'TestCascadeDamage', 'TestCascadeCollision',
         'TestAxeTierGate', 'TestChopPowerScaling', 'TestImpactBelowMin', 'TestImpactZeroNoOp',
         'TestBackpackFull', 'TestDepositFlush', 'TestDepositStationEntry', 'TestPrestigeFormula', 'TestFallingImpactSplit', 'TestComboFinalDamage', 'TestMultiWoodTypes',
         'TestStatCounters', 'TestWoodCuttingLevel', 'TestPickupStackMerge', 'TestEnvWindSanity', 'TestStrictTooHard', 'TestTunablesValheimSanity',

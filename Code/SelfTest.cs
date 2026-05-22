@@ -12,7 +12,7 @@ public sealed class SelfTest : Component
 	enum Phase
 	{
 		Init, TestSpawnDistribution, Approach, Swing, Verify,
-		TestStump, TestSplit, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
+		TestStump, TestSplit, TestLandedLogChopGrace, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestDepositFlush, TestDepositStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
@@ -36,6 +36,11 @@ public sealed class SelfTest : Component
 	// État pour TestBonusDrop : référence sur le Veteran spawné, count avant.
 	private Tree _bonusDropVeteran;
 	private int _woodItemsBeforeBonusDrop;
+	private Tree _landedGraceTree;
+	private bool _landedGraceSpawned;
+	private bool _landedGraceEarlyHitChecked;
+	private int _landedGraceHpAfterEarlyHit;
+	private TimeSince _landedGraceSinceLanded;
 	// État pour TestWoodPickup
 	private int _backpackBeforePickup;
 	private TimeSince _pickupSpawnTime;
@@ -80,6 +85,7 @@ public sealed class SelfTest : Component
 			case Phase.Verify: TickVerify(); break;
 			case Phase.TestStump: TickTestStump(); break;
 			case Phase.TestSplit: TickTestSplit(); break;
+			case Phase.TestLandedLogChopGrace: TickTestLandedLogChopGrace(); break;
 			case Phase.TestBonusDrop: TickTestBonusDrop(); break;
 			case Phase.TestWoodPickup: TickTestWoodPickup(); break;
 			case Phase.TestPhysicsAutoSplit: TickTestPhysicsAutoSplit(); break;
@@ -387,6 +393,62 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] SPLIT PASS  items={items.Count} swings={_swingsFired}  (sapling.LandedDropCount={expected})" );
+		Transition( Phase.TestLandedLogChopGrace );
+	}
+
+	private void TickTestLandedLogChopGrace()
+	{
+		if ( !_landedGraceSpawned )
+		{
+			_landedGraceSpawned = true;
+			_landedGraceEarlyHitChecked = false;
+			var pos = _targetTreePos + new Vector3( -520f, 420f, 0f );
+			if ( TryGetGroundZ( pos.x, pos.y, out var gz ) ) pos = pos.WithZ( gz );
+			_landedGraceTree = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Normal );
+			_landedGraceTree.StartFell( Vector3.Forward );
+			return;
+		}
+
+		if ( !_landedGraceTree.IsValid() )
+		{
+			Log.Error( "[TC_TEST] FAIL TestLandedLogChopGrace: tree destroyed before grace check" );
+			Finish();
+			return;
+		}
+		if ( !_landedGraceTree.IsFallenLog )
+		{
+			if ( (float)_phaseTime > 5f )
+			{
+				Log.Error( "[TC_TEST] FAIL TestLandedLogChopGrace: tree never became landed log" );
+				Finish();
+			}
+			return;
+		}
+
+		if ( !_landedGraceEarlyHitChecked )
+		{
+			_landedGraceEarlyHitChecked = true;
+			_landedGraceSinceLanded = 0f;
+			int hpBefore = _landedGraceTree.ChopsRemaining;
+			_landedGraceTree.Chop( Vector3.Forward, 1, _landedGraceTree.LogCenter );
+			_landedGraceHpAfterEarlyHit = _landedGraceTree.ChopsRemaining;
+			if ( _landedGraceHpAfterEarlyHit != hpBefore )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestLandedLogChopGrace: early hit damaged log HP {hpBefore}->{_landedGraceHpAfterEarlyHit}" );
+				Finish();
+			}
+			return;
+		}
+
+		if ( (float)_landedGraceSinceLanded < Tunables.WoodLogChopGrace + 0.08f ) return;
+		_landedGraceTree.Chop( Vector3.Forward, 1, _landedGraceTree.LogCenter );
+		if ( _landedGraceTree.IsValid() && _landedGraceTree.ChopsRemaining >= _landedGraceHpAfterEarlyHit )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestLandedLogChopGrace: post-grace hit did not damage log HP={_landedGraceTree.ChopsRemaining}" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] LANDED_LOG_GRACE PASS  early hit ignored for {Tunables.WoodLogChopGrace:0.00}s, post-grace hit applied" );
 		Transition( Phase.TestBonusDrop );
 	}
 
@@ -1703,6 +1765,25 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] HITDATA PASS  IChoppable.Damage(HitData) propagated chopPower=1, HP {hpBefore}→{sap.ChopsRemaining}" );
+		var normalPos = pos + new Vector3( 0f, 320f, 0f );
+		if ( TryGetGroundZ( normalPos.x, normalPos.y, out var gz2 ) ) normalPos = normalPos.WithZ( gz2 );
+		var normal = Tree.SpawnAt( Scene, normalPos, 1f, TreeKind.Normal );
+		int normalHp = normal.ChopsRemaining;
+		normal.Damage( HitData.Make( Vector3.Forward, chopPower: 1, hitPoint: normalPos, toolTier: 0 ) );
+		if ( normal.ChopsRemaining != normalHp )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestHitDataDamage: ToolTier 0 damaged Normal HP {normalHp}->{normal.ChopsRemaining}" );
+			Finish();
+			return;
+		}
+		normal.Damage( HitData.Make( Vector3.Forward, chopPower: 1, hitPoint: normalPos, toolTier: 1 ) );
+		if ( normal.ChopsRemaining != normalHp - 1 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestHitDataDamage: ToolTier 1 did not damage Normal HP {normalHp}->{normal.ChopsRemaining}" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] HITDATA_TIER PASS  Normal ToolTier 0 bounced, ToolTier 1 damaged HP {normalHp}->{normal.ChopsRemaining}" );
 		Transition( Phase.TestGameStateSanitize );
 	}
 
