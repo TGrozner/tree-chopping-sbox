@@ -4,7 +4,7 @@
 
 ---
 
-Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). Loop : chop arbres → wood → shop sur le sommet de la montagne (E pour upgrade axe T0→T3) → re-chop plus gros. Continuous play, pas de runs. Pivot fait 2026-05-20. Repo GitHub : `https://github.com/TGrozner/tree-chopping-sbox`.
+Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). Loop : chop arbres → wood → shop sur le sommet de la montagne → upgrade axe T0→T6 + stats → re-chop plus gros. Continuous play, pas de runs. Pivot fait 2026-05-20. Repo GitHub : `https://github.com/TGrozner/tree-chopping-sbox`.
 
 **Suis le protocole ci-dessous à la lettre — chaque ligne a coûté du debug.**
 

@@ -270,11 +270,11 @@ public sealed class AxeController : Component
 		// chop dans le vide on a quand même des wood chips"). Chips only fire
 		// on actual impact, via ApplyImpactFeedback.
 		TriggerAttackAnim();
-		// Pitch swing sound varies par chain level pour audio feedback (level 0
-		// "ah", level 1 "uhh", level 2 "HEH" — hint sonore que le combo monte).
-		float swingPitchMul = 1f + 0.10f * ChainLevel;
+		// Keep the axe whoosh lower than the impact. High-pitched swings read
+		// toy-like; Valheim's axe audio is broad and weighty.
+		float swingPitchMul = 1f + 0.06f * ChainLevel;
 		Sfx.PlayLocal( "sounds/swing.sound",
-			volume: 0.86f, pitchMin: 1.30f * swingPitchMul, pitchMax: 1.56f * swingPitchMul );
+			volume: 0.92f, pitchMin: 1.08f * swingPitchMul, pitchMax: 1.28f * swingPitchMul );
 	}
 
 	private void TickWindUp()
@@ -344,7 +344,7 @@ public sealed class AxeController : Component
 		{
 			_fovOffset += Tunables.SwingFovPunch * 0.25f;
 			Sfx.PlayLocal( "sounds/swing.sound",
-				volume: 0.66f, pitchMin: 1.55f, pitchMax: 1.85f );
+				volume: 0.72f, pitchMin: 1.16f, pitchMax: 1.38f );
 		}
 
 		_phase = SwingPhase.Recovery;
