@@ -95,6 +95,12 @@ public sealed class AutoPlay : Component
 			_step = StepGoShop;
 			return;
 		}
+		if ( gs.IsValid() && gs.BackpackTotal > 0 && AnyUpgradeAffordableAfterSell( gs ) )
+		{
+			CurrentAction = $"cargo funds upgrade {gs.BackpackTotal}/{gs.BackpackCapacity} - heading to shop";
+			_step = StepGoShop;
+			return;
+		}
 		if ( gs.IsValid() && AnyUpgradeAffordable( gs ) )
 		{
 			CurrentAction = $"have {gs.Wood} wood — heading to shop";
@@ -146,6 +152,12 @@ public sealed class AutoPlay : Component
 			CurrentAction = $"tree falling - total {TreesFelled}";
 			return;
 		}
+		if ( !CanChopNow( _target ) )
+		{
+			CurrentAction = $"{_target.Kind} too hard - retargeting";
+			_step = StepPickTarget;
+			return;
+		}
 		if ( (float)_sinceLastSwing < 0.45f ) return;
 		ParkFacing( _target.LogCenter );
 		var hit = _axe.DebugSwing();
@@ -157,6 +169,12 @@ public sealed class AutoPlay : Component
 		}
 		if ( hit is Tree hitTree && hitTree.IsValid() && hitTree != _target )
 		{
+			if ( !CanChopNow( hitTree ) )
+			{
+				CurrentAction = $"{hitTree.Kind} too hard - retargeting";
+				_step = StepPickTarget;
+				return;
+			}
 			_target = hitTree;
 			_targetPos = hitTree.WorldPosition;
 			_countedTargetFell = !hitTree.IsStanding;
@@ -225,6 +243,30 @@ public sealed class AutoPlay : Component
 		return false;
 	}
 
+	private static bool AnyUpgradeAffordableAfterSell( GameState gs )
+	{
+		int wood = gs.Wood + gs.BackpackWood;
+		if ( gs.AxeTier < Tunables.MaxAxeTier )
+		{
+			var recipe = Tunables.AxeTierCostsByType[gs.AxeTier + 1];
+			if ( wood >= recipe[0] && gs.Finewood + gs.BackpackFinewood >= recipe[1] && gs.CoreWood + gs.BackpackCoreWood >= recipe[2] )
+				return true;
+		}
+		if ( gs.SpeedTier < Tunables.MaxStatTier && wood >= Tunables.SpeedCosts[gs.SpeedTier + 1] ) return true;
+		if ( gs.LuckTier  < Tunables.MaxStatTier && wood >= Tunables.LuckCosts[gs.LuckTier + 1] )   return true;
+		if ( gs.PowerTier < Tunables.MaxStatTier && wood >= Tunables.PowerCosts[gs.PowerTier + 1] ) return true;
+		if ( gs.BackpackTier < Tunables.MaxBackpackTier && wood >= Tunables.BackpackCosts[gs.BackpackTier + 1] ) return true;
+		if ( gs.PetTier < Tunables.MaxPetTier && wood >= Tunables.PetCosts[gs.PetTier + 1] ) return true;
+		return false;
+	}
+
+	private bool CanChopNow( Tree tree )
+	{
+		if ( !tree.IsValid() || !tree.IsStanding ) return true;
+		int axeTier = GameState.Get( Scene )?.AxeTier ?? 0;
+		return Tunables.TreeKindMinAxeTier[(int)tree.Kind] <= axeTier;
+	}
+
 	private Tree PickNearestStandingTree()
 	{
 		var playerPos = _axe.WorldPosition;
@@ -237,7 +279,7 @@ public sealed class AutoPlay : Component
 			.OrderBy( t => playerPos.Distance( t.WorldPosition ) )
 			.FirstOrDefault();
 		if ( choppable.IsValid() ) return choppable;
-		return standing.OrderBy( t => playerPos.Distance( t.WorldPosition ) ).FirstOrDefault();
+		return null;
 	}
 
 	private void ParkFacing( Vector3 targetPos )
