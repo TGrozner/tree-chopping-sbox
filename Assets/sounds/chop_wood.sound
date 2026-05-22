@@ -1,11 +1,14 @@
 {
   "UI": false,
-  "Volume": "0.55",
+  "Volume": "0.72",
   "Pitch": "1.0",
-  "Decibels": 72,
+  "Decibels": 76,
   "SelectionMode": "Random",
   "Sounds": [
-    "sounds/chop_wood.vsnd"
+    "sounds/cc0/wood/wood_cracking_01.vsnd",
+    "sounds/cc0/wood/wood_cracking_02.vsnd",
+    "sounds/cc0/wood/wood_cracking_03.vsnd",
+    "sounds/cc0/wood/wood_cracking_04.vsnd"
   ],
   "Occlusion": false,
   "AirAbsorption": true,
