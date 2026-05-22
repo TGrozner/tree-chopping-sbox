@@ -239,7 +239,7 @@ public sealed class AxeController : Component
 		if ( _phaseTime < Tunables.SwingWindUpDuration ) return;
 
 		var origin = WorldPosition + Vector3.Up * Tunables.PlayerEyeHeight;
-		var forward = EyeForwardFlat();
+		var forward = _pendingForward.LengthSquared > 0.001f ? _pendingForward : EyeForwardFlat();
 		var hit = PickCameraAimTarget( out var impactPoint )
 			?? ChooseSwingTarget( origin, forward, out impactPoint );
 

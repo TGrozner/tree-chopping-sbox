@@ -300,6 +300,16 @@ public static class Tunables
 	public const float InitialFellOmega = 0.18f;
 	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
 	public const float InitialFellTopImpulseSpeed = 16f;
+	public const float LogGroundSkin = 2f;
+	public const float SubLogColliderRadiusMul = 0.86f;
+	public const float SubLogAxisSpawnFrac = 0.34f;
+	public const float SubLogSideSpawnMin = 14f;
+	public const float SubLogSideSpawnMul = 0.75f;
+	public const float SubLogInheritedVelocityMul = 0.18f;
+	public const float SubLogSpawnSpeedMin = 12f;
+	public const float SubLogSpawnSpeedMax = 28f;
+	public const float SubLogSpawnAngularMin = 0.10f;
+	public const float SubLogSpawnAngularMax = 0.32f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.

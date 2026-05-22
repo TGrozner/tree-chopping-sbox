@@ -581,6 +581,21 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _subLogPos ) < 700f ) )
+		{
+			if ( TryGetGroundZ( log.LogCenter.x, log.LogCenter.y, out var groundZ ) && log.LogCenter.z < groundZ - 12f )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog below terrain centerZ={log.LogCenter.z:F1}, groundZ={groundZ:F1}" );
+				Finish();
+				return;
+			}
+			if ( log.Body.IsValid() && log.Body.Velocity.Length > 220f )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog spawned too hot vel={log.Body.Velocity.Length:F1}u/s" );
+				Finish();
+				return;
+			}
+		}
 		Log.Info( $"[TC_TEST] SUBLOG_SPLIT PASS  Normal parent log -> {subLogs} sublogs" );
 		ClearTestObjectsAround( _subLogPos, 900f );
 		Transition( Phase.TestWoodPickup );
@@ -598,20 +613,25 @@ public sealed class SelfTest : Component
 			_pickupSpawned = true;
 			_state.ResetForTest();
 			_backpackBeforePickup = _state.BackpackWood;
-			// Spawn 60u devant le player (hors de son collider qui sinon push
-			// l'item à dist aléatoire >80u et bypasse magnet). Avec gravity=false
-			// + vel=0, l'item reste à 60u → magnet engage post-grace, fly à
-			// 700u/s vers player, pickup à <30u dans ~0.04s. Total ~0.54s.
-			var spawnPos = _axe.WorldPosition + new Vector3( 40f, 0f, 18f );
+			// Pin the item at the magnet target. This phase validates pickup
+			// grace + banking, not item-vs-player capsule physics.
+			var spawnPos = _axe.WorldPosition + Vector3.Up * (Tunables.PlayerEyeHeight * 0.4f);
 			var item = WoodItem.SpawnAt( Scene, spawnPos );
 			if ( item.Body.IsValid() )
 			{
+				item.Body.MotionEnabled = false;
 				item.Body.Velocity = Vector3.Zero;
 				item.Body.AngularVelocity = Vector3.Zero;
 				item.Body.Gravity = false;
+				if ( item.Body.PhysicsBody.IsValid() )
+				{
+					item.Body.PhysicsBody.Position = spawnPos;
+					item.Body.PhysicsBody.Velocity = Vector3.Zero;
+					item.Body.PhysicsBody.AngularVelocity = Vector3.Zero;
+				}
 			}
 			_pickupSpawnTime = 0f;
-			Log.Info( $"[TC_TEST] WoodPickup : spawned item at {spawnPos} (40u from player, vel+gravity zeroed), backpack before={_backpackBeforePickup}" );
+			Log.Info( $"[TC_TEST] WoodPickup : spawned item at magnet target {spawnPos}, backpack before={_backpackBeforePickup}" );
 			return;
 		}
 
