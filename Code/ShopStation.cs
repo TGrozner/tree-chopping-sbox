@@ -19,6 +19,7 @@ public sealed class ShopStation : Component
 	private AxeController _axe;
 	private bool _wasInside;
 	private bool _justEntered;
+	private float _ringPulse;
 
 	public string Label => Kind switch
 	{
@@ -52,7 +53,27 @@ public sealed class ShopStation : Component
 		go.WorldPosition = pos;
 		var station = go.AddComponent<ShopStation>();
 		station.Kind = kind;
+		BuildGroundRing( scene, go, station.RingTint );
 		return station;
+	}
+
+	private static void BuildGroundRing( Scene scene, GameObject parent, Color tint )
+	{
+		const int Segments = 24;
+		const float Radius = 160f;
+		const float Thickness = 10f;
+		const float LengthMul = 0.95f;
+		for ( int i = 0; i < Segments; i++ )
+		{
+			float a = (i / (float)Segments) * MathF.PI * 2f;
+			var seg = scene.CreateObject();
+			seg.Name = "StationRingSegment";
+			seg.SetParent( parent );
+			seg.LocalPosition = new Vector3( MathF.Cos( a ) * Radius, MathF.Sin( a ) * Radius, -58f );
+			seg.LocalRotation = Rotation.FromYaw( a * 180f / MathF.PI + 90f );
+			seg.LocalScale = new Vector3( (MathF.PI * 2f * Radius / Segments) * LengthMul, Thickness, 3f ) / Tunables.CubeBase;
+			Mat.AddTintedCube( seg, tint.WithAlpha( 0.78f ) );
+		}
 	}
 
 	protected override void OnUpdate()
@@ -68,6 +89,7 @@ public sealed class ShopStation : Component
 		PlayerInside = newInside;
 
 		DrawWorldLabel();
+		TickGroundRing();
 
 		if ( !PlayerInside || !_state.IsValid() ) return;
 
@@ -77,6 +99,19 @@ public sealed class ShopStation : Component
 			case StationKind.Sell:     HandleSell();     break;
 			case StationKind.Upgrades: HandleUpgrades(); break;
 			case StationKind.Prestige: HandlePrestige(); break;
+		}
+	}
+
+	private void TickGroundRing()
+	{
+		_ringPulse += Time.Delta * (PlayerInside ? 6.0f : 2.5f);
+		float pulse = PlayerInside ? (0.82f + MathF.Sin( _ringPulse ) * 0.18f) : 0.48f;
+		var tint = Color.Lerp( RingTint, Color.White, PlayerInside ? 0.22f : 0.04f ).WithAlpha( pulse );
+		foreach ( var child in GameObject.Children )
+		{
+			if ( !child.IsValid() || child.Name != "StationRingSegment" ) continue;
+			var mr = child.Components.Get<ModelRenderer>();
+			if ( mr.IsValid() ) mr.Tint = tint;
 		}
 	}
 

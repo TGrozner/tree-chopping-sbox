@@ -35,6 +35,19 @@ public sealed class AxeController : Component
 	[Property] public bool DebugApplyTeleport { get; set; }
 	[Property] public float DebugTeleportYawDegrees { get; set; }
 	public bool IsSwingIdle => _phase == SwingPhase.Idle;
+	public bool IsSwinging => _phase != SwingPhase.Idle;
+	public float SwingViewProgress
+	{
+		get
+		{
+			return _phase switch
+			{
+				SwingPhase.WindUp => (_phaseTime / Tunables.SwingWindUpDuration).Clamp( 0f, 1f ),
+				SwingPhase.Recovery => 1f + (_phaseTime / MathF.Max( Tunables.SwingRecoveryDuration, 0.001f )).Clamp( 0f, 1f ),
+				_ => 0f,
+			};
+		}
+	}
 
 	protected override void OnAwake()
 	{

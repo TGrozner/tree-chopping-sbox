@@ -17,6 +17,7 @@ public sealed class WoodItem : Component
 	private TimeSince _timeSinceSpawn;
 	private AxeController _axe;
 	private bool _magnetized;
+	private TimeSince _timeSinceFullFeedback = 999f;
 
 	public static WoodItem SpawnAt( Scene scene, Vector3 pos, float scaleMul = 1f, WoodType type = WoodType.Wood )
 	{
@@ -108,7 +109,7 @@ public sealed class WoodItem : Component
 		if ( !_magnetized && dist < Tunables.WoodItemMagnetRange )
 		{
 			_magnetized = true;
-			Sfx.Play( "sounds/wood_magnet.sound", WorldPosition, volume: 0.30f, pitchMin: 1.20f, pitchMax: 1.55f );
+			Sfx.Play( "sounds/wood_magnet.sound", WorldPosition, volume: 0.38f, pitchMin: 1.28f, pitchMax: 1.62f );
 			// Disable the rigidbody's gravity influence so the item flies in a
 			// straight line toward the player instead of arcing down.
 			if ( Body.IsValid() )
@@ -116,6 +117,10 @@ public sealed class WoodItem : Component
 				Body.Gravity = false;
 				Body.LinearDamping = 6f;
 				Body.AngularDamping = 6f;
+				Body.AngularVelocity = new Vector3(
+					Game.Random.Float( -14f, 14f ),
+					Game.Random.Float( -14f, 14f ),
+					Game.Random.Float( -14f, 14f ) );
 			}
 		}
 
@@ -142,8 +147,12 @@ public sealed class WoodItem : Component
 				{
 					// Backpack full — show the warning, bail without consuming
 					// so the item lingers until the player flushes the bag.
-					if ( hud.IsValid() ) hud.ShowBackpackFullHint();
-					Sfx.Play( "sounds/backpack_full.sound", WorldPosition, volume: 0.60f, pitchMin: 0.65f, pitchMax: 0.85f );
+					if ( (float)_timeSinceFullFeedback > 0.7f )
+					{
+						_timeSinceFullFeedback = 0f;
+						if ( hud.IsValid() ) hud.ShowBackpackFullHint();
+						Sfx.Play( "sounds/backpack_full.sound", WorldPosition, volume: 0.60f, pitchMin: 0.65f, pitchMax: 0.85f );
+					}
 					return;
 				}
 				// Pass type pour que le toast affiche "Wood / Finewood / CoreWood".
@@ -151,7 +160,7 @@ public sealed class WoodItem : Component
 			}
 			// Tiny "blip" pitch on consume for the satisfaction-tick feel.
 			Sfx.Play( "sounds/wood_pickup.sound", WorldPosition,
-				volume: 0.35f, pitchMin: 2.10f, pitchMax: 2.30f );
+				volume: 0.46f, pitchMin: 2.15f, pitchMax: 2.42f );
 			GameObject?.Destroy();
 		}
 	}

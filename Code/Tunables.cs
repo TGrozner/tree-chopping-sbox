@@ -242,17 +242,17 @@ public static class Tunables
 	public static readonly int[] LogChopHP                  = { 2, 1, 3, 1 };
 	public static readonly int[] TreeKindLandedDropCount    = { 4, 1, 9, 2 };
 	public const float WoodItemPickupRange = 30f;
-	// Aligné Valheim Player.AutoPickup() — m_autoPickupRange = 2m = ~80u sbox.
-	// Le joueur attire les items dans ce rayon, déplacement à ~15 m/s vers
-	// le centre (notre WoodItemMagnetSpeed = 700u/s, équivalent).
-	public const float WoodItemMagnetRange = 80f;
-	public const float WoodItemMagnetSpeed = 700f;
+	// Pickup kept slightly tighter than Valheim's 2m (~80u) so wood reads as a
+	// nearby cleanup action instead of long-range vacuum; speed is bumped so
+	// the final snap is still satisfying.
+	public const float WoodItemMagnetRange = 65f;
+	public const float WoodItemMagnetSpeed = 820f;
 	// Grace post-spawn avant que le magnet engage — Valheim ItemDrop.CanPickup
 	// reject auto-pickup si `Time.time - m_spawnTime < 0.5`. Laisse le burst
 	// se voir avant que le snap commence.
 	public const float WoodItemMagnetGrace = 0.5f;
 	public const float WoodItemDespawnDelay = 60f;
-	public const float WoodItemHintRange = 170f;
+	public const float WoodItemHintRange = 140f;
 	public static readonly Color WoodLogTint = new( 0.55f, 0.38f, 0.22f, 1f );
 	public static readonly Color WoodItemTint = new( 0.70f, 0.50f, 0.28f, 1f );
 	public static readonly Color MythicTrunkTint = new( 0.78f, 0.55f, 0.18f, 1f );
