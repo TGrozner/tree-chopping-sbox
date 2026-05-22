@@ -1585,11 +1585,9 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		// Heavy-log contract : stabilize landed trunks instead of letting them
-		// spin/slide through terrain.
-		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) < 1.0f )
+		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) > 0.7f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} (expected >= 1.0 pour logs lourds/stables)" );
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} (expected <= 0.7, Valheim-like dynamic log)" );
 			Finish();
 			return;
 		}
@@ -1599,9 +1597,9 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) > 1.5f )
+		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.0f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} (expected <= 1.5 pour stabiliser le landed log)" );
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} (expected >= 2.0 pour laisser le log dynamique)" );
 			Finish();
 			return;
 		}
@@ -1969,17 +1967,15 @@ public sealed class SelfTest : Component
 
 	private void TickTestRollingLogsDamping()
 	{
-		// Heavy-log contract : high damping + quick manual sleep keeps trunks
-		// from behaving like light props.
-		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) < 1.0f )
+		if ( RuntimeValue( Tunables.TreeAngularDampLanded ) > 0.7f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} < 1.0 (logs tournent trop longtemps)" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeAngularDampLanded={Tunables.TreeAngularDampLanded} > 0.7 (logs trop amortis)" );
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeLinearDampLanded ) < 0.5f )
+		if ( RuntimeValue( Tunables.TreeLinearDampLanded ) > 0.4f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLinearDampLanded={Tunables.TreeLinearDampLanded} < 0.5 (logs glissent trop)" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLinearDampLanded={Tunables.TreeLinearDampLanded} > 0.4 (logs trop amortis)" );
 			Finish();
 			return;
 		}
@@ -1989,13 +1985,13 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) > 1.5f )
+		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.0f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} > 1.5 (logs restent instables trop longtemps)" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} < 2.0 (manual sleep coupe le roll trop tôt)" );
 			Finish();
 			return;
 		}
-		Log.Info( $"[TC_TEST] HEAVY_LOG_DAMPING PASS  Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} Sleep={Tunables.TreeLogSleepThreshold} ManualDelay={Tunables.TreeLandedManualSleepDelay}" );
+		Log.Info( $"[TC_TEST] VALHEIM_LOG_DAMPING PASS  Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} Sleep={Tunables.TreeLogSleepThreshold} ManualDelay={Tunables.TreeLandedManualSleepDelay}" );
 		Transition( Phase.TestEnvWindDeterministic );
 	}
 

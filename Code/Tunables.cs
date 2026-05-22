@@ -300,16 +300,16 @@ public static class Tunables
 	public const float InitialFellOmega = 0.18f;
 	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
 	public const float InitialFellTopImpulseSpeed = 10f;
-	public const float LogGroundSkin = 4f;
+	public const float LogGroundSkin = 2f;
 	public const float SubLogColliderRadiusMul = 0.86f;
 	public const float SubLogAxisSpawnFrac = 0.34f;
 	public const float SubLogSideSpawnMin = 18f;
 	public const float SubLogSideSpawnMul = 0.75f;
 	public const float SubLogInheritedVelocityMul = 0f;
 	public const float SubLogSpawnSpeedMin = 0f;
-	public const float SubLogSpawnSpeedMax = 6f;
+	public const float SubLogSpawnSpeedMax = 0f;
 	public const float SubLogSpawnAngularMin = 0f;
-	public const float SubLogSpawnAngularMax = 0.04f;
+	public const float SubLogSpawnAngularMax = 0f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.
@@ -343,12 +343,12 @@ public static class Tunables
 	// après un split. Distinct de WoodLogPhysicsBreakGrace qui gate uniquement
 	// les triggers physics OnCollisionStart.
 	public const float WoodLogChopGrace = 0.2f;
-	public const float TreeAngularDampLanded = 1.35f;
-	public const float TreeLinearDampLanded = 0.70f;
+	public const float TreeAngularDampLanded = 0.45f;
+	public const float TreeLinearDampLanded = 0.25f;
 	public const float TreeLogSleepThreshold = 0.05f;
-	public const float TreeLandedManualSleepDelay = 1.0f;
-	public const float TreeLandedManualSleepSpeed = 10.0f;
-	public const float TreeLandedManualSleepAngularSpeed = 0.55f;
+	public const float TreeLandedManualSleepDelay = 2.2f;
+	public const float TreeLandedManualSleepSpeed = 4.0f;
+	public const float TreeLandedManualSleepAngularSpeed = 0.28f;
 	// Tree is "landed" once its up-axis tilts past this dot threshold.
 	public const float TreeFallenUpDotMax = 0.28f;
 	public const float TreeRestingTiltUpDotMax = 0.75f;
@@ -368,9 +368,9 @@ public static class Tunables
 
 	// Per-hit nudge on landed trunks. Kept low so logs feel heavy and do not
 	// spin like light props when the player keeps chopping.
-	public const float LandedLogKickImpulse = 38f;
-	public const float LandedLogKickTorque = 70f;
-	public const float LandedLogHitPointTorqueMul = 0.25f;
+	public const float LandedLogKickImpulse = 48f;
+	public const float LandedLogKickTorque = 95f;
+	public const float LandedLogHitPointTorqueMul = 0.35f;
 	public const float LogDropAxisSpreadFrac = 0.42f;
 	// Valheim TreeLog.Destroy uses m_spawnDistance=2m along the log up-axis,
 	// not a full-log shower. Cap the spread so drops stay readable near the
