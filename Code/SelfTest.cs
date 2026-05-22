@@ -18,7 +18,7 @@ public sealed class SelfTest : Component
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
 		TestImpactDamageScaling, TestWindDirRotation, TestRespawnJitterRange, TestWoodTypeDistribution, TestTreeShakeReset, TestCascadeShakeNoFell,
 		TestRollingLogsDamping, TestEnvWindDeterministic, TestWoodTypeMixSumsAll, TestHitDataDamage,
-		TestStats, TestPrestige, Done
+		TestGameStateSanitize, TestStats, TestPrestige, Done
 	}
 
 	private Phase _phase = Phase.Init;
@@ -113,6 +113,7 @@ public sealed class SelfTest : Component
 			case Phase.TestEnvWindDeterministic: TickTestEnvWindDeterministic(); break;
 			case Phase.TestWoodTypeMixSumsAll: TickTestWoodTypeMixSumsAll(); break;
 			case Phase.TestHitDataDamage: TickTestHitDataDamage(); break;
+			case Phase.TestGameStateSanitize: TickTestGameStateSanitize(); break;
 			case Phase.TestStats: TickTestStats(); break;
 			case Phase.TestPrestige: TickTestPrestige(); break;
 			case Phase.Done: break;
@@ -1581,6 +1582,40 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] HITDATA PASS  IChoppable.Damage(HitData) propagated chopPower=1, HP {hpBefore}→{sap.ChopsRemaining}" );
+		Transition( Phase.TestGameStateSanitize );
+	}
+
+	private void TickTestGameStateSanitize()
+	{
+		_state.DebugSetUnsafeProgressForTest();
+		bool tiersOk =
+			_state.AxeTier == Tunables.MaxAxeTier
+			&& _state.SpeedTier == 0
+			&& _state.LuckTier == Tunables.MaxStatTier
+			&& _state.PowerTier == Tunables.MaxStatTier
+			&& _state.BackpackTier == 0
+			&& _state.PetTier == Tunables.MaxPetTier
+			&& _state.ToolRangeTier == Tunables.MaxToolStatTier
+			&& _state.ToolSpeedTier == 0;
+		bool currenciesOk =
+			_state.Wood == 0
+			&& _state.Finewood == 0
+			&& _state.CoreWood == 0
+			&& _state.BackpackTotal <= _state.BackpackCapacity
+			&& _state.Spirits == 0
+			&& _state.TotalWoodEarned == 0
+			&& _state.TotalChops == 0
+			&& _state.TreesFelledTotal == 0;
+		bool statsOk = _state.TreesFelledByTier != null && _state.TreesFelledByTier.Length == Tunables.MaxAxeTier + 1
+			&& _state.TreesFelledByTier.All( v => v >= 0 );
+		if ( !tiersOk || !currenciesOk || !statsOk )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestGameStateSanitize: tiersOk={tiersOk} currenciesOk={currenciesOk} statsOk={statsOk} bag={_state.BackpackTotal}/{_state.BackpackCapacity}" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] GAMESTATE_SANITIZE PASS  tiers clamped, currencies non-negative, bag={_state.BackpackTotal}/{_state.BackpackCapacity}" );
+		_state.ResetForTest();
 		Transition( Phase.TestStats );
 	}
 

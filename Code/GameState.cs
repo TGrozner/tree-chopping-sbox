@@ -46,7 +46,7 @@ public sealed class GameState : Component
 	// Per-axe-tier fell counter — Valheim Game.IncrementPlayerStat(PlayerStatType.TreeTierN).
 	// Indexed by Tunables.TreeKindMinAxeTier[Kind] (0=hands, 1=stone, ..., 6=chainsaw).
 	// Survives prestige (lifetime stat).
-	[Property, ReadOnly] public int[] TreesFelledByTier { get; private set; } = new int[7];
+	[Property, ReadOnly] public int[] TreesFelledByTier { get; private set; } = new int[Tunables.MaxAxeTier + 1];
 
 	public int BackpackCapacity => Tunables.BackpackCaps[BackpackTier];
 	// BackpackFull check sur le TOTAL (Wood + Finewood + CoreWood) — Valheim
@@ -113,11 +113,53 @@ public sealed class GameState : Component
 				BackpackFinewood = d.BackpackFinewood;
 				CoreWood = d.CoreWood;
 				BackpackCoreWood = d.BackpackCoreWood;
+				SanitizeLoadedState();
 			}
 			else Log.Warning( $"[GameState] {PersistFile} present but unreadable — starting fresh" );
 			Log.Info( $"[GameState] Loaded : wood={Wood} bag={BackpackWood}/{BackpackCapacity} axe=T{AxeTier} spd=T{SpeedTier} luk=T{LuckTier} pwr=T{PowerTier} spirits={Spirits}" );
 		}
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Load failed: {ex.Message}" ); }
+	}
+
+	private void SanitizeLoadedState()
+	{
+		Wood = Math.Max( 0, Wood );
+		Finewood = Math.Max( 0, Finewood );
+		CoreWood = Math.Max( 0, CoreWood );
+		BackpackWood = Math.Max( 0, BackpackWood );
+		BackpackFinewood = Math.Max( 0, BackpackFinewood );
+		BackpackCoreWood = Math.Max( 0, BackpackCoreWood );
+		TotalWoodEarned = Math.Max( 0, TotalWoodEarned );
+		TreesFelledTotal = Math.Max( 0, TreesFelledTotal );
+		TotalChops = Math.Max( 0, TotalChops );
+		Spirits = Math.Max( 0, Spirits );
+		AxeTier = Math.Clamp( AxeTier, 0, Tunables.MaxAxeTier );
+		SpeedTier = Math.Clamp( SpeedTier, 0, Tunables.MaxStatTier );
+		LuckTier = Math.Clamp( LuckTier, 0, Tunables.MaxStatTier );
+		PowerTier = Math.Clamp( PowerTier, 0, Tunables.MaxStatTier );
+		BackpackTier = Math.Clamp( BackpackTier, 0, Tunables.MaxBackpackTier );
+		PetTier = Math.Clamp( PetTier, 0, Tunables.MaxPetTier );
+		ToolRangeTier = Math.Clamp( ToolRangeTier, 0, Tunables.MaxToolStatTier );
+		ToolSpeedTier = Math.Clamp( ToolSpeedTier, 0, Tunables.MaxToolStatTier );
+		if ( TreesFelledByTier == null || TreesFelledByTier.Length != Tunables.MaxAxeTier + 1 )
+			TreesFelledByTier = new int[Tunables.MaxAxeTier + 1];
+		for ( int i = 0; i < TreesFelledByTier.Length; i++ )
+			TreesFelledByTier[i] = Math.Max( 0, TreesFelledByTier[i] );
+		ClampBackpackToCapacity();
+	}
+
+	private void ClampBackpackToCapacity()
+	{
+		int overflow = BackpackTotal - BackpackCapacity;
+		if ( overflow <= 0 ) return;
+		int take = Math.Min( BackpackWood, overflow );
+		BackpackWood -= take;
+		overflow -= take;
+		take = Math.Min( BackpackFinewood, overflow );
+		BackpackFinewood -= take;
+		overflow -= take;
+		take = Math.Min( BackpackCoreWood, overflow );
+		BackpackCoreWood -= take;
 	}
 
 	private void Save()
@@ -364,6 +406,30 @@ public sealed class GameState : Component
 	// Per-tool sub-stats applied to AxeController swing path.
 	public float SwingRangeMultiplier => Tunables.ToolRangeMul[ToolRangeTier];
 	public float SwingSpeedMultiplier => Tunables.ToolSpeedMul[ToolSpeedTier];
+
+	internal void DebugSetUnsafeProgressForTest()
+	{
+		Wood = -10;
+		Finewood = -20;
+		CoreWood = -30;
+		BackpackWood = 999;
+		BackpackFinewood = 999;
+		BackpackCoreWood = 999;
+		AxeTier = 99;
+		SpeedTier = -2;
+		LuckTier = 99;
+		PowerTier = 99;
+		BackpackTier = -1;
+		PetTier = 99;
+		ToolRangeTier = 99;
+		ToolSpeedTier = -4;
+		Spirits = -5;
+		TotalWoodEarned = -1;
+		TreesFelledTotal = -1;
+		TotalChops = -1;
+		TreesFelledByTier = new[] { -1, 2 };
+		SanitizeLoadedState();
+	}
 
 	public void ResetForTest()
 	{
