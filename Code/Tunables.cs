@@ -403,7 +403,7 @@ public static class Tunables
 
 	// Swing feel : click → WindUp (anticipation) → Impact (Chop + chips + cam
 	// punch + hit-stop) → Recovery (input locked) → Idle. The wind-up is what
-	// turns the swing from a toggle into a gesture ; the hit-stop sells weight.
+	// turns the swing from a toggle into a gesture ; the hit-stop conveys weight.
 	// Cadence bumped 2026-05-21 to ~1s/chop (was ~0.63s) — matches the more
 	// pondered Valheim axe rhythm observed in Thomas's gameplay capture.
 	public const float SwingWindUpDuration = 0.55f;

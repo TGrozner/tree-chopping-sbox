@@ -23,8 +23,8 @@ public sealed class WoodHud : Component
 	private TimeSince _upgradeBannerTime = 999f;
 	private string _upgradeBannerText = "";
 	private TimeSince _backpackFullTime = 999f;
-	private TimeSince _sellFlashTime = 999f;
-	private int _lastSellAmount;
+	private TimeSince _depositFlashTime = 999f;
+	private int _lastDepositAmount;
 
 	// Called after a successful TryPrestige() so the player gets
 	// a clear "you just earned N Spirits" beat on top of the chip burst.
@@ -60,12 +60,12 @@ public sealed class WoodHud : Component
 	private TreeKind _axeTooWeakKind;
 	private int _axeTooWeakNeededTier;
 
-	// Fired by the depot after a TrySell — shows the amount transferred
+	// Fired by the depot after a TryDeposit — shows the amount transferred
 	// as a brief floating "+N" so the action reads.
-	public void ShowSellFlash( int amount )
+	public void ShowDepositFlash( int amount )
 	{
-		_sellFlashTime = 0f;
-		_lastSellAmount = amount;
+		_depositFlashTime = 0f;
+		_lastDepositAmount = amount;
 	}
 
 	// Fired by WoodItem.OnPickup. Stack-merge Valheim MessageHud pattern (lignes
@@ -176,7 +176,7 @@ public sealed class WoodHud : Component
 		DrawPrestigeBanner( hud );
 		DrawUpgradeBanner( hud );
 		DrawBackpackFullWarning( hud );
-		DrawSellFlash( hud );
+		DrawDepositFlash( hud );
 		DrawAxeTooWeakHint( hud );
 		DrawPickupToasts( hud );
 		DrawDamagePopups( hud, camera );
@@ -262,7 +262,7 @@ public sealed class WoodHud : Component
 			label = _axe.AimTargetLabel;
 			tint = _axe.AimTargetTooHard ? HotColor.WithAlpha( 0.92f ) : TextColor.WithAlpha( 0.84f );
 		}
-		else if ( _activeStation.IsValid() && _activeStation.Kind == StationKind.Sell )
+		else if ( _activeStation.IsValid() && _activeStation.Kind == StationKind.Deposit )
 		{
 			label = _state.BackpackTotal > 0 ? "DEPOSIT WOOD" : "BACKPACK EMPTY";
 			tint = _state.BackpackTotal > 0 ? TextColor.WithAlpha( 0.82f ) : TextColor.WithAlpha( 0.42f );
@@ -462,11 +462,11 @@ public sealed class WoodHud : Component
 		hud.DrawText( new TextRendering.Scope( msg, HotColor.WithAlpha( alpha ), size ), rect, TextFlag.Center );
 	}
 
-	private void DrawSellFlash( Sandbox.Rendering.HudPainter hud )
+	private void DrawDepositFlash( Sandbox.Rendering.HudPainter hud )
 	{
 		const float duration = 1.2f;
-		float t = (float)_sellFlashTime / duration;
-		if ( t >= 1f || _lastSellAmount <= 0 ) return;
+		float t = (float)_depositFlashTime / duration;
+		if ( t >= 1f || _lastDepositAmount <= 0 ) return;
 		float alpha = t < 0.10f ? (t / 0.10f) : (1f - (t - 0.10f) / 0.90f);
 		alpha = alpha.Clamp( 0f, 1f );
 		// Float upward from the stockpile position.
@@ -475,7 +475,7 @@ public sealed class WoodHud : Component
 		float yOff = -50f * t;
 		float size = 32f;
 		var rect = new Rect( padL, y0 + yOff, 240f, size * 1.4f );
-		hud.DrawText( new TextRendering.Scope( $"+{_lastSellAmount}", TextColor.WithAlpha( alpha ), size ),
+		hud.DrawText( new TextRendering.Scope( $"+{_lastDepositAmount}", TextColor.WithAlpha( alpha ), size ),
 			rect, TextFlag.LeftCenter );
 	}
 
@@ -517,13 +517,13 @@ public sealed class WoodHud : Component
 		switch ( _activeStation.Kind )
 		{
 			case StationKind.Tools:    DrawToolsHint( hud );    break;
-			case StationKind.Sell:     DrawSellHint( hud );     break;
+			case StationKind.Deposit:     DrawDepositHint( hud );     break;
 			case StationKind.Upgrades: DrawUpgradesHint( hud ); break;
 			case StationKind.Prestige: DrawPrestigeHint( hud ); break;
 		}
 	}
 
-	private void DrawSellHint( Sandbox.Rendering.HudPainter hud )
+	private void DrawDepositHint( Sandbox.Rendering.HudPainter hud )
 	{
 		string header = _state.BackpackTotal > 0
 			? $"DEPOT - auto deposit on entry · [E] / [1] to flush again ({_state.BackpackTotal} carried)"

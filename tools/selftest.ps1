@@ -1,13 +1,13 @@
-ï»¿# Headless self-test runner â€” parallÃ¨le par dÃ©faut.
+# Headless self-test runner — parallèle par défaut.
 #
 # Spawns sbox-server.exe per seed with +tc_selftest 1. Chaque process redirect
 # stdout/stderr en fichier. Poll periodically pour DONE marker.
 #
 # Validations par iteration :
-#   1. Phase contract â€” chaque phase emit [TC_TEST] PHASE_OK <name>.
-#   2. FAIL markers â€” toute ligne [TC_TEST] *FAIL* ou [TC_INV] FAIL.
-#   3. Exception watchdog â€” Exception/FATAL/Unhandled hors allowlist.
-#   4. PASS count â€” au moins 1 marker [TC_TEST] *PASS*.
+#   1. Phase contract — chaque phase emit [TC_TEST] PHASE_OK <name>.
+#   2. FAIL markers — toute ligne [TC_TEST] *FAIL* ou [TC_INV] FAIL.
+#   3. Exception watchdog — Exception/FATAL/Unhandled hors allowlist.
+#   4. PASS count — au moins 1 marker [TC_TEST] *PASS*.
 
 [CmdletBinding()]
 param(
@@ -41,7 +41,7 @@ function Get-ExpectedPhases {
     @( 'Init', 'TestSpawnDistribution', 'Approach', 'Swing', 'Verify',
         'TestStump', 'TestSplit', 'TestBonusDrop', 'TestWoodPickup', 'TestPhysicsAutoSplit', 'TestStumpRespawn', 'TestCascadeDamage', 'TestCascadeCollision',
         'TestAxeTierGate', 'TestChopPowerScaling', 'TestImpactBelowMin', 'TestImpactZeroNoOp',
-        'TestBackpackFull', 'TestSellFlush', 'TestSellStationEntry', 'TestPrestigeFormula', 'TestFallingImpactSplit', 'TestComboFinalDamage', 'TestMultiWoodTypes',
+        'TestBackpackFull', 'TestDepositFlush', 'TestDepositStationEntry', 'TestPrestigeFormula', 'TestFallingImpactSplit', 'TestComboFinalDamage', 'TestMultiWoodTypes',
         'TestStatCounters', 'TestWoodCuttingLevel', 'TestPickupStackMerge', 'TestEnvWindSanity', 'TestStrictTooHard', 'TestTunablesValheimSanity',
         'TestImpactDamageScaling', 'TestWindDirRotation', 'TestRespawnJitterRange', 'TestWoodTypeDistribution', 'TestTreeShakeReset', 'TestCascadeShakeNoFell',
         'TestRollingLogsDamping', 'TestEnvWindDeterministic', 'TestWoodTypeMixSumsAll', 'TestHitDataDamage',
@@ -96,7 +96,7 @@ function Wait-AllForDone {
                 continue
             }
             if ( Test-Path $p.StdoutPath ) {
-                # sbox-server holds the stdout file open in write mode â€” we need
+                # sbox-server holds the stdout file open in write mode — we need
                 # explicit FileShare.ReadWrite to read it concurrently. ReadAllText
                 # uses FileShare.Read which would IOException here.
                 $content = $null
@@ -183,7 +183,7 @@ function Test-SelftestIteration {
     }
 }
 
-# Seed list â€” same convention que l'ancienne version.
+# Seed list — same convention que l'ancienne version.
 $seedList = @()
 if ( $Seeds -le 1 ) {
     $seedList = @(0)
@@ -230,7 +230,7 @@ foreach ( $r in $results ) {
     if ( $r.TcLines.Count -gt 0 ) {
         $r.TcLines | ForEach-Object { Write-Host $_ }
     } else {
-        Write-Host "(no [TC_TEST]/[TC_INV]/[SceneStarter] lines â€” check stdout : $($r.StdoutPath))"
+        Write-Host "(no [TC_TEST]/[TC_INV]/[SceneStarter] lines — check stdout : $($r.StdoutPath))"
     }
     Write-Host "---------------------------------------------------------"
     Write-Host "[harness] seed=$($r.Seed) summary:"

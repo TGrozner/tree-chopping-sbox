@@ -263,7 +263,7 @@ public sealed class GameState : Component
 	// counts toward lifetime earned (drives prestige threshold based on Wood-equivalent
 	// total). Returns the total transferred (0 if all empty). Valheim Trader pattern :
 	// you deposit per type into separate stockpiles.
-	public int TrySell()
+	public int TryDeposit()
 	{
 		int total = BackpackTotal;
 		if ( total <= 0 ) return 0;

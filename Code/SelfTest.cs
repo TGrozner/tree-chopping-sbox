@@ -14,7 +14,7 @@ public sealed class SelfTest : Component
 		Init, TestSpawnDistribution, Approach, Swing, Verify,
 		TestStump, TestSplit, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
-		TestBackpackFull, TestSellFlush, TestSellStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
+		TestBackpackFull, TestDepositFlush, TestDepositStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
 		TestImpactDamageScaling, TestWindDirRotation, TestRespawnJitterRange, TestWoodTypeDistribution, TestTreeShakeReset, TestCascadeShakeNoFell,
 		TestRollingLogsDamping, TestEnvWindDeterministic, TestWoodTypeMixSumsAll, TestHitDataDamage,
@@ -53,10 +53,10 @@ public sealed class SelfTest : Component
 	private TreeStump _respawnStump;
 	private TimeSince _respawnStartTime;
 	private bool _respawnTriggered;
-	private bool _sellStationEntrySetup;
-	private bool _sellStationEntered;
-	private int _sellStationWalletBefore;
-	private int _sellStationTotalBefore;
+	private bool _depositStationEntrySetup;
+	private bool _depositStationEntered;
+	private int _depositStationStockpileBefore;
+	private int _depositStationTotalBefore;
 
 	[ConVar( "tc_selftest", Help = "Spawn TreeChopping.SelfTest on bootstrap to run the mow-the-lawn headless scenario." )]
 	public static bool Enable { get; set; }
@@ -91,8 +91,8 @@ public sealed class SelfTest : Component
 			case Phase.TestImpactBelowMin: TickTestImpactBelowMin(); break;
 			case Phase.TestImpactZeroNoOp: TickTestImpactZeroNoOp(); break;
 			case Phase.TestBackpackFull: TickTestBackpackFull(); break;
-			case Phase.TestSellFlush: TickTestSellFlush(); break;
-			case Phase.TestSellStationEntry: TickTestSellStationEntry(); break;
+			case Phase.TestDepositFlush: TickTestDepositFlush(); break;
+			case Phase.TestDepositStationEntry: TickTestDepositStationEntry(); break;
 			case Phase.TestPrestigeFormula: TickTestPrestigeFormula(); break;
 			case Phase.TestFallingImpactSplit: TickTestFallingImpactSplit(); break;
 			case Phase.TestComboFinalDamage: TickTestComboFinalDamage(); break;
@@ -710,7 +710,7 @@ public sealed class SelfTest : Component
 		_state.AddWood( totalWood );
 		_state.AddBackpack( totalFinewood, WoodType.Finewood );
 		_state.AddBackpack( totalCoreWood, WoodType.CoreWood );
-		_state.TrySell(); // flush Finewood + CoreWood backpack → stockpile
+		_state.TryDeposit(); // flush Finewood + CoreWood backpack → stockpile
 		for ( int i = 0; i < 4; i++ )
 		{
 			if ( !_state.TryUpgradeAxe() )
@@ -799,77 +799,77 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] BACKPACK_FULL PASS  cap={cap}, fill banked all, overflow returned 0" );
-		Transition( Phase.TestSellFlush );
+		Transition( Phase.TestDepositFlush );
 	}
 
-	private void TickTestSellFlush()
+	private void TickTestDepositFlush()
 	{
-		// TrySell flush BackpackWood → Wood (stockpile) + reset backpack à 0 +
+		// TryDeposit flush BackpackWood → Wood (stockpile) + reset backpack à 0 +
 		// incr TotalWoodEarned. Vérifie le path depot station.
 		_state.ResetForTest();
 		_state.AddBackpack( 10 );
 		int wBefore = _state.Wood;
 		int totalBefore = _state.TotalWoodEarned;
-		int sold = _state.TrySell();
-		if ( sold != 10 || _state.BackpackWood != 0 || _state.Wood != wBefore + 10
+		int deposited = _state.TryDeposit();
+		if ( deposited != 10 || _state.BackpackWood != 0 || _state.Wood != wBefore + 10
 			|| _state.TotalWoodEarned != totalBefore + 10 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestSellFlush: deposited={sold} (expected 10), backpack={_state.BackpackWood} wood {wBefore}→{_state.Wood} total {totalBefore}→{_state.TotalWoodEarned}" );
+			Log.Error( $"[TC_TEST] FAIL TestDepositFlush: deposited={deposited} (expected 10), backpack={_state.BackpackWood} wood {wBefore}→{_state.Wood} total {totalBefore}→{_state.TotalWoodEarned}" );
 			Finish();
 			return;
 		}
 		Log.Info( $"[TC_TEST] DEPOT_FLUSH PASS  deposited=10, stockpile {wBefore}→{_state.Wood}, total {totalBefore}→{_state.TotalWoodEarned}, backpack reset" );
-		Transition( Phase.TestSellStationEntry );
+		Transition( Phase.TestDepositStationEntry );
 	}
 
-	private void TickTestSellStationEntry()
+	private void TickTestDepositStationEntry()
 	{
-		var sellStation = Scene.GetAllComponents<ShopStation>()
-			.FirstOrDefault( s => s.IsValid() && s.Kind == StationKind.Sell );
-		if ( !sellStation.IsValid() )
+		var depositStation = Scene.GetAllComponents<ShopStation>()
+			.FirstOrDefault( s => s.IsValid() && s.Kind == StationKind.Deposit );
+		if ( !depositStation.IsValid() )
 		{
-			Log.Error( "[TC_TEST] FAIL TestSellStationEntry: no depot station found" );
+			Log.Error( "[TC_TEST] FAIL TestDepositStationEntry: no depot station found" );
 			Finish();
 			return;
 		}
 
-		if ( !_sellStationEntrySetup )
+		if ( !_depositStationEntrySetup )
 		{
-			_sellStationEntrySetup = true;
-			_sellStationEntered = false;
+			_depositStationEntrySetup = true;
+			_depositStationEntered = false;
 			_state.ResetForTest();
 			_state.AddBackpack( 12 );
-			_sellStationWalletBefore = _state.Wood;
-			_sellStationTotalBefore = _state.TotalWoodEarned;
-			var outside = sellStation.WorldPosition + Vector3.Right * (sellStation.Radius + 120f) + Vector3.Up * 80f;
+			_depositStationStockpileBefore = _state.Wood;
+			_depositStationTotalBefore = _state.TotalWoodEarned;
+			var outside = depositStation.WorldPosition + Vector3.Right * (depositStation.Radius + 120f) + Vector3.Up * 80f;
 			_axe.TeleportTo( outside, 180f );
 			return;
 		}
 
-		if ( !_sellStationEntered )
+		if ( !_depositStationEntered )
 		{
 			if ( (float)_phaseTime < 0.20f ) return;
-			if ( sellStation.PlayerInside )
+			if ( depositStation.PlayerInside )
 			{
-				Log.Error( "[TC_TEST] FAIL TestSellStationEntry: station considered player inside before entry transition" );
+				Log.Error( "[TC_TEST] FAIL TestDepositStationEntry: station considered player inside before entry transition" );
 				Finish();
 				return;
 			}
-			_sellStationEntered = true;
-			_axe.TeleportTo( sellStation.WorldPosition + Vector3.Up * 80f, 180f );
+			_depositStationEntered = true;
+			_axe.TeleportTo( depositStation.WorldPosition + Vector3.Up * 80f, 180f );
 			return;
 		}
 
 		if ( (float)_phaseTime < 0.45f ) return;
-		if ( _state.BackpackTotal != 0 || _state.Wood != _sellStationWalletBefore + 12
-			|| _state.TotalWoodEarned != _sellStationTotalBefore + 12 || !sellStation.PlayerInside )
+		if ( _state.BackpackTotal != 0 || _state.Wood != _depositStationStockpileBefore + 12
+			|| _state.TotalWoodEarned != _depositStationTotalBefore + 12 || !depositStation.PlayerInside )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestSellStationEntry: inside={sellStation.PlayerInside} backpack={_state.BackpackTotal} wood {_sellStationWalletBefore}->{_state.Wood} total {_sellStationTotalBefore}->{_state.TotalWoodEarned}" );
+			Log.Error( $"[TC_TEST] FAIL TestDepositStationEntry: inside={depositStation.PlayerInside} backpack={_state.BackpackTotal} wood {_depositStationStockpileBefore}->{_state.Wood} total {_depositStationTotalBefore}->{_state.TotalWoodEarned}" );
 			Finish();
 			return;
 		}
 
-		Log.Info( $"[TC_TEST] DEPOT_STATION_ENTRY PASS  entering depot ring auto-deposited 12, stockpile {_sellStationWalletBefore}->{_state.Wood}" );
+		Log.Info( $"[TC_TEST] DEPOT_STATION_ENTRY PASS  entering depot ring auto-deposited 12, stockpile {_depositStationStockpileBefore}->{_state.Wood}" );
 		Transition( Phase.TestPrestigeFormula );
 	}
 
@@ -1010,7 +1010,7 @@ public sealed class SelfTest : Component
 	{
 		// Valheim 1:1 wood types — vérifier (a) WoodType enum 3 values, (b) chaque
 		// type a un tint + name dans Tunables, (c) AddBackpack(N, type) route vers
-		// le bon slot, (d) TrySell flush tous les types, (e) TreeKindWoodTypeMix
+		// le bon slot, (d) TryDeposit flush tous les types, (e) TreeKindWoodTypeMix
 		// proba sum ~1.0 par kind.
 		_state.ResetForTest();
 		// AddBackpack par type
@@ -1029,35 +1029,35 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		// TrySell flush tous les types
-		int sold = _state.TrySell();
-		if ( sold != 10 || _state.Wood != 5 || _state.Finewood != 3 || _state.CoreWood != 2 )
+		// TryDeposit flush tous les types
+		int deposited = _state.TryDeposit();
+		if ( deposited != 10 || _state.Wood != 5 || _state.Finewood != 3 || _state.CoreWood != 2 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TrySell deposited={sold} (exp 10), stockpiles Wood={_state.Wood}/5 Finewood={_state.Finewood}/3 CoreWood={_state.CoreWood}/2" );
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryDeposit deposited={deposited} (exp 10), stockpiles Wood={_state.Wood}/5 Finewood={_state.Finewood}/3 CoreWood={_state.CoreWood}/2" );
 			Finish();
 			return;
 		}
 		if ( _state.BackpackTotal != 0 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: BackpackTotal après sell={_state.BackpackTotal} (expected 0)" );
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: BackpackTotal after deposit={_state.BackpackTotal} (expected 0)" );
 			Finish();
 			return;
 		}
 		_state.ResetForTest();
 		_state.AddBackpack( 3, WoodType.Finewood );
-		bool helperSold = ShopStation.TryBuyCheapestAcrossAll( Scene );
-		if ( !helperSold || _state.BackpackTotal != 0 || _state.Finewood != 3 )
+		bool helperDeposited = ShopStation.TryBuyCheapestAcrossAll( Scene );
+		if ( !helperDeposited || _state.BackpackTotal != 0 || _state.Finewood != 3 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not flush Finewood-only backpack (deposited={helperSold}, bag={_state.BackpackTotal}, Finewood={_state.Finewood})" );
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not flush Finewood-only backpack (deposited={helperDeposited}, bag={_state.BackpackTotal}, Finewood={_state.Finewood})" );
 			Finish();
 			return;
 		}
 		_state.ResetForTest();
 		_state.AddBackpack( Tunables.AxeTierCostsByType[1][0], WoodType.Wood );
-		bool helperSoldAndBought = ShopStation.TryBuyCheapestAcrossAll( Scene );
-		if ( !helperSoldAndBought || _state.BackpackTotal != 0 || _state.AxeTier != 1 )
+		bool helperDepositedAndBought = ShopStation.TryBuyCheapestAcrossAll( Scene );
+		if ( !helperDepositedAndBought || _state.BackpackTotal != 0 || _state.AxeTier != 1 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not sell+buy Stone in one shop pass (ok={helperSoldAndBought}, bag={_state.BackpackTotal}, axe=T{_state.AxeTier}, wood={_state.Wood})" );
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not deposit+buy Stone in one shop pass (ok={helperDepositedAndBought}, bag={_state.BackpackTotal}, axe=T{_state.AxeTier}, wood={_state.Wood})" );
 			Finish();
 			return;
 		}
@@ -1090,7 +1090,7 @@ public sealed class SelfTest : Component
 				return;
 			}
 		}
-		Log.Info( $"[TC_TEST] MULTI_WOOD PASS  AddBackpack par type + TrySell flush, typed axe recipe fallback, TreeKindWoodTypeMix sums ok" );
+		Log.Info( $"[TC_TEST] MULTI_WOOD PASS  AddBackpack par type + TryDeposit flush, typed axe recipe fallback, TreeKindWoodTypeMix sums ok" );
 		Transition( Phase.TestStatCounters );
 	}
 
@@ -1545,7 +1545,7 @@ public sealed class SelfTest : Component
 		_state.AddWood( totalWood );
 		_state.AddBackpack( totalFW, WoodType.Finewood );
 		_state.AddBackpack( totalCW, WoodType.CoreWood );
-		_state.TrySell();
+		_state.TryDeposit();
 		for ( int i = 0; i < 3; i++ ) _state.TryUpgradeAxe();
 		// ChopPower at T3 = 5. Veteran HP min 8, donc HP 8-5=3 reste positif → still standing → shake reset.
 		int hpBefore = vet.ChopsRemaining;

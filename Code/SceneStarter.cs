@@ -202,7 +202,7 @@ public sealed class SceneStarter : Component
 		// Totem dropped 2026-05-21 -- the tall flagpole made no sense vs the
 		// physical stations which are the actual nav landmark.
 		SpawnStationAt( -67.5f, StationKind.Tools );
-		SpawnStationAt( -22.5f, StationKind.Sell );
+		SpawnStationAt( -22.5f, StationKind.Deposit );
 		SpawnStationAt(  22.5f, StationKind.Upgrades );
 		SpawnStationAt(  67.5f, StationKind.Prestige );
 	}

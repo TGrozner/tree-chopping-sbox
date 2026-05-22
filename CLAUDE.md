@@ -11,7 +11,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 2. **Headless est le loop par défaut, pas l'éditeur :**
    - `dotnet build C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj` pour valider les types.
    - `sbox-server.exe +game <sbproj> +maxplayers 1` pour le lifecycle + physique (pas de rendu, pas d'input client). `Log.Info` → stdout.
-   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/sell, cascade, too-hard, stats, prestige. **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
+   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/deposit, cascade, too-hard, stats, prestige. **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
    - `sbox.exe` ne marche PAS sur projets locaux (traite le sbproj comme un cloud package et 404). Seuls `sbox-dev.exe` (éditeur) et `sbox-server.exe` (headless) gèrent du dev non shippé.
 
 3. **`System.Environment.*` est sur le deny-list de la whitelist du compiler s&box.** `GetEnvironmentVariable`, `GetCommandLineArgs`, etc. font échouer la compile avec `"is not allowed when whitelist is enabled"`. Pour les flags de lancement → `[ConVar("name")]`, set via `sbox-server.exe ... +name value`.
@@ -250,7 +250,7 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
 
 Économie deux-pool (Wood vs BackpackWood) :
   BackpackWood = ramassé sur le terrain, cappé par BackpackCapacity[BackpackTier].
-  ShopStation.Sell (WOOD DEPOT station, ring vert) → TrySell flush BackpackWood → Wood (stockpile).
+  ShopStation.Deposit (WOOD DEPOT station, ring vert) → TryDeposit flush BackpackWood → Wood (stockpile).
   Wood = monnaie de dépense aux ShopStation.Upgrades (axe / speed / luck / power / pet /
   bag / range / swing-speed) + ShopStation.Prestige (replant).
 
@@ -272,12 +272,12 @@ Shop / progression (GameState + ShopStation) :
     └─ LuckChance (rolled UNE FOIS dans Tree.SplitIntoLogs pour +50% items
         sur le drop entier, plus dans Tree.GiveWoodOnce qui n'existe plus)
   ShopStation × 4 (stations worldspace — supplante l'ex-ShopArea single-menu) :
-    Chaque station = StationKind {Tools, Sell, Upgrades, Prestige}, anneau de
+    Chaque station = StationKind {Tools, Deposit, Upgrades, Prestige}, anneau de
     Radius=160u + worldspace label tinté (cyan/vert/orange/gold), PAS de pillar
     (Thomas 2026-05-21 : just the label). Inputs lus quand PlayerInside d'UNE
     station — slot inputs réutilisés (Slot1..N changent de sens selon station).
     ├─ Tools : équipe Axe T0..T6 (re-buy = swap tool actif)
-    ├─ Depot : E → TrySell flush BackpackWood → Wood + deposit SFX
+    ├─ Depot : E → TryDeposit flush BackpackWood → Wood + deposit SFX
     ├─ Upgrades : Slot1=Speed Slot2=Luck Slot3=Power Slot4=Bag Slot5=Pet
     │             Slot6=ToolRange Slot7=ToolSpeed
     └─ Prestige : Slot1=Replant (TryPrestige, gated par CanPrestige)
@@ -320,7 +320,7 @@ Self-test (headless, mow-the-lawn + upgrade + prestige scenario) :
   Verify : assert target tree transitioned out of Standing. **Phase F note** : on
     n'asserte plus que `Wood` a augmenté — chopping ne crédite plus directement
     le stockpile, le pipeline complet (Tree → landed log split → WoodItem →
-    pickup → AddBackpack → TrySell) est trop indirect pour le harness. Le
+    pickup → AddBackpack → TryDeposit) est trop indirect pour le harness. Le
     toppled check est le smoke test minimum.
   TestStats : `_state.AddWood(totalCost)` direct, then exercise TryUpgradeSpeed +
     TryUpgradePower, assert tier++ et wood -= cost.

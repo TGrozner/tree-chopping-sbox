@@ -210,8 +210,8 @@ public sealed class FilmStrip : Component
 				wood += r[0]; fw += r[1]; cw += r[2];
 			}
 			_state.AddWood( wood );
-			if ( fw > 0 ) { _state.AddBackpack( fw, WoodType.Finewood ); _state.TrySell(); }
-			if ( cw > 0 ) { _state.AddBackpack( cw, WoodType.CoreWood ); _state.TrySell(); }
+			if ( fw > 0 ) { _state.AddBackpack( fw, WoodType.Finewood ); _state.TryDeposit(); }
+			if ( cw > 0 ) { _state.AddBackpack( cw, WoodType.CoreWood ); _state.TryDeposit(); }
 			while ( _state.AxeTier < neededTier && _state.TryUpgradeAxe() ) { }
 			Log.Info( $"[TC_FILM] pumped AxeTier → {_state.AxeTier} pour {_target.Kind} (needed {neededTier})" );
 		}

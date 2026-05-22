@@ -1,6 +1,6 @@
 namespace TreeChopping;
 
-public enum StationKind { Tools, Sell, Upgrades, Prestige }
+public enum StationKind { Tools, Deposit, Upgrades, Prestige }
 
 // Mow-the-lawn-style physical shop : one station per category, each a stone
 // pillar with a colored interaction disc + worldspace label. Player walks
@@ -24,7 +24,7 @@ public sealed class ShopStation : Component
 	public string Label => Kind switch
 	{
 		StationKind.Tools    => "TOOLS",
-		StationKind.Sell     => "WOOD DEPOT",
+		StationKind.Deposit  => "WOOD DEPOT",
 		StationKind.Upgrades => "UPGRADES",
 		StationKind.Prestige => "PRESTIGE",
 		_ => "?",
@@ -37,7 +37,7 @@ public sealed class ShopStation : Component
 	public Color RingTint => Kind switch
 	{
 		StationKind.Tools    => new( 0.30f, 0.78f, 1.00f, 1f ),
-		StationKind.Sell     => new( 0.20f, 0.95f, 0.30f, 1f ),
+		StationKind.Deposit  => new( 0.20f, 0.95f, 0.30f, 1f ),
 		StationKind.Upgrades => new( 1.00f, 0.55f, 0.10f, 1f ),
 		StationKind.Prestige => new( 1.00f, 0.85f, 0.15f, 1f ),
 		_ => Color.White,
@@ -53,7 +53,7 @@ public sealed class ShopStation : Component
 		go.WorldPosition = pos;
 		var station = go.AddComponent<ShopStation>();
 		station.Kind = kind;
-		station.Radius = kind == StationKind.Sell ? 230f : 160f;
+		station.Radius = kind == StationKind.Deposit ? 230f : 160f;
 		BuildGroundRing( scene, go, station.RingTint, station.Radius );
 		return station;
 	}
@@ -96,7 +96,7 @@ public sealed class ShopStation : Component
 		switch ( Kind )
 		{
 			case StationKind.Tools:    HandleTools();    break;
-			case StationKind.Sell:     HandleSell();     break;
+			case StationKind.Deposit:  HandleDeposit();  break;
 			case StationKind.Upgrades: HandleUpgrades(); break;
 			case StationKind.Prestige: HandlePrestige(); break;
 		}
@@ -115,21 +115,21 @@ public sealed class ShopStation : Component
 		}
 	}
 
-	private void HandleSell()
+	private void HandleDeposit()
 	{
-		// Sell station = transfer BackpackWood → Wood. Auto-sells once on
+		// Deposit station = transfer BackpackWood → Wood. Auto-deposits once on
 		// disc entry (false→true PlayerInside transition) so the loop reads
-		// as "fill bag → run home → it just sells", and again on [E]/[1]
+		// as "fill bag → run home → it just banks", and again on [E]/[1]
 		// after that (in case the player carried more wood back).
-		if ( _justEntered ) TryAutoSell( false );
-		if ( Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) ) TryAutoSell( true );
+		if ( _justEntered ) TryAutoDeposit( false );
+		if ( Input.Pressed( "Use" ) || Input.Pressed( "Slot1" ) ) TryAutoDeposit( true );
 	}
 
-	private void TryAutoSell( bool manual )
+	private void TryAutoDeposit( bool manual )
 	{
-		int sold = _state.TrySell();
+		int deposited = _state.TryDeposit();
 		var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
-		if ( sold <= 0 )
+		if ( deposited <= 0 )
 		{
 			if ( manual )
 			{
@@ -138,8 +138,8 @@ public sealed class ShopStation : Component
 			}
 			return;
 		}
-		if ( hud.IsValid() ) hud.ShowSellFlash( sold );
-		Sfx.Play( "sounds/shop_sell.sound", WorldPosition, volume: 0.85f, pitchMin: 1.05f, pitchMax: 1.25f );
+		if ( hud.IsValid() ) hud.ShowDepositFlash( deposited );
+		Sfx.Play( "sounds/wood_deposit.sound", WorldPosition, volume: 0.85f, pitchMin: 1.05f, pitchMax: 1.25f );
 	}
 
 	// Project the label position to screen via manual world→screen math.
@@ -305,7 +305,7 @@ public sealed class ShopStation : Component
 	}
 
 	// AutoPlay / bridge entry point — first FLUSHES the backpack if non-zero
-	// (post-Phase B : the player has to actually sell to convert wood),
+	// (post-Phase B : the player has to actually deposit to convert wood),
 	// then prestiges if available, then buys the cheapest affordable upgrade.
 	public static bool TryBuyCheapestAcrossAll( Scene scene )
 	{
@@ -314,7 +314,7 @@ public sealed class ShopStation : Component
 		bool didSomething = false;
 		if ( state.BackpackTotal > 0 )
 		{
-			didSomething = state.TrySell() > 0;
+			didSomething = state.TryDeposit() > 0;
 		}
 		if ( state.CanPrestige() )
 		{

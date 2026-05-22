@@ -1,7 +1,7 @@
 namespace TreeChopping;
 
 // Cosmetic pet — a small tinted orb that orbits around the player. No
-// gameplay effect, just sells the "you have a companion" vibe à la
+// gameplay effect, just gives the "you have a companion" vibe à la
 // Mow-The-Lawn / Forager. Auto-syncs its visibility + size + tint from
 // GameState.PetTier each tick.
 public sealed class Pet : Component
