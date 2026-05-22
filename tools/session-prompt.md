@@ -34,7 +34,8 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 ## Architecture en cours (rapide)
 
 - **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, player, shop+totem, forêt initiale, 4 gates, pet)
-- **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog → split landed log → WoodItem drops. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
+- **`Tree.cs`** : standing tree multi-chop → StartFell → TreeStump + `FallenLog.SpawnFromTree` + fell bonus drops. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
+- **`FallenLog.cs`** : Valheim TreeLog equivalent : fall physics, impact/cascade damage, 0.2s chop grace, axe-tier gate, landed-log split → WoodItem drops
 - **`AxeController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch, applique GameState.SpeedMultiplier sur PlayerController.WalkSpeed, AerialView toggle pour top-down screenshot
 - **`GameState.cs`** : stockpiles Wood/Finewood/CoreWood + backpack, AxeTier (0..6), Speed/Luck/Power tiers (0..5), PetTier (0..5), Spirits + TotalWoodEarned persistence (FileSystem.Data/progress.json — local profile actuel)
 - **`ShopStation.cs`** : stations Tools / Deposit / Upgrades / Prestige, inputs contextualisés, deposit backpack → stockpile

@@ -418,9 +418,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( IsFalling || _logSplit ) return;
 		if ( _landed && (float)_timeSinceLanded < Tunables.WoodLogChopGrace ) return;
 
-		// Axe-tier gate (Phase E) only on the standing tree â€” once it's a
-		// FallenLog the kind tier doesn't matter (any axe can chop a log).
-		if ( !_landed )
+		// Valheim gates both TreeBase and TreeLog with m_minToolTier. The
+		// normal path spawns FallenLog, but this fallback stays aligned too.
+		if ( !_landed || IsFallenLog )
 		{
 			var gs = GameState.Get( Scene );
 			int axeTier = toolTierOverride ?? (gs.IsValid() ? gs.AxeTier : 0);

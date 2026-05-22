@@ -229,6 +229,7 @@ public sealed class AxeController : Component
 			rb.PhysicsBody.Position = pos;
 			rb.Velocity = Vector3.Zero;
 			rb.AngularVelocity = Vector3.Zero;
+			WorldPosition = pos;
 		}
 		else WorldPosition = pos;
 		if ( Player.IsValid() )
@@ -291,7 +292,9 @@ public sealed class AxeController : Component
 			if ( impactPoint == default )
 				impactPoint = hit.WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.3f);
 			var hitDir = HitDirection( origin, forward, impactPoint );
-			int basePower = GameState.Get( Scene )?.ChopPower ?? 1;
+			var state = GameState.Get( Scene );
+			int basePower = state?.ChopPower ?? 1;
+			int toolTier = state?.AxeTier ?? 0;
 			// Final hit du combo (last level) = damage × FinalDamageMul.
 			// Valheim Attack.cs ligne 1094-1098 : `hitData.m_damage.Modify(m_lastChainDamageMultiplier)`.
 			bool isFinalHit = ChainLevel == Tunables.ChopComboMaxLevels - 1;
@@ -328,15 +331,13 @@ public sealed class AxeController : Component
 			}
 			if ( tooHard )
 			{
-				if ( hit is Tree t ) t.Chop( hitDir, chopPower, impactPoint );
-				else hit.Chop( hitDir, impactPoint );
+				hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier ) );
 				ApplyTooHardFeedback( impactPoint, hitDir );
 			}
 			else
 			{
 				ApplyImpactFeedback( impactPoint, hitDir, chipTint, chopPitchMul, willBreakTree, damageFrac, isLogHit );
-				if ( hit is Tree t ) t.Chop( hitDir, chopPower, impactPoint );
-				else hit.Chop( hitDir, impactPoint );
+				hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier ) );
 			}
 		}
 		else
@@ -445,10 +446,11 @@ public sealed class AxeController : Component
 		var forward = EyeForwardFlat();
 		var hit = ChooseSwingTarget( origin, forward, out var impactPoint );
 		if ( hit is null ) return null;
-		int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
+		var state = GameState.Get( Scene );
+		int chopPower = state?.ChopPower ?? 1;
+		int toolTier = state?.AxeTier ?? 0;
 		var hitDir = HitDirection( origin, forward, impactPoint );
-		if ( hit is Tree t ) t.Chop( hitDir, chopPower, impactPoint );
-		else hit.Chop( hitDir, impactPoint );
+		hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier ) );
 		return hit;
 	}
 
@@ -477,11 +479,12 @@ public sealed class AxeController : Component
 		}
 		Log.Info( $"[TC_TEST] DebugSwingVerbose considered={considered} droppedValid={droppedValid} droppedTool={droppedTool} droppedRange={droppedRange} droppedCone={droppedCone} best={(best == null ? "null" : best.GetType().Name)}" );
 		if ( best is null ) return null;
-		int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
+		var state = GameState.Get( Scene );
+		int chopPower = state?.ChopPower ?? 1;
+		int toolTier = state?.AxeTier ?? 0;
 		var impactPoint = GetFallbackHitPoint( best, origin );
 		var hitDir = HitDirection( origin, forward, impactPoint );
-		if ( best is Tree t ) t.Chop( hitDir, chopPower, impactPoint );
-		else best.Chop( hitDir, impactPoint );
+		best.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier ) );
 		return best;
 	}
 
@@ -532,10 +535,13 @@ public sealed class AxeController : Component
 
 	private bool IsTooHardTreeHit( IChoppable target )
 	{
-		if ( target is not Tree tree || !tree.IsStanding ) return false;
+		TreeKind kind;
+		if ( target is Tree tree && tree.IsValid() && tree.IsStanding ) kind = tree.Kind;
+		else if ( target is FallenLog log && log.IsValid() ) kind = log.Kind;
+		else return false;
 		var state = GameState.Get( Scene );
 		int axeTier = state.IsValid() ? state.AxeTier : 0;
-		return axeTier < Tunables.TreeKindMinAxeTier[(int)tree.Kind];
+		return axeTier < Tunables.TreeKindMinAxeTier[(int)kind];
 	}
 
 	// HUD hit-or-miss indicator : true when there's a chop target under the
@@ -547,10 +553,13 @@ public sealed class AxeController : Component
 	{
 		get
 		{
-			if ( _previewTarget is not Tree tree || !tree.IsValid() || !tree.IsStanding ) return false;
+			TreeKind kind;
+			if ( _previewTarget is Tree tree && tree.IsValid() && tree.IsStanding ) kind = tree.Kind;
+			else if ( _previewTarget is FallenLog log && log.IsValid() ) kind = log.Kind;
+			else return false;
 			var state = GameState.Get( Scene );
 			int axeTier = state.IsValid() ? state.AxeTier : 0;
-			return axeTier < Tunables.TreeKindMinAxeTier[(int)tree.Kind];
+			return axeTier < Tunables.TreeKindMinAxeTier[(int)kind];
 		}
 	}
 	public string AimTargetLabel
@@ -558,7 +567,18 @@ public sealed class AxeController : Component
 		get
 		{
 			if ( _previewTarget is null || !_previewTarget.IsValid() ) return "";
-			if ( _previewTarget is FallenLog log ) return $"CHOP LOG · {log.ChopsRemaining}";
+			if ( _previewTarget is FallenLog log )
+			{
+				if ( AimTargetTooHard )
+				{
+					int neededTier = Tunables.TreeKindMinAxeTier[(int)log.Kind];
+					string need = neededTier >= 0 && neededTier < Tunables.AxeTierName.Length
+						? Tunables.AxeTierName[neededTier].ToUpper()
+						: $"T{neededTier}";
+					return $"AXE TOO WEAK · NEEDS {need}";
+				}
+				return $"CHOP LOG · {log.ChopsRemaining}";
+			}
 			if ( _previewTarget is not Tree tree ) return "";
 			if ( tree.IsFallenLog ) return $"CHOP LOG · {tree.ChopsRemaining}";
 			if ( AimTargetTooHard )

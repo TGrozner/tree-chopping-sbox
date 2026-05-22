@@ -13,7 +13,7 @@ public sealed class SelfTest : Component
 	{
 		Init, TestSpawnDistribution, Approach, Swing, Verify,
 		TestStump, TestSplit, TestLandedLogChopGrace, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
-		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
+		TestAxeTierGate, TestLogTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestDepositFlush, TestDepositStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
 		TestFellCanopyDestroyed, TestImpactDamageScaling, TestWindDirRotation, TestRespawnJitterRange, TestWoodTypeDistribution, TestTreeShakeReset, TestCascadeShakeNoFell,
@@ -63,6 +63,10 @@ public sealed class SelfTest : Component
 	private TimeSince _cascadeCollisionStartTime;
 	private bool _cascadeCollisionSpawned;
 	private int _cascadeNeighborHpBefore;
+	private FallenLog _logTierGateLog;
+	private TimeSince _logTierGateSinceLanded;
+	private bool _logTierGateSpawned;
+	private int _logTierGateHpBefore;
 	// État pour TestStumpRespawn
 	private TreeStump _respawnStump;
 	private TimeSince _respawnStartTime;
@@ -105,6 +109,7 @@ public sealed class SelfTest : Component
 			case Phase.TestCascadeDamage: TickTestCascadeDamage(); break;
 			case Phase.TestCascadeCollision: TickTestCascadeCollision(); break;
 			case Phase.TestAxeTierGate: TickTestAxeTierGate(); break;
+			case Phase.TestLogTierGate: TickTestLogTierGate(); break;
 			case Phase.TestChopPowerScaling: TickTestChopPowerScaling(); break;
 			case Phase.TestImpactBelowMin: TickTestImpactBelowMin(); break;
 			case Phase.TestImpactZeroNoOp: TickTestImpactZeroNoOp(); break;
@@ -433,7 +438,7 @@ public sealed class SelfTest : Component
 			_landedGraceEarlyHitChecked = false;
 			var pos = _targetTreePos + new Vector3( -520f, 420f, 0f );
 			if ( TryGetGroundZ( pos.x, pos.y, out var gz ) ) pos = pos.WithZ( gz );
-			_landedGraceTree = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Normal );
+			_landedGraceTree = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Sapling );
 			_landedGraceTree.StartFell( Vector3.Forward );
 			_landedGraceLog = FindNearestFallenLog( pos, 700f );
 			return;
@@ -781,6 +786,64 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] AXE_GATE PASS  AxeTier 0 vs Veteran HP={hpBefore} unchanged + standing" );
+		Transition( Phase.TestLogTierGate );
+	}
+
+	private void TickTestLogTierGate()
+	{
+		if ( !_logTierGateSpawned )
+		{
+			_state.ResetForTest();
+			var vetPos = _targetTreePos + new Vector3( -1380f, 260f, 0f );
+			if ( TryGetGroundZ( vetPos.x, vetPos.y, out var gz ) ) vetPos = vetPos.WithZ( gz );
+			ClearTestObjectsAround( vetPos, 900f );
+			var vet = Tree.SpawnAt( Scene, vetPos, 1f, TreeKind.Veteran );
+			vet.StartFell( Vector3.Forward );
+			_logTierGateLog = vet.SpawnedLog;
+			if ( !_logTierGateLog.IsValid() )
+			{
+				Log.Error( "[TC_TEST] FAIL TestLogTierGate: Veteran StartFell did not spawn FallenLog" );
+				Finish();
+				return;
+			}
+			_logTierGateLog.ApplyImpactDamage( 1, Vector3.Forward );
+			_logTierGateHpBefore = _logTierGateLog.ChopsRemaining;
+			_logTierGateSinceLanded = 0f;
+			_logTierGateSpawned = true;
+			return;
+		}
+
+		var log = _logTierGateLog;
+		if ( !log.IsValid() )
+		{
+			Log.Error( "[TC_TEST] FAIL TestLogTierGate: Veteran log vanished before tier check" );
+			Finish();
+			return;
+		}
+		if ( (float)_logTierGateSinceLanded < Tunables.WoodLogChopGrace + 0.06f )
+			return;
+
+		int hpBefore = _logTierGateHpBefore;
+		ParkPlayerFacing( log.LogCenter );
+		var weakHit = _axe.DebugSwingVerbose();
+		if ( weakHit != log || log.ChopsRemaining != hpBefore || !log.IsFallenLog )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestLogTierGate: weak axe changed Veteran log (hit={weakHit?.GetType().Name ?? "null"} hp {hpBefore}->{(log.IsValid() ? log.ChopsRemaining : -1)} valid={log.IsValid()})" );
+			Finish();
+			return;
+		}
+
+		int neededTier = Tunables.TreeKindMinAxeTier[(int)TreeKind.Veteran];
+		UpgradeAxeTo( neededTier );
+		ParkPlayerFacing( log.LogCenter );
+		var strongHit = _axe.DebugSwingVerbose();
+		if ( strongHit != log || (log.IsValid() && log.ChopsRemaining >= hpBefore) )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestLogTierGate: valid tier did not damage Veteran log (hit={strongHit?.GetType().Name ?? "null"} hpBefore={hpBefore} hpNow={(log.IsValid() ? log.ChopsRemaining : -1)} valid={log.IsValid()})" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] LOG_TIER_GATE PASS  Veteran log T0 bounced, T{neededTier} damaged/split" );
 		Transition( Phase.TestChopPowerScaling );
 	}
 
@@ -2026,6 +2089,37 @@ public sealed class SelfTest : Component
 		dir = dir.Normal;
 		var pos = targetPos - dir * 70f + Vector3.Up * 35f;
 		_axe.TeleportTo( pos, Rotation.LookAt( dir ).Yaw() );
+	}
+
+	private void UpgradeAxeTo( int tier )
+	{
+		int wood = 0, finewood = 0, corewood = 0;
+		for ( int i = _state.AxeTier + 1; i <= tier; i++ )
+		{
+			var recipe = Tunables.AxeTierCostsByType[i];
+			wood += recipe[0];
+			finewood += recipe[1];
+			corewood += recipe[2];
+		}
+		if ( wood > 0 ) _state.AddWood( wood );
+		if ( finewood > 0 ) _state.AddBackpack( finewood, WoodType.Finewood );
+		if ( corewood > 0 ) _state.AddBackpack( corewood, WoodType.CoreWood );
+		if ( finewood > 0 || corewood > 0 ) _state.TryDeposit();
+		while ( _state.AxeTier < tier && _state.TryUpgradeAxe() ) { }
+	}
+
+	private void ClearTestObjectsAround( Vector3 center, float radius )
+	{
+		foreach ( var tree in Scene.GetAllComponents<Tree>().ToList() )
+		{
+			if ( tree.IsValid() && tree.WorldPosition.Distance( center ) < radius )
+				tree.GameObject?.Destroy();
+		}
+		foreach ( var log in Scene.GetAllComponents<FallenLog>().ToList() )
+		{
+			if ( log.IsValid() && log.WorldPosition.Distance( center ) < radius )
+				log.GameObject?.Destroy();
+		}
 	}
 
 	private FallenLog FindNearestFallenLog( Vector3 pos, float radius )

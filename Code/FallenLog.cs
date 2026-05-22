@@ -157,24 +157,42 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	bool IChoppable.IsValid() => IsFallenLog && this.IsValid();
 	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Axe;
 	void IChoppable.Chop( Vector3 direction, Vector3 hitPoint ) => Chop( direction, 1, hitPoint );
-	public void Damage( HitData hit ) => Chop( hit.Direction, hit.ChopPower, hit.HitPoint );
+	public void Damage( HitData hit ) => Chop( hit.Direction, hit.ChopPower, hit.HitPoint, hit.ToolTier );
 
 	public void Chop( Vector3 direction, int chopPower, Vector3 hitPoint )
 	{
+		Chop( direction, chopPower, hitPoint, null );
+	}
+
+	private void Chop( Vector3 direction, int chopPower, Vector3 hitPoint, int? toolTierOverride )
+	{
 		if ( _logSplit || !_landed ) return;
 		if ( (float)_timeSinceLanded < Tunables.WoodLogChopGrace ) return;
+		var gs = GameState.Get( Scene );
+		int axeTier = toolTierOverride ?? (gs.IsValid() ? gs.AxeTier : 0);
+		int neededTier = Tunables.TreeKindMinAxeTier[(int)Kind];
+		if ( axeTier < neededTier )
+		{
+			var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
+			if ( hud.IsValid() )
+			{
+				hud.ShowAxeTooWeakHint( Kind, neededTier );
+				var popupPos = hitPoint.LengthSquared > 0.01f ? hitPoint : LogCenter;
+				hud.ShowDamageText( "TROP DUR", popupPos, WoodHud.DamageTextTooHard );
+			}
+			return;
+		}
 
 		ChopsRemaining -= chopPower;
 		PulseHitFlash( ChopsRemaining <= 0 );
-		var gsChop = GameState.Get( Scene );
-		bool leveledUp = gsChop.IsValid() && gsChop.IncrementTreeChops();
-		var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
-		if ( hud.IsValid() )
+		bool leveledUp = gs.IsValid() && gs.IncrementTreeChops();
+		var damageHud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
+		if ( damageHud.IsValid() )
 		{
 			var popupPos = hitPoint.LengthSquared > 0.01f ? hitPoint : LogCenter;
-			hud.ShowDamageText( chopPower.ToString(), popupPos, WoodHud.DamageTextNormal );
+			damageHud.ShowDamageText( chopPower.ToString(), popupPos, WoodHud.DamageTextNormal );
 			if ( leveledUp )
-				hud.ShowDamageText( $"WoodCutting Lv.{gsChop.WoodCuttingLevel}", popupPos + Vector3.Up * 50f, WoodHud.DamageTextBonus, isBonus: true );
+				damageHud.ShowDamageText( $"WoodCutting Lv.{gs.WoodCuttingLevel}", popupPos + Vector3.Up * 50f, WoodHud.DamageTextBonus, isBonus: true );
 		}
 		ApplyLandedKick( direction, hitPoint, chopPower );
 		SpawnLandedChopScar( hitPoint, direction, chopPower, ChopsRemaining <= 0 );

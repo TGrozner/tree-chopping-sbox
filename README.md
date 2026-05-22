@@ -36,7 +36,8 @@ dotnet build Code/tree_chopping.csproj
 | Fichier | Rôle |
 |---|---|
 | `Code/SceneStarter.cs` | Bootstrap : singletons, terrain procédural, mountain borders, player spawn, forêt biome-biased, hub/shop stations |
-| `Code/Tree.cs` | Multi-chop + StartFell + landed-log split + wood item drops. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
+| `Code/Tree.cs` | Standing tree multi-chop + StartFell + stump/fell bonus drops. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
+| `Code/FallenLog.cs` | Valheim-style TreeLog equivalent : falling physics, impact/cascade damage, landed-log chops, split to WoodItems |
 | `Code/AxeController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
 | `Code/GameState.cs` | Persistence (FileSystem.Data/progress.json) : Wood/Finewood/CoreWood stockpiles + backpack, AxeTier 0..6, Speed/Luck/Power tiers 0..5, PetTier 0..5, Spirits + TotalWoodEarned (prestige). Derived : ChopPower, WoodMultiplier, SpeedMultiplier, LuckChance |
 | `Code/ShopStation.cs` | Stations Tools / Depot / Upgrades / Prestige autour du hub |

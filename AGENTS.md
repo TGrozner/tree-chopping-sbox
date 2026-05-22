@@ -229,14 +229,14 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
     ├─ Mass-scaled ApplyTorque sur (Up × _fellDir), no impulse — gravité + torque only
     │   (sapling et veteran ont la même accel angulaire, fix du "petits arbres flyent")
     └─ Trigger BecomeLandedLog when upDot < TreeFallenUpDotMax OR 5s timeout (stuck against neighbor)
-  Tree.BecomeLandedLog (n'AUTO-CREDIT PLUS de wood — Phase F change) :
+  FallenLog.BecomeLandedLog (n'AUTO-CREDIT PLUS de wood — Phase F change) :
     ├─ Damping landed (TreeAngularDampLanded / TreeLinearDampLanded)
     ├─ log_break SFX volume × speedFrac (mass-scaled landing pitch)
     ├─ Dust burst (3 directions, ~24 brown leaves up + side)
     ├─ SnapTrunkOnImpact : upper trunk + canopy rotate 12-22° misalign + 6u offset
     │   → lit visually comme "le tronc s'est cassé à l'impact" sans physics break
     └─ ChopsRemaining = Tunables.LogChopHP[Kind] (le tronc landed reste IChoppable)
-  Tree.Chop sur landed log :
+  FallenLog.Chop sur landed log :
     └─ HP <= 0 → SplitIntoLogs : spawn N WoodItems alignés sur l'axe du tronc couché,
        N = TreeKindLandedDropCount[Kind], items burst au final chop du landed log
        (Luck stat = chance de bonus items, Mythic = +2 items, résolu ici une seule fois)
@@ -355,7 +355,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 - [[tree-chopping-design-log]] — Chronologique des décisions, override events, rationale. Si tu vas changer un comportement existant, lis d'abord pourquoi il est comme ça.
 
 **Aligné 1:1 vérifiable** :
-- Two-stage prefab swap (TreeBase → TreeLog ≈ Tree state machine → WoodItem direct, on a viré l'intermediate WoodLog)
+- Two-stage prefab swap (TreeBase → TreeLog ≈ `Tree.StartFell` → `FallenLog.SpawnFromTree` → WoodItem direct)
 - Stump séparée (m_stubPrefab ≈ TreeStump)
 - ResetInertiaTensor avant kick au fell
 - Grace period au log spawn (Valheim 0.2s, nous WoodLogChopGrace 0.2s)
@@ -387,7 +387,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 - `tools/selftest.ps1` : phases tests verrouillent les comportements clés. ~11s wall, 10+ phases.
 
 **Déviations restantes (assumées)** :
-- Pipeline Tree (1 component) flip MotionEnabled vs Valheim TreeBase destroy + spawn TreeLog (2 components). Visuellement équivalent, plus simple notre archi.
+- Pipeline TreeBase destroy + spawn TreeLog désormais aligné : `Tree` standing détruit après spawn `FallenLog`, qui porte le chop/impact landed.
 - Continuous-play short respawn (30-300s par kind) vs Valheim's m_respawnTimeMinutes (minutes-scale, polled chaque 60s). Cadence différente pour notre Cookie-Clicker loop.
 - Skills tier-based purchase (AxeTier 0-6, ShopStation) vs Valheim's continuous 0-100 RaiseSkill. Game design choice.
 - LandingShakeAmp retiré : Valheim trees ne secouent pas l'écran à eux seuls, on a aligné.
