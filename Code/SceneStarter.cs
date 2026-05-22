@@ -244,7 +244,7 @@ public sealed class SceneStarter : Component
 		float outerR = Tunables.ArenaRadius;
 		SpawnStarterResourceField();
 		int scripted = SpawnProgressionGroves();
-		SpawnForestBand( innerR, outerR, Math.Max( 0, TreeCount - scripted ) );
+		SpawnForestBand( innerR + 680f, outerR, Math.Max( 0, TreeCount - scripted ) );
 	}
 
 	private int SpawnProgressionGroves()
@@ -352,7 +352,7 @@ public sealed class SceneStarter : Component
 		{
 			attempts++;
 			float r = SpawnPadRadius + MathX.Lerp( StartOffset, EndOffset, (float)rng.NextDouble() );
-			float angle = (float)(rng.NextDouble() * MathF.Tau);
+			float angle = MathX.Lerp( -62f, 62f, (float)rng.NextDouble() ).DegreeToRadian();
 			float x = ResolvedPlayerSpawn.x + MathF.Cos( angle ) * r;
 			float y = ResolvedPlayerSpawn.y + MathF.Sin( angle ) * r;
 			if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
