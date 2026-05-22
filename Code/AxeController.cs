@@ -515,7 +515,15 @@ public sealed class AxeController : Component
 		{
 			if ( !_previewTree.IsValid() ) return "";
 			if ( _previewTree.IsFallenLog ) return $"CHOP LOG · {_previewTree.ChopsRemaining}";
-			return AimTargetTooHard ? "AXE TOO WEAK" : $"CHOP {_previewTree.Kind.ToString().ToUpper()} · {_previewTree.ChopsRemaining}";
+			if ( AimTargetTooHard )
+			{
+				int neededTier = Tunables.TreeKindMinAxeTier[(int)_previewTree.Kind];
+				string need = neededTier >= 0 && neededTier < Tunables.AxeTierName.Length
+					? Tunables.AxeTierName[neededTier].ToUpper()
+					: $"T{neededTier}";
+				return $"AXE TOO WEAK · NEEDS {need}";
+			}
+			return $"CHOP {_previewTree.Kind.ToString().ToUpper()} · {_previewTree.ChopsRemaining}";
 		}
 	}
 
