@@ -1,7 +1,8 @@
 namespace TreeChopping;
 
 // Headless-friendly autoplay driver. Toggle Active=true to make the player
-// walk to the nearest standing tree, swing until it fells, then repeat.
+// walk to the nearest standing tree, split the landed log, collect, sell,
+// upgrade, then repeat.
 // Used both by gameplay validation runs (bridge sets Active=true, frames
 // captured by screenshot loop) and as a stress harness for cascade physics.
 public sealed class AutoPlay : Component
@@ -11,16 +12,24 @@ public sealed class AutoPlay : Component
 	[Property, ReadOnly] public string CurrentAction { get; set; } = "idle";
 	[Property, ReadOnly] public int TreesFelled { get; set; }
 
+	public static bool IsAnyActive( Scene scene )
+		=> scene?.GetAllComponents<AutoPlay>().Any( a => a.IsValid() && a.Active ) == true;
+
 	private AxeController _axe;
 	private Tree _target;
+	private Vector3 _targetPos;
+	private bool _countedTargetFell;
 	private TimeSince _sinceLastSwing = 999f;
+	private TimeSince _sinceLastPickupMove = 999f;
 	private TimeSince _sinceShopArrived = 999f;
+	private bool _wasActive;
 	private int _step;
 	private const int StepPickTarget = 0;
 	private const int StepApproach = 1;
 	private const int StepSwing = 2;
-	private const int StepGoShop = 3;
-	private const int StepBuyShop = 4;
+	private const int StepCollectDrops = 3;
+	private const int StepGoShop = 4;
+	private const int StepBuyShop = 5;
 
 	protected override void OnUpdate()
 	{
@@ -44,8 +53,15 @@ public sealed class AutoPlay : Component
 
 		if ( !Active )
 		{
+			_wasActive = false;
 			if ( CurrentAction != "looking back at shop" ) CurrentAction = "idle";
 			return;
+		}
+		if ( !_wasActive )
+		{
+			_wasActive = true;
+			_target = null;
+			_step = StepPickTarget;
 		}
 
 		if ( !_axe.IsValid() ) { CurrentAction = "no player"; return; }
@@ -55,6 +71,7 @@ public sealed class AutoPlay : Component
 			case StepPickTarget: TickPickTarget(); break;
 			case StepApproach: TickApproach(); break;
 			case StepSwing: TickSwing(); break;
+			case StepCollectDrops: TickCollectDrops(); break;
 			case StepGoShop: TickGoShop(); break;
 			case StepBuyShop: TickBuyShop(); break;
 		}
@@ -72,6 +89,12 @@ public sealed class AutoPlay : Component
 			_step = StepGoShop;
 			return;
 		}
+		if ( gs.IsValid() && gs.BackpackFull )
+		{
+			CurrentAction = $"backpack full {gs.BackpackTotal}/{gs.BackpackCapacity} - heading to shop";
+			_step = StepGoShop;
+			return;
+		}
 		if ( gs.IsValid() && AnyUpgradeAffordable( gs ) )
 		{
 			CurrentAction = $"have {gs.Wood} wood — heading to shop";
@@ -80,6 +103,8 @@ public sealed class AutoPlay : Component
 		}
 		_target = PickNearestStandingTree();
 		if ( !_target.IsValid() ) { CurrentAction = "no standing trees in range"; return; }
+		_targetPos = _target.WorldPosition;
+		_countedTargetFell = false;
 		CurrentAction = $"targeted tree at {_target.WorldPosition}";
 		_step = StepApproach;
 	}
@@ -103,17 +128,66 @@ public sealed class AutoPlay : Component
 		// Tree is "felled" once it's neither standing nor falling — i.e. it
 		// has landed and (probably) paid wood. Counting on !IsStanding alone
 		// over-counts during the fall animation.
-		if ( !_target.IsValid() || (!_target.IsStanding && !_target.IsFalling) )
+		if ( _target.IsValid() && !_countedTargetFell && !_target.IsStanding )
 		{
+			_countedTargetFell = true;
 			TreesFelled++;
 			CurrentAction = $"tree fell — total {TreesFelled}";
-			_step = 0;
+		}
+		if ( !_target.IsValid() )
+		{
+			CurrentAction = "log split - collecting drops";
+			_sinceLastPickupMove = 999f;
+			_step = StepCollectDrops;
+			return;
+		}
+		if ( _target.IsFalling )
+		{
+			CurrentAction = $"tree falling - total {TreesFelled}";
 			return;
 		}
 		if ( (float)_sinceLastSwing < 0.45f ) return;
-		_axe.DebugSwing();
+		ParkFacing( _target.LogCenter );
+		var hit = _axe.DebugSwing();
+		if ( hit is null )
+		{
+			CurrentAction = "swing miss - repositioning";
+			_step = StepApproach;
+			return;
+		}
+		if ( hit is Tree hitTree && hitTree.IsValid() && hitTree != _target )
+		{
+			_target = hitTree;
+			_targetPos = hitTree.WorldPosition;
+			_countedTargetFell = !hitTree.IsStanding;
+		}
 		_sinceLastSwing = 0f;
 		CurrentAction = $"swing — chops left {_target.ChopsRemaining}";
+	}
+
+	private void TickCollectDrops()
+	{
+		var gs = GameState.Get( Scene );
+		var items = Scene.GetAllComponents<WoodItem>()
+			.Where( w => w.IsValid() && w.WorldPosition.Distance( _targetPos ) < 900f )
+			.OrderBy( w => _axe.WorldPosition.Distance( w.WorldPosition ) )
+			.ToList();
+		if ( items.Count == 0 || (gs.IsValid() && gs.BackpackFull) )
+		{
+			CurrentAction = gs.IsValid()
+				? $"collected bag {gs.BackpackTotal}/{gs.BackpackCapacity}"
+				: "collected";
+			_step = StepPickTarget;
+			return;
+		}
+
+		if ( (float)_sinceLastPickupMove < 0.20f ) return;
+		var item = items[0];
+		var dir = (item.WorldPosition - _axe.WorldPosition).WithZ( 0f );
+		float yaw = dir.LengthSquared > 1f ? Rotation.LookAt( dir.Normal ).Yaw() : 0f;
+		_axe.TeleportTo( item.WorldPosition + Vector3.Up * 35f, yaw );
+		_sinceLastPickupMove = 0f;
+		CurrentAction = $"collecting drops {items.Count} left";
 	}
 
 	private void TickGoShop()
@@ -164,5 +238,13 @@ public sealed class AutoPlay : Component
 			.FirstOrDefault();
 		if ( choppable.IsValid() ) return choppable;
 		return standing.OrderBy( t => playerPos.Distance( t.WorldPosition ) ).FirstOrDefault();
+	}
+
+	private void ParkFacing( Vector3 targetPos )
+	{
+		var dir = (targetPos - _axe.WorldPosition).WithZ( 0f );
+		if ( dir.LengthSquared < 1f ) dir = Vector3.Forward;
+		float yaw = Rotation.LookAt( dir.Normal ).Yaw();
+		_axe.TeleportTo( _axe.WorldPosition, yaw );
 	}
 }

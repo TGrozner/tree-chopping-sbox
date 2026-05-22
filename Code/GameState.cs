@@ -169,8 +169,9 @@ public sealed class GameState : Component
 		// real progress.json (the FileSystem.Data dir is shared between
 		// selftest and human play). Same gate for FilmStrip when it boots
 		// active via +tc_filmstrip — the visual capture scenario resets
-		// state and shouldn't touch the player's save either.
-		if ( SelfTest.IsActiveRequest() || FilmStrip.IsAnyActive( Scene ) ) return;
+		// state and shouldn't touch the player's save either. AutoPlay is also
+		// a validation driver, not real player progress.
+		if ( SelfTest.IsActiveRequest() || FilmStrip.IsAnyActive( Scene ) || AutoPlay.IsAnyActive( Scene ) ) return;
 		try
 		{
 			FileSystem.Data.WriteJson( PersistFile, new SaveData
