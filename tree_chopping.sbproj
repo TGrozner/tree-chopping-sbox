@@ -27,7 +27,7 @@
     "ProjectTemplate": {
       "Icon": "park",
       "Order": 0,
-      "Description": "Beaver chops trees, gathers wood."
+      "Description": "Chop trees, gather wood, upgrade tools."
     }
   }
 }

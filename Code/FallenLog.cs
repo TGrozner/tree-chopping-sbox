@@ -219,7 +219,8 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		var t = (_slowTipElapsed / Tunables.SlowTipDuration).Clamp( 0f, 1f );
 		var frac = MathX.Lerp( Tunables.SlowTipInitialFrac, Tunables.SlowTipRampFrac, t );
 		float massScale = Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass / Tunables.TreeMass : 1f;
-		Body.ApplyTorque( Vector3.Up.Cross( _fellDir ) * Tunables.FellTorque * frac * Time.Delta * massScale );
+		float kindTorqueMul = Tunables.TreeKindFellTorqueMul[(int)Kind];
+		Body.ApplyTorque( Vector3.Up.Cross( _fellDir ) * Tunables.FellTorque * frac * Time.Delta * massScale * kindTorqueMul );
 		var upDot = WorldRotation.Up.Dot( Vector3.Up );
 		if ( !_whooshFired && upDot < Tunables.TreeWhooshUpDotThreshold )
 		{
@@ -282,7 +283,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
 		float impactSpeed = _preCollisionVelocity.Length;
 		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
-		_timeSinceLastImpactDamage = 0f;
 
 		float impactScale = ((impactSpeed - Tunables.ImpactMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
 		float softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
@@ -305,23 +305,30 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		if ( dir.LengthSquared < 0.01f ) dir = _fellDir;
 		if ( dir.LengthSquared < 0.01f ) dir = Vector3.Forward;
 
+		bool consumedImpact = false;
 		if ( tree.IsValid() && tree.IsStanding )
 		{
 			if ( damage > 0 ) tree.ApplyImpactDamage( damage, dir.Normal );
 			else tree.ReactToSoftImpactFromLog( dir.Normal, contactPoint );
+			consumedImpact = true;
 		}
 		else if ( log.IsValid() && log != this )
 		{
 			if ( damage > 0 ) log.ApplyImpactDamage( damage, dir.Normal );
 			else log.ApplyLandedKick( dir.Normal, contactPoint );
+			consumedImpact = true;
 		}
 
 		if ( Tunables.ImpactDamageSelf && damage > 0 )
 		{
 			float splitSpeed = _landed ? Tunables.WoodLogBreakImpactSpeed : Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)Kind];
 			if ( impactSpeed >= splitSpeed || (!_landed && impactScale >= Tunables.ImpactViolentScale) )
+			{
 				ApplyImpactDamage( damage, dir.Normal );
+				consumedImpact = true;
+			}
 		}
+		if ( consumedImpact ) _timeSinceLastImpactDamage = 0f;
 	}
 
 	void Component.ICollisionListener.OnCollisionUpdate( Collision other ) { }

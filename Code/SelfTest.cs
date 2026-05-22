@@ -740,11 +740,24 @@ public sealed class SelfTest : Component
 				}
 				_cascadeSourceLog.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
 				_cascadeSourceLog.Body.AngularVelocity = Vector3.Zero;
+				_cascadeSourceLog.Body.Sleeping = false;
 			}
 			_cascadeCollisionStartTime = 0f;
 			_cascadeCollisionSpawned = true;
 			Log.Info( $"[TC_TEST] CascadeCollision : source={sourcePos} neighbor={neighborPos} hp={_cascadeNeighborHpBefore}" );
 			return;
+		}
+
+		if ( _cascadeSourceLog.IsValid() && (float)_cascadeCollisionStartTime < 0.65f && _cascadeSourceLog.Body.IsValid() )
+		{
+			var logAxis = _cascadeSourceLog.WorldRotation.Up;
+			if ( logAxis.LengthSquared < 0.001f ) logAxis = Vector3.Forward;
+			logAxis = logAxis.Normal;
+			var velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
+			if ( _cascadeSourceLog.Body.PhysicsBody.IsValid() )
+				_cascadeSourceLog.Body.PhysicsBody.Velocity = velocity;
+			_cascadeSourceLog.Body.Velocity = velocity;
+			_cascadeSourceLog.Body.Sleeping = false;
 		}
 
 		if ( !_cascadeNeighbor.IsValid() || !_cascadeNeighbor.IsStanding )
@@ -1501,6 +1514,19 @@ public sealed class SelfTest : Component
 		if ( Tunables.TreeKindChopPitchMul.Length != 4 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeKindChopPitchMul has {Tunables.TreeKindChopPitchMul.Length} entries (expected 4)" );
+			Finish();
+			return;
+		}
+		if ( Tunables.TreeKindFellTorqueMul.Length != 4 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeKindFellTorqueMul has {Tunables.TreeKindFellTorqueMul.Length} entries (expected 4)" );
+			Finish();
+			return;
+		}
+		if ( Tunables.TreeKindFellTorqueMul[(int)TreeKind.Sapling] <= Tunables.TreeKindFellTorqueMul[(int)TreeKind.Normal]
+			|| Tunables.TreeKindFellTorqueMul[(int)TreeKind.Veteran] >= Tunables.TreeKindFellTorqueMul[(int)TreeKind.Normal] )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: fell torque kind mul should be Sapling > Normal > Veteran (S={Tunables.TreeKindFellTorqueMul[(int)TreeKind.Sapling]}, N={Tunables.TreeKindFellTorqueMul[(int)TreeKind.Normal]}, V={Tunables.TreeKindFellTorqueMul[(int)TreeKind.Veteran]})" );
 			Finish();
 			return;
 		}

@@ -920,7 +920,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 		float impactSpeed = _preCollisionVelocity.Length;
 		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
-		_timeSinceLastImpactDamage = 0f;
 
 		// Valheim feel : cascade impact crÃ©e un thud + dust burst au point de
 		// collision. Sans ce feedback, le tronc qui crash dans un voisin paraissait
@@ -978,6 +977,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			{
 				if ( damage > 0 ) neighbor.ApplyImpactDamage( damage, dirOther.Normal );
 				else neighbor.ReactToSoftImpact( dirOther.Normal, contactPoint );
+				_timeSinceLastImpactDamage = 0f;
 			}
 		}
 
@@ -993,6 +993,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 				var selfDir = _preCollisionVelocity.WithZ( 0f );
 				if ( selfDir.LengthSquared < 0.01f ) selfDir = Vector3.Forward;
 				ApplyImpactDamage( damage, selfDir.Normal );
+				_timeSinceLastImpactDamage = 0f;
 			}
 		}
 	}
@@ -1162,8 +1163,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// trees flew). Linear impulse dropped entirely â€” gravity + torque
 		// is the entire fall, no "kick" that throws light trees.
 		float massScale = Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass / Tunables.TreeMass : 1f;
+		float kindTorqueMul = Tunables.TreeKindFellTorqueMul[(int)Kind];
 		var torqueAxis = Vector3.Up.Cross( _fellDir );
-		Body.ApplyTorque( torqueAxis * Tunables.FellTorque * frac * Time.Delta * massScale );
+		Body.ApplyTorque( torqueAxis * Tunables.FellTorque * frac * Time.Delta * massScale * kindTorqueMul );
 		var upDot = WorldRotation.Up.Dot( Vector3.Up );
 		SweepNearbyCascadeTargets();
 

@@ -306,6 +306,7 @@ public static class Tunables
 	//                      n'importe quel impact ground), Veteran haut
 	//                      (faut un vrai impact pour split).
 	public static readonly float[] TreeKindInitialFellOmegaMul = { 1.0f, 1.4f, 0.7f, 1.25f };
+	public static readonly float[] TreeKindFellTorqueMul       = { 1.0f, 1.35f, 0.82f, 1.45f };
 	public static readonly float[] TreeKindGroanPitchMul       = { 1.0f, 1.30f, 0.65f, 1.35f };
 	public static readonly float[] TreeKindSplitImpactMul      = { 1.0f, 1.0f, 1.0f, 0.45f };
 	// Bonus items droppés instantanément au StartFell (Valheim TreeBase.RPC_Damage
