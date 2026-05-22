@@ -710,12 +710,12 @@ public sealed class SelfTest : Component
 		_state.AddWood( totalWood );
 		_state.AddBackpack( totalFinewood, WoodType.Finewood );
 		_state.AddBackpack( totalCoreWood, WoodType.CoreWood );
-		_state.TrySell(); // flush Finewood + CoreWood backpack → wallet
+		_state.TrySell(); // flush Finewood + CoreWood backpack → stockpile
 		for ( int i = 0; i < 4; i++ )
 		{
 			if ( !_state.TryUpgradeAxe() )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestChopPowerScaling: TryUpgradeAxe failed at tier {_state.AxeTier} (wallet Wood={_state.Wood}/{Tunables.AxeTierCostsByType[_state.AxeTier+1][0]} FW={_state.Finewood}/{Tunables.AxeTierCostsByType[_state.AxeTier+1][1]} CW={_state.CoreWood}/{Tunables.AxeTierCostsByType[_state.AxeTier+1][2]})" );
+			Log.Error( $"[TC_TEST] FAIL TestChopPowerScaling: TryUpgradeAxe failed at tier {_state.AxeTier} (stockpile Wood={_state.Wood}/{Tunables.AxeTierCostsByType[_state.AxeTier+1][0]} FW={_state.Finewood}/{Tunables.AxeTierCostsByType[_state.AxeTier+1][1]} CW={_state.CoreWood}/{Tunables.AxeTierCostsByType[_state.AxeTier+1][2]})" );
 				Finish();
 				return;
 			}
@@ -804,8 +804,8 @@ public sealed class SelfTest : Component
 
 	private void TickTestSellFlush()
 	{
-		// TrySell flush BackpackWood → Wood (wallet) + reset backpack à 0 +
-		// incr TotalWoodEarned. Vérifie le path SELL station.
+		// TrySell flush BackpackWood → Wood (stockpile) + reset backpack à 0 +
+		// incr TotalWoodEarned. Vérifie le path depot station.
 		_state.ResetForTest();
 		_state.AddBackpack( 10 );
 		int wBefore = _state.Wood;
@@ -814,11 +814,11 @@ public sealed class SelfTest : Component
 		if ( sold != 10 || _state.BackpackWood != 0 || _state.Wood != wBefore + 10
 			|| _state.TotalWoodEarned != totalBefore + 10 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestSellFlush: sold={sold} (expected 10), backpack={_state.BackpackWood} wood {wBefore}→{_state.Wood} total {totalBefore}→{_state.TotalWoodEarned}" );
+			Log.Error( $"[TC_TEST] FAIL TestSellFlush: deposited={sold} (expected 10), backpack={_state.BackpackWood} wood {wBefore}→{_state.Wood} total {totalBefore}→{_state.TotalWoodEarned}" );
 			Finish();
 			return;
 		}
-		Log.Info( $"[TC_TEST] SELL_FLUSH PASS  sold=10, wallet {wBefore}→{_state.Wood}, total {totalBefore}→{_state.TotalWoodEarned}, backpack reset" );
+		Log.Info( $"[TC_TEST] DEPOT_FLUSH PASS  deposited=10, stockpile {wBefore}→{_state.Wood}, total {totalBefore}→{_state.TotalWoodEarned}, backpack reset" );
 		Transition( Phase.TestSellStationEntry );
 	}
 
@@ -828,7 +828,7 @@ public sealed class SelfTest : Component
 			.FirstOrDefault( s => s.IsValid() && s.Kind == StationKind.Sell );
 		if ( !sellStation.IsValid() )
 		{
-			Log.Error( "[TC_TEST] FAIL TestSellStationEntry: no SELL station found" );
+			Log.Error( "[TC_TEST] FAIL TestSellStationEntry: no depot station found" );
 			Finish();
 			return;
 		}
@@ -869,7 +869,7 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		Log.Info( $"[TC_TEST] SELL_STATION_ENTRY PASS  entering SELL ring auto-sold 12, wallet {_sellStationWalletBefore}->{_state.Wood}" );
+		Log.Info( $"[TC_TEST] DEPOT_STATION_ENTRY PASS  entering depot ring auto-deposited 12, stockpile {_sellStationWalletBefore}->{_state.Wood}" );
 		Transition( Phase.TestPrestigeFormula );
 	}
 
@@ -1033,7 +1033,7 @@ public sealed class SelfTest : Component
 		int sold = _state.TrySell();
 		if ( sold != 10 || _state.Wood != 5 || _state.Finewood != 3 || _state.CoreWood != 2 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TrySell sold={sold} (exp 10), wallets Wood={_state.Wood}/5 Finewood={_state.Finewood}/3 CoreWood={_state.CoreWood}/2" );
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TrySell deposited={sold} (exp 10), stockpiles Wood={_state.Wood}/5 Finewood={_state.Finewood}/3 CoreWood={_state.CoreWood}/2" );
 			Finish();
 			return;
 		}
@@ -1048,7 +1048,7 @@ public sealed class SelfTest : Component
 		bool helperSold = ShopStation.TryBuyCheapestAcrossAll( Scene );
 		if ( !helperSold || _state.BackpackTotal != 0 || _state.Finewood != 3 )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not flush Finewood-only backpack (sold={helperSold}, bag={_state.BackpackTotal}, Finewood={_state.Finewood})" );
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: TryBuyCheapestAcrossAll did not flush Finewood-only backpack (deposited={helperSold}, bag={_state.BackpackTotal}, Finewood={_state.Finewood})" );
 			Finish();
 			return;
 		}

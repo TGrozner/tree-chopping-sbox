@@ -60,7 +60,7 @@ public sealed class WoodHud : Component
 	private TreeKind _axeTooWeakKind;
 	private int _axeTooWeakNeededTier;
 
-	// Fired by SELL station after a TrySell — shows the amount transferred
+	// Fired by the depot after a TrySell — shows the amount transferred
 	// as a brief floating "+N" so the action reads.
 	public void ShowSellFlash( int amount )
 	{
@@ -264,7 +264,7 @@ public sealed class WoodHud : Component
 		}
 		else if ( _activeStation.IsValid() && _activeStation.Kind == StationKind.Sell )
 		{
-			label = _state.BackpackTotal > 0 ? "SELL CARGO" : "BACKPACK EMPTY";
+			label = _state.BackpackTotal > 0 ? "DEPOSIT WOOD" : "BACKPACK EMPTY";
 			tint = _state.BackpackTotal > 0 ? TextColor.WithAlpha( 0.82f ) : TextColor.WithAlpha( 0.42f );
 		}
 		else if ( _state.BackpackFull )
@@ -366,7 +366,7 @@ public sealed class WoodHud : Component
 		float alpha = (1f - t).Clamp( 0f, 1f );
 		float size = 30f;
 		var rect = new Rect( 0f, Screen.Height * 0.18f, Screen.Width, size * 1.6f );
-		hud.DrawText( new TextRendering.Scope( "BACKPACK FULL — RETURN TO SELL", HotColor.WithAlpha( alpha ), size ),
+		hud.DrawText( new TextRendering.Scope( "BACKPACK FULL - RETURN TO DEPOT", HotColor.WithAlpha( alpha ), size ),
 			rect, TextFlag.Center );
 	}
 
@@ -469,7 +469,7 @@ public sealed class WoodHud : Component
 		if ( t >= 1f || _lastSellAmount <= 0 ) return;
 		float alpha = t < 0.10f ? (t / 0.10f) : (1f - (t - 0.10f) / 0.90f);
 		alpha = alpha.Clamp( 0f, 1f );
-		// Float upward from the wallet position.
+		// Float upward from the stockpile position.
 		float padL = 36f;
 		float y0 = 70f;
 		float yOff = -50f * t;
@@ -526,8 +526,8 @@ public sealed class WoodHud : Component
 	private void DrawSellHint( Sandbox.Rendering.HudPainter hud )
 	{
 		string header = _state.BackpackTotal > 0
-			? $"SELL — auto on entry · [E] / [1] to flush again ({_state.BackpackTotal} carried)"
-			: "SELL — backpack empty, go chop";
+			? $"DEPOT - auto deposit on entry · [E] / [1] to flush again ({_state.BackpackTotal} carried)"
+			: "DEPOT - backpack empty, go chop";
 		DrawStationHintFrame( hud, 0, header,
 			out _, out _, out _, out _, out _ );
 	}
@@ -695,13 +695,13 @@ public sealed class WoodHud : Component
 					&& _state.CoreWood + _state.BackpackCoreWood >= recipe[2];
 				if ( nextAxeReady )
 				{
-					text = $"[R] return to sell - {Tunables.AxeTierName[_state.AxeTier + 1].ToUpper()} ready";
+					text = $"[R] return to depot - {Tunables.AxeTierName[_state.AxeTier + 1].ToUpper()} ready";
 					tint = HotColor.WithAlpha( 0.72f );
 				}
 			}
 			if ( _state.BackpackFull )
 			{
-				text = "[R] return to sell - backpack full";
+				text = "[R] return to depot - backpack full";
 				tint = HotColor.WithAlpha( 0.72f );
 			}
 		}

@@ -15,7 +15,7 @@ public sealed class GameState : Component
 {
 	// Mow-the-lawn-style two-pool economy : BackpackWood is what chopping
 	// credits (capped per BackpackTier). The player carries it back to the
-	// SELL station, which transfers it to Wood (the wallet). Wood is what
+	// depot station, which transfers it to Wood (the stockpile). Wood is what
 	// gets spent on upgrades. Pivot 2026-05-21 — was wood-instant before.
 	[Property, ReadOnly] public int Wood { get; private set; }
 	[Property, ReadOnly] public int BackpackWood { get; private set; }
@@ -30,7 +30,7 @@ public sealed class GameState : Component
 	[Property, ReadOnly] public int ToolRangeTier { get; private set; }
 	[Property, ReadOnly] public int ToolSpeedTier { get; private set; }
 	[Property, ReadOnly] public int TreesFelledTotal { get; private set; }
-	// Valheim multi-wood-type wallets — Wood (Beech-derived, basic crafts),
+	// Valheim multi-wood-type stockpiles — Wood (Beech-derived, basic crafts),
 	// Finewood (Birch/Oak, advanced), CoreWood (Pine, masts/structures).
 	// `Wood` field above = legacy single currency (= alias for WoodByType[0]).
 	// Pour preserve les saves existants, Wood / BackpackWood RESTENT le slot 0
@@ -195,7 +195,7 @@ public sealed class GameState : Component
 		catch ( System.Exception ex ) { Log.Warning( $"[GameState] Save failed: {ex.Message}" ); }
 	}
 
-	// Direct-to-wallet credit — used by SelfTest pumping and the SELL
+	// Direct-to-stockpile credit — used by SelfTest pumping and the depot
 	// station's transfer. Gameplay chopping goes through AddBackpack instead.
 	public void AddWood( int amount )
 	{
@@ -259,10 +259,10 @@ public sealed class GameState : Component
 		return banked;
 	}
 
-	// SELL station entry point — flushes ALL backpack types into their wallets,
+	// Depot station entry point — flushes ALL backpack types into their stockpiles,
 	// counts toward lifetime earned (drives prestige threshold based on Wood-equivalent
 	// total). Returns the total transferred (0 if all empty). Valheim Trader pattern :
-	// you sell par type into separate currencies.
+	// you deposit per type into separate stockpiles.
 	public int TrySell()
 	{
 		int total = BackpackTotal;

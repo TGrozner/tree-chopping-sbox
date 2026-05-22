@@ -197,7 +197,7 @@ public sealed class SceneStarter : Component
 	private void SpawnShop()
 	{
 		// 4 stations on a forward arc (+X) so the player faces them on spawn.
-		// Matches the Mow-the-lawn layout : Tools / Sell / Upgrades / Prestige
+		// Matches the Mow-the-lawn layout : Tools / Depot / Upgrades / Prestige
 		// spread +/-67.5 deg from the spawn forward direction.
 		// Totem dropped 2026-05-21 -- the tall flagpole made no sense vs the
 		// physical stations which are the actual nav landmark.

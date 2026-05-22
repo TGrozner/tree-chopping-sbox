@@ -77,7 +77,7 @@ public static class Tunables
 	// Wood mul curve bumped 2026-05-21 so each tier upgrade feels worth it —
 	// roughly doubles per tier instead of linear-ish. Pairs with the per-kind
 	// AxeTier gate : buying Stone (T1) unlocks Normals (+3 wood each) and a
-	// 1.5× wallet multiplier on top → income goes from trickle to flow.
+	// 1.5× stockpile multiplier on top → income goes from trickle to flow.
 	public static readonly float[] AxeTierWoodMul = { 1.0f, 1.5f, 2.5f, 4.0f, 6.5f, 10.0f, 16.0f };
 	public static readonly string[] AxeTierName =
 	{
@@ -182,8 +182,8 @@ public static class Tunables
 	public static readonly float[] ToolSpeedMul   = { 1.0f, 0.92f, 0.82f, 0.70f, 0.55f, 0.40f };
 
 	// Backpack capacity tier — gates how much wood you can carry before
-	// returning to the SELL station. Base cap is intentionally tight (50)
-	// so the back-to-sell loop kicks in within a few chops at the start.
+	// returning to the depot station. Base cap is intentionally tight (50)
+	// so the back-to-depot loop kicks in within a few chops at the start.
 	// Scales steep so late-game lets you mow several trees before returning.
 	public const int MaxBackpackTier = 5;
 	public static readonly int[] BackpackCosts =     {    0,   18,    60,   180,   480,  1200 };

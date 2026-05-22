@@ -1,7 +1,7 @@
 namespace TreeChopping;
 
 // Headless-friendly autoplay driver. Toggle Active=true to make the player
-// walk to the nearest standing tree, split the landed log, collect, sell,
+// walk to the nearest standing tree, split the landed log, collect, deposit,
 // upgrade, then repeat.
 // Used both by gameplay validation runs (bridge sets Active=true, frames
 // captured by screenshot loop) and as a stress harness for cascade physics.
@@ -95,7 +95,7 @@ public sealed class AutoPlay : Component
 			_step = StepGoShop;
 			return;
 		}
-		if ( gs.IsValid() && gs.BackpackTotal > 0 && AnyUpgradeAffordableAfterSell( gs ) )
+		if ( gs.IsValid() && gs.BackpackTotal > 0 && AnyUpgradeAffordableAfterDeposit( gs ) )
 		{
 			CurrentAction = $"cargo funds upgrade {gs.BackpackTotal}/{gs.BackpackCapacity} - heading to shop";
 			_step = StepGoShop;
@@ -243,7 +243,7 @@ public sealed class AutoPlay : Component
 		return false;
 	}
 
-	private static bool AnyUpgradeAffordableAfterSell( GameState gs )
+	private static bool AnyUpgradeAffordableAfterDeposit( GameState gs )
 	{
 		int wood = gs.Wood + gs.BackpackWood;
 		if ( gs.AxeTier < Tunables.MaxAxeTier )

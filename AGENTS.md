@@ -154,7 +154,7 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 | `Code/` | Assembly de jeu. Namespace `TreeChopping`. `Assembly.cs` = global usings. **`Code/AGENTS.md`** = patterns API s&box / Source 2 / hotload, chargé seulement quand tu touches `Code/**/*.cs`. |
 | `Editor/` | Assembly **éditeur** séparée (`tree_chopping.editor.csproj`) — code outils, pas sandboxé. Actuellement vide à part les usings. |
 | `Assets/scenes/main.scene` | Scène JSON minimale : `Sun` (DirectionalLight, overridden au runtime par SceneStarter.SetupLighting) + `Skybox` (SkyBox2D, warm orange tint) + `Fog` (GradientFog, copper-orange `0.92,0.62,0.42`) + `Ground` (plane initial — désactivé au boot, terrain heightmap prend le relais) + `Bootstrap` (SceneStarter, TreeCount=400, MinSpacing=180, PlayerSpawn=(-1000,0,80), SpawnPadRadius=180) + `Camera` (FieldOfView=72, Tonemapping HableFilmic + Bloom + ColorGrading). Tout le reste (Citizen player + axe, terrain procédural, mountain borders, forêt biome-biased, ShopStation, WoodHud, GameState, AutoPlay) est spawné au runtime par `SceneStarter`. |
-| `ProjectSettings/Input.config` | Bindings clavier/gamepad. **Tu lis ces noms** dans `Input.Pressed("Jump")` etc. "Use" (E) vend le backpack dans la station Sell ; "Reload" (R) téléporte le joueur au spawn shop. |
+| `ProjectSettings/Input.config` | Bindings clavier/gamepad. **Tu lis ces noms** dans `Input.Pressed("Jump")` etc. "Use" (E) dépose le backpack dans la station Depot ; "Reload" (R) téléporte le joueur au spawn shop. |
 | `ProjectSettings/Collision.config` | Matrice de collision. |
 | `Libraries/` | Libs externes. Contient `claudebridge/` (MCP bridge addon — cf. section "Avec l'éditeur"). `tree_chopping.sbproj.PackageReferences = ["facepunch.woodaxe"]` — sbox-dev DL au project-open, pas de fichier local. |
 | `tools/` | `selftest.ps1` (harness mow-the-lawn scenario, exit 0/1/3 = PASS/FAIL/TIMEOUT) + `filmstrip.ps1` (visual capture procedure / cold-start launcher — voir section "Visual cycle — filmstrip") + `session-prompt.md` + `hooks/` (scripts appelés par `.codex/hooks.json`). |
@@ -165,7 +165,7 @@ Fichiers gitignored à noter : `*.csproj`, `*.slnx`, `*.sln`, `obj/`, `bin/`, `.
 
 ## Architecture gameplay actuelle
 
-**Pivot 2026-05-20 : mow-the-lawn-like façon Valheim.** Tu spawnes au sommet d'une montagne où vit ton shop. Tu descends, tu chop des arbres, ils tombent en deux temps (multi-chop debout → fell → landed log à chopper aussi → split direct en WoodItems pickables au sol). Tu ramasses (magnet de proximité), ton **BackpackWood** se remplit (cappé par BackpackTier). Tu remontes au shop, tu **flush au SELL station → Wood (wallet)**, puis tu upgrade aux autres stations (Tools / Upgrades / Prestige). Continuous play, pas de "fin de run". Cascade domino entre arbres = wake scripté déjà implémenté via ImpactEffect-style damage, pas de propagation physique pure (kinematic standing).
+**Pivot 2026-05-20 : mow-the-lawn-like façon Valheim.** Tu spawnes au sommet d'une montagne où vit ton shop. Tu descends, tu chop des arbres, ils tombent en deux temps (multi-chop debout → fell → landed log à chopper aussi → split direct en WoodItems pickables au sol). Tu ramasses (magnet de proximité), ton **BackpackWood** se remplit (cappé par BackpackTier). Tu remontes au shop, tu **flush au WOOD DEPOT → Wood (stockpile)**, puis tu upgrade aux autres stations (Tools / Upgrades / Prestige). Continuous play, pas de "fin de run". Cascade domino entre arbres = wake scripté déjà implémenté via ImpactEffect-style damage, pas de propagation physique pure (kinematic standing).
 
 ### Layout des biomes
 Anneau de difficulté centré sur le spawn :
@@ -191,7 +191,7 @@ SceneStarter.OnStart()
  │   camera + input + animator owned) + child SkinnedModelRenderer (Citizen vmdl) +
  │   AxeController + axe (facepunch.woodaxe) parenté à hand_R
  ├─ SpawnShop() : HubAmphitheatre + HubProps au ResolvedPlayerSpawn, + 4× ShopStation
- │   (Tools / Sell / Upgrades / Prestige) en cercle autour, + totem vertical 1200u
+ │   (Tools / Depot / Upgrades / Prestige) en cercle autour, + totem vertical 1200u
  │   avec cap doré (Mythic tint) visible from distance comme nav-marker
  ├─ SpawnForest() : starter resource field dense autour du hub, puis full arena
  │   biome-biased jusqu'à ArenaRadius :
@@ -256,14 +256,14 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
 
 Économie deux-pool (Wood vs BackpackWood) :
   BackpackWood = ramassé sur le terrain, cappé par BackpackCapacity[BackpackTier].
-  ShopStation.Sell (SELL WOOD station, ring vert) → TrySell flush BackpackWood → Wood (wallet).
+  ShopStation.Sell (WOOD DEPOT station, ring vert) → TrySell flush BackpackWood → Wood (stockpile).
   Wood = monnaie de dépense aux ShopStation.Upgrades (axe / speed / luck / power / pet /
   bag / range / swing-speed) + ShopStation.Prestige (replant).
 
 Shop / progression (GameState + ShopStation) :
   GameState (singleton, persistant via FileSystem.Data/progress.json — per-Steam
   variant punted phase6r, TODO when MP wired) :
-    ├─ Wood (wallet) + BackpackWood (sac, cappé par BackpackCapacity[BackpackTier])
+    ├─ Wood (stockpile) + BackpackWood (sac, cappé par BackpackCapacity[BackpackTier])
     ├─ TotalWoodEarned, TreesFelledTotal (lifetime, survives prestige)
     ├─ AxeTier : 0..6 (Hands/Stone/Bronze/Iron/Steel/Lumberjack/Chainsaw)
     ├─ SpeedTier / LuckTier / PowerTier / BackpackTier : 0..5 (personal stats)
@@ -283,7 +283,7 @@ Shop / progression (GameState + ShopStation) :
     (Thomas 2026-05-21 : just the label). Inputs lus quand PlayerInside d'UNE
     station — slot inputs réutilisés (Slot1..N changent de sens selon station).
     ├─ Tools : équipe Axe T0..T6 (re-buy = swap tool actif)
-    ├─ Sell  : E → TrySell flush BackpackWood → Wood + sell SFX
+    ├─ Depot : E → TrySell flush BackpackWood → Wood + deposit SFX
     ├─ Upgrades : Slot1=Speed Slot2=Luck Slot3=Power Slot4=Bag Slot5=Pet
     │             Slot6=ToolRange Slot7=ToolSpeed
     └─ Prestige : Slot1=Replant (TryPrestige, gated par CanPrestige)
@@ -325,7 +325,7 @@ Self-test (headless, mow-the-lawn + upgrade + prestige scenario) :
   Swing : DebugSwingVerbose en loop jusqu'à IsStanding=false (cap 8s).
   Verify : assert target tree transitioned out of Standing. **Phase F note** : on
     n'asserte plus que `Wood` a augmenté — chopping ne crédite plus directement
-    le wallet, le pipeline complet (Tree → landed log split → WoodItem →
+    le stockpile, le pipeline complet (Tree → landed log split → WoodItem →
     pickup → AddBackpack → TrySell) est trop indirect pour le harness. Le
     toppled check est le smoke test minimum.
   TestStats : `_state.AddWood(totalCost)` direct, then exercise TryUpgradeSpeed +

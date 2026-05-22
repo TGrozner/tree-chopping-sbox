@@ -24,14 +24,14 @@ public sealed class ShopStation : Component
 	public string Label => Kind switch
 	{
 		StationKind.Tools    => "TOOLS",
-		StationKind.Sell     => "SELL WOOD",
+		StationKind.Sell     => "WOOD DEPOT",
 		StationKind.Upgrades => "UPGRADES",
 		StationKind.Prestige => "PRESTIGE",
 		_ => "?",
 	};
 
 	// Ring + cap tint per station, also drives the worldspace label color.
-	// Echoes the Mow-the-lawn palette : tools=cyan, sell=green, upgrades=
+	// Echoes the Mow-the-lawn palette : tools=cyan, depot=green, upgrades=
 	// orange, prestige=gold. Already-saturated values, no HDR multiplier —
 	// bumping past 1.0 just blows out the tonemapper to pink/white.
 	public Color RingTint => Kind switch
