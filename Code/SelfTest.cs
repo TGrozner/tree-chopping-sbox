@@ -181,6 +181,8 @@ public sealed class SelfTest : Component
 		int frontRing = 0;
 		int frontSaplings = 0;
 		int frontNormals = 0;
+		int laneTrees = 0;
+		int laneSaplings = 0;
 		var origin = starter.ResolvedPlayerSpawn;
 		var front = Vector3.Forward;
 		foreach ( var tree in Scene.GetAllComponents<Tree>() )
@@ -200,6 +202,11 @@ public sealed class SelfTest : Component
 					frontRing++;
 					if ( tree.Kind == TreeKind.Sapling ) frontSaplings++;
 					if ( tree.Kind == TreeKind.Normal ) frontNormals++;
+				}
+				if ( MathF.Abs( delta.y ) < 240f && delta.x > 0f )
+				{
+					laneTrees++;
+					if ( tree.Kind == TreeKind.Sapling ) laneSaplings++;
 				}
 			}
 		}
@@ -222,8 +229,14 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( laneTrees < 12 || laneSaplings < 10 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSpawnDistribution: starter lane too sparse lane={laneTrees} saplings={laneSaplings} (expected >=12 / >=10)" );
+			Finish();
+			return;
+		}
 
-		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, front={frontRing}/{frontSaplings}/{frontNormals}, padClear" );
+		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, front={frontRing}/{frontSaplings}/{frontNormals}, lane={laneTrees}/{laneSaplings}, padClear" );
 		Transition( Phase.Approach );
 	}
 
@@ -1295,6 +1308,12 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] TUNABLES_SANITY PASS  Shake 40/36Hz 1.5° 1s, ImpactInterval 0.5s, recipes 7×3, woodTypes 3×3, wind ok, damping ok, chop pitch S>1>V, whoosh threshold ok" );
+		if ( RuntimeValue( Tunables.TreeHitFlashDuration ) <= 0f || RuntimeValue( Tunables.TreeHitFlashDuration ) > 0.25f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeHitFlashDuration={Tunables.TreeHitFlashDuration} (expected quick impact flash <= 0.25s)" );
+			Finish();
+			return;
+		}
 		Transition( Phase.TestImpactDamageScaling );
 	}
 

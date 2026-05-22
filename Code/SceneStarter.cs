@@ -13,8 +13,9 @@ public sealed class SceneStarter : Component
 	[Property] public int Seed { get; set; } = 0xCA5C;
 	[Property] public Vector3 PlayerSpawn { get; set; } = new( -1000f, 0f, 80f );
 	// Pad needs > ShopStationArcRadius + station footprint AND room around
-	// the player so the spawn feels respirable (no trees in their face).
-	[Property] public float SpawnPadRadius { get; set; } = 1100f;
+	// the player so the spawn feels respirable, but Mow-like resource starts
+	// must still be visible from the hub.
+	[Property] public float SpawnPadRadius { get; set; } = 930f;
 	// 4 shop stations on a forward arc (+X), spread +/-67.5 deg. At 650u radius,
 	// neighbor-to-neighbor distance is ~497u -- well separated (Thomas
 	// 2026-05-21 : "elles sont trop proches").
@@ -247,11 +248,11 @@ public sealed class SceneStarter : Component
 
 	private void SpawnStarterResourceField()
 	{
-		const int StarterCount = 48;
-		const float StartOffset = 120f;
-		const float EndOffset = 620f;
-		const float Spacing = 145f;
-		const float FrontStep = 150f;
+		const int StarterCount = 72;
+		const float StartOffset = 80f;
+		const float EndOffset = 760f;
+		const float Spacing = 128f;
+		const float FrontStep = 132f;
 		var rng = new Random( Seed ^ 0x51A7E7 );
 		var placed = Scene.GetAllComponents<Tree>()
 			.Where( t => t.IsValid() )
@@ -259,12 +260,31 @@ public sealed class SceneStarter : Component
 			.ToList();
 
 		int spawned = 0;
-		for ( int row = 0; row < 4 && spawned < StarterCount; row++ )
+		float[] laneOffsets = { -150f, 0f, 150f };
+		for ( int row = 0; row < 5 && spawned < StarterCount; row++ )
+		{
+			float x = ResolvedPlayerSpawn.x + SpawnPadRadius + StartOffset + row * 145f;
+			for ( int i = 0; i < laneOffsets.Length && spawned < StarterCount; i++ )
+			{
+				float y = ResolvedPlayerSpawn.y + laneOffsets[i] + (row % 2 == 0 ? 0f : 42f);
+				if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
+
+				var pos = new Vector3( x, y, groundZ );
+				if ( placed.Any( p => p.Distance( pos ) < Spacing ) ) continue;
+				placed.Add( pos );
+
+				var kind = spawned % 7 == 6 ? TreeKind.Normal : TreeKind.Sapling;
+				Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: kind );
+				spawned++;
+			}
+		}
+
+		for ( int row = 0; row < 5 && spawned < StarterCount; row++ )
 		{
 			float r = SpawnPadRadius + StartOffset + row * FrontStep;
 			float[] angles = row % 2 == 0
-				? new[] { -30f, -15f, 0f, 15f, 30f }
-				: new[] { -24f, -8f, 8f, 24f };
+				? new[] { -38f, -24f, -12f, 0f, 12f, 24f, 38f }
+				: new[] { -31f, -18f, -6f, 6f, 18f, 31f };
 
 			for ( int i = 0; i < angles.Length && spawned < StarterCount; i++ )
 			{
@@ -277,7 +297,8 @@ public sealed class SceneStarter : Component
 				if ( placed.Any( p => p.Distance( pos ) < Spacing ) ) continue;
 				placed.Add( pos );
 
-				var kind = spawned % 7 == 6 ? TreeKind.Normal : TreeKind.Sapling;
+				bool centerLane = MathF.Abs( angles[i] ) <= 12f;
+				var kind = centerLane && row >= 2 && spawned % 4 == 3 ? TreeKind.Normal : TreeKind.Sapling;
 				Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: kind );
 				spawned++;
 			}

@@ -90,11 +90,11 @@
         {
           "__type": "TreeChopping.SceneStarter",
           "__guid": "8e9c4b51-2d50-4b6c-af7e-30258d5c6e70",
-          "TreeCount": 100,
-          "MinSpacing": 220,
+          "TreeCount": 130,
+          "MinSpacing": 190,
           "Seed": 51804,
           "PlayerSpawn": "-1000,0,80",
-          "SpawnPadRadius": 1100,
+          "SpawnPadRadius": 930,
           "ShopStationArcRadius": 650
         }
       ]

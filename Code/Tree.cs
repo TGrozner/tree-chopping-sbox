@@ -84,6 +84,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private float _trunkLen;
 	private float _trunkWidth;
 	private Color _trunkTint;
+	private float _trunkDamageMul = 1f;
+	private TimeSince _hitFlashTime = 999f;
+	private float _hitFlashStrength;
 	private Rotation _baseRotation;
 	private bool _baseRotCached;
 	// Valheim TreeBase.ShakeAnimation : buzz vibrato Ã  40Hz Sin (pitch) + 36Hz
@@ -350,10 +353,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 	private void SetTrunkHighlight( bool on )
 	{
-		if ( !_landed ) return;
-		if ( _trunkLowerMr.IsValid() ) _trunkLowerMr.Tint = on ? Color.Lerp( _trunkTint, Color.White, _landed ? 0.35f : 0.18f ) : _trunkTint;
-		if ( _trunkUpperMr.IsValid() ) _trunkUpperMr.Tint = on ? Color.Lerp( _trunkTint, Color.White, _landed ? 0.28f : 0.14f ) : _trunkTint;
-		if ( _rootMr.IsValid() ) _rootMr.Tint = on ? Color.Lerp( _trunkTint, Color.White, 0.16f ) : _trunkTint;
+		UpdateTrunkVisuals();
 	}
 
 	// Player chop : remove ChopPower from ChopsRemaining. If it hits 0, fell.
@@ -415,6 +415,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		}
 
 		ChopsRemaining -= chopPower;
+		PulseHitFlash( ChopsRemaining <= 0 );
 		// Valheim Game.IncrementPlayerStat(PlayerStatType.TreeChops) â€” track per-chop.
 		// Returns true si on vient de passer un palier de "WoodCutting level".
 		var gsChop = GameState.Get( Scene );
@@ -572,22 +573,54 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// extreme chops don't go pure black.
 	private void DarkenTrunkOnce()
 	{
-		const float factor = 0.92f;
-		const float floor = 0.5f;
-		DarkenRenderer( _trunkLowerMr, factor, floor );
-		DarkenRenderer( _trunkUpperMr, factor, floor );
-		DarkenRenderer( _rootMr,       factor, floor );
+		_trunkDamageMul = MathF.Max( 0.50f, _trunkDamageMul * 0.92f );
+		UpdateTrunkVisuals();
 	}
 
-	private static void DarkenRenderer( ModelRenderer mr, float factor, float floor )
+	private void PulseHitFlash( bool finalHit )
+	{
+		_hitFlashTime = 0f;
+		_hitFlashStrength = finalHit ? 0.62f : 0.38f;
+		UpdateTrunkVisuals();
+	}
+
+	private void TickHitFlash()
+	{
+		if ( (float)_hitFlashTime > Tunables.TreeHitFlashDuration )
+		{
+			if ( _hitFlashStrength > 0f )
+			{
+				_hitFlashStrength = 0f;
+				UpdateTrunkVisuals();
+			}
+			return;
+		}
+		UpdateTrunkVisuals();
+	}
+
+	private void UpdateTrunkVisuals()
+	{
+		SetRendererTint( _trunkLowerMr, 1.00f, _landed ? 0.35f : 0.20f );
+		SetRendererTint( _trunkUpperMr, 1.08f, _landed ? 0.28f : 0.16f );
+		SetRendererTint( _rootMr, 0.78f, 0.14f );
+	}
+
+	private void SetRendererTint( ModelRenderer mr, float brightness, float highlightStrength )
 	{
 		if ( !mr.IsValid() ) return;
-		var t = mr.Tint;
-		mr.Tint = new Color(
-			MathF.Max( floor * 0.78f, t.r * factor ),
-			MathF.Max( floor * 0.78f, t.g * factor ),
-			MathF.Max( floor * 0.78f, t.b * factor ),
+		var baseTint = new Color(
+			(_trunkTint.r * brightness * _trunkDamageMul).Clamp( 0.04f, 1f ),
+			(_trunkTint.g * brightness * _trunkDamageMul).Clamp( 0.04f, 1f ),
+			(_trunkTint.b * brightness * _trunkDamageMul).Clamp( 0.04f, 1f ),
 			1f );
+		if ( _highlighted ) baseTint = Color.Lerp( baseTint, Color.White, highlightStrength );
+		float flashT = (float)_hitFlashTime / Tunables.TreeHitFlashDuration;
+		if ( flashT < 1f && _hitFlashStrength > 0f )
+		{
+			float flash = _hitFlashStrength * (1f - flashT) * (1f - flashT);
+			baseTint = Color.Lerp( baseTint, Tunables.ChipSplinterTint, flash );
+		}
+		mr.Tint = baseTint;
 	}
 
 	// Per-hit visible reaction : the standing trunk leans + bounces against
@@ -1062,6 +1095,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	protected override void OnUpdate()
 	{
 		if ( !_chopped ) TickWobble();
+		TickHitFlash();
 	}
 
 	private void TickFall()

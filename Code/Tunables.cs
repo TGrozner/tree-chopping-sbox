@@ -103,6 +103,7 @@ public static class Tunables
 	public const float TreeShakeFreqA = 40f;     // Sin axis (X / Right) in Hz — Valheim exact
 	public const float TreeShakeFreqB = 36f;     // Cos axis (Forward) — Valheim 40 × 0.9
 	public const float TreeShakeAmplitudeDeg = 1.5f;
+	public const float TreeHitFlashDuration = 0.16f;
 
 	// Whoosh SFX pendant la chute — fire ONCE quand WorldRotation.Up.Dot(Up)
 	// passe sous ce threshold (= tree tilt past ~45°). Match Valheim trees qui
