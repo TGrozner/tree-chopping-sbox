@@ -936,9 +936,18 @@ public sealed class SelfTest : Component
 		int hpBefore = tree.ChopsRemaining;
 		int basePower = 1;
 		int finalPower = Math.Max( 1, (int)MathF.Ceiling( basePower * Tunables.ChopComboFinalDamageMul ) );
+		float basePush = Tree.ComputeLandedKickPowerScale( basePower, basePower );
+		float finalPush = Tree.ComputeLandedKickPowerScale( basePower, finalPower );
+		float expectedPush = (1f + 0.3f * finalPower) * Tunables.ChopComboFinalPushMul;
 		if ( finalPower != 2 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: ceiling(1×{Tunables.ChopComboFinalDamageMul})={finalPower} (expected 2)" );
+			Finish();
+			return;
+		}
+		if ( MathF.Abs( finalPush - expectedPush ) > 0.001f || finalPush <= basePush )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: finalPush={finalPush:0.###}, expected={expectedPush:0.###}, basePush={basePush:0.###}" );
 			Finish();
 			return;
 		}

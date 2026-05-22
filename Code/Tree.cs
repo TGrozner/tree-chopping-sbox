@@ -439,7 +439,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		}
 		if ( _landed )
 		{
-			ApplyLandedKick( direction, hitPoint );
+			ApplyLandedKick( direction, hitPoint, chopPower );
 			SpawnLandedChopScar( hitPoint, direction, chopPower, ChopsRemaining <= 0 );
 		}
 		else
@@ -601,7 +601,17 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// up on the trunk (offset = lever arm â†’ tip rotates) + a small angular
 	// impulse perpendicular to chop dir = the log visibly rocks on each hit.
 	// Magnitudes intentionally small : we react, we don't displace.
-	private void ApplyLandedKick( Vector3 chopDirection, Vector3 hitPoint )
+	internal static float ComputeLandedKickPowerScale( int baseChopPower, int actualChopPower )
+	{
+		baseChopPower = Math.Max( 1, baseChopPower );
+		actualChopPower = Math.Max( 1, actualChopPower );
+		float scale = 1f + 0.3f * actualChopPower;
+		if ( actualChopPower > baseChopPower )
+			scale *= Tunables.ChopComboFinalPushMul;
+		return scale;
+	}
+
+	private void ApplyLandedKick( Vector3 chopDirection, Vector3 hitPoint, int chopPower = 0 )
 	{
 		if ( !Body.IsValid() || !Body.PhysicsBody.IsValid() ) return;
 		var flat = chopDirection.WithZ( 0f );
@@ -611,11 +621,11 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
 		axis = axis.Normal;
 		// Mimicke Valheim TreeLog.RPC_Damage : `hit.m_dir * hit.m_pushForce * 2f`
-		// â€” m_pushForce vient de la HitData de l'arme et scale avec son tier. Ici
-		// on multiplie par (1 + 0.3*ChopPower) â†’ T0 hands = Ã—1.3, T6 chainsaw =
-		// Ã—7.0 (ChopPower 20). Plus tu frappes fort, plus le tronc bouge.
-		int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
-		float powerScale = 1f + 0.3f * chopPower;
+		// m_pushForce vient de la HitData de l'arme et scale avec son tier.
+		// Le final combo garde aussi le push bonus Valheim (x1.2).
+		int baseChopPower = GameState.Get( Scene )?.ChopPower ?? 1;
+		if ( chopPower <= 0 ) chopPower = baseChopPower;
+		float powerScale = ComputeLandedKickPowerScale( baseChopPower, chopPower );
 		// Valheim Destructible.RPC_Damage applique l'impulse Ã  `hit.m_point` :
 		// le tronc rebondit autour de l'endroit oÃ¹ l'axe le touche. Si pas de
 		// hit point disponible (DebugSwing, fallback) â†’ ancre fixe au-dessus.
