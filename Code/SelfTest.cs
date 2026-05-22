@@ -265,7 +265,7 @@ public sealed class SelfTest : Component
 	private void TickVerify()
 	{
 		// Phase F : chopping no longer credits wood directly. The standing
-		// tree falls into a FallenLog → split into WoodLogs → drop pickable
+		// tree falls into a FallenLog → split directly into pickable
 		// WoodItems → player walks over → AddBackpack. The harness can't
 		// easily simulate the full pickup chain so we just assert the first
 		// step : the target tree transitioned out of Standing within 8s.
@@ -315,7 +315,7 @@ public sealed class SelfTest : Component
 	private void TickTestSplit()
 	{
 		// Attend que le sapling tombé passe en état FallenLog (upDot threshold
-		// atteint par TickFall), puis chop-it jusqu'à split en WoodLogs.
+		// atteint par TickFall), puis chop-it jusqu'à split en WoodItems.
 		// Si le sapling auto-split via TreeSplitImpactSpeed (ne devrait pas
 		// passer le seuil, il est trop léger), GameObject est déjà destroyed.
 		bool destroyed = !_targetTree.IsValid();

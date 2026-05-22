@@ -1,8 +1,8 @@
 namespace TreeChopping;
 
-// Mow-the-lawn bootstrap : spawn player at the summit, drop a ShopArea
-// marker on the plateau, scatter a forest with biome bias (close trees =
-// saplings/easy ; far trees = veterans/hard). No daily seed — random per
+// Mow-the-lawn bootstrap : spawn player at the summit, place the four
+// ShopStation rings on the plateau, scatter a forest with biome bias (close trees =
+// saplings/easy ; far trees = veterans/hard). No daily seed -- random per
 // boot, continuous play.
 public sealed class SceneStarter : Component
 {
@@ -15,8 +15,8 @@ public sealed class SceneStarter : Component
 	// Pad needs > ShopStationArcRadius + station footprint AND room around
 	// the player so the spawn feels respirable (no trees in their face).
 	[Property] public float SpawnPadRadius { get; set; } = 1100f;
-	// 4 shop stations on a forward arc (+X), spread ±67.5°. At 650u radius,
-	// neighbor-to-neighbor distance is ~497u — well separated (Thomas
+	// 4 shop stations on a forward arc (+X), spread +/-67.5 deg. At 650u radius,
+	// neighbor-to-neighbor distance is ~497u -- well separated (Thomas
 	// 2026-05-21 : "elles sont trop proches").
 	[Property] public float ShopStationArcRadius { get; set; } = 650f;
 
@@ -62,7 +62,7 @@ public sealed class SceneStarter : Component
 			SpawnTestSapling();
 			SpawnPet( player );
 
-			Log.Info( $"[SceneStarter] Bootstrap OK — player pos={player?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
+			Log.Info( $"[SceneStarter] Bootstrap OK -- player pos={player?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
 		}
 		catch ( System.Exception ex )
 		{
@@ -72,14 +72,14 @@ public sealed class SceneStarter : Component
 
 	// Warm sun + brighter ambient SkyColor so shaded trunks read as brown
 	// instead of silhouettes. The scene's original Sun was warm-orange but
-	// dim, with a cool-blue SkyColor at 0.22/0.32/0.48 — directional-strong
+	// dim, with a cool-blue SkyColor at 0.22/0.32/0.48 -- directional-strong
 	// + fill-weak = sun-facing faces bright, away-faces black. Bump both.
 	private void SetupLighting()
 	{
 		// Daylight palette pivot 2026-05-21 : the warm-sunset cast was
 		// crushing the hub silhouettes (Mow-the-lawn comparison showed our
 		// stations/amphi/perso all blending into the same orange tone).
-		// Shift toward bright golden hour : warm-white sun ×2.5 + bright
+		// Shift toward bright golden hour : warm-white sun x2.5 + bright
 		// blue sky fill + much less aggressive fog. Skybox + fog overridden
 		// here (not in main.scene) so the values land even if the editor
 		// hasn't reloaded the scene file.
@@ -102,7 +102,7 @@ public sealed class SceneStarter : Component
 			fog.StartDistance = 3000f;
 			fog.EndDistance = 7000f;
 		}
-		Log.Info( "[SceneStarter] Daylight palette applied (sun ×2.5, sky-blue fill ×1.4, fog 3000→7000u neutral)" );
+		Log.Info( "[SceneStarter] Daylight palette applied (sun x2.5, sky-blue fill x1.4, fog 3000->7000u neutral)" );
 	}
 
 	private void DisableSceneGround()
@@ -138,7 +138,7 @@ public sealed class SceneStarter : Component
 		var drift = new Vector2( spawn.x - AuthoredSpawn.x, spawn.y - AuthoredSpawn.y );
 		if ( drift.Length > driftLimit )
 		{
-			Log.Warning( $"[SceneStarter] PlayerSpawn drift ({spawn}) — falling back to authored {AuthoredSpawn}" );
+			Log.Warning( $"[SceneStarter] PlayerSpawn drift ({spawn}) -- falling back to authored {AuthoredSpawn}" );
 			spawn = AuthoredSpawn;
 		}
 		float z = spawn.z;
@@ -197,8 +197,8 @@ public sealed class SceneStarter : Component
 	{
 		// 4 stations on a forward arc (+X) so the player faces them on spawn.
 		// Matches the Mow-the-lawn layout : Tools / Sell / Upgrades / Prestige
-		// spread ±67.5° from the spawn forward direction.
-		// Totem dropped 2026-05-21 — the tall flagpole made no sense vs the
+		// spread +/-67.5 deg from the spawn forward direction.
+		// Totem dropped 2026-05-21 -- the tall flagpole made no sense vs the
 		// physical stations which are the actual nav landmark.
 		SpawnStationAt( -67.5f, StationKind.Tools );
 		SpawnStationAt( -22.5f, StationKind.Sell );
@@ -221,7 +221,7 @@ public sealed class SceneStarter : Component
 	public void RegenerateForest()
 	{
 		// Drop existing trees + re-spawn with the same seed (mow-the-lawn
-		// doesn't normally regen — but tools/selftest still calls this).
+		// doesn't normally regen -- but tools/selftest still calls this).
 		foreach ( var t in Scene.GetAllComponents<Tree>().ToList() )
 		{
 			if ( !t.IsValid() ) continue;
@@ -233,11 +233,10 @@ public sealed class SceneStarter : Component
 		Log.Info( $"[SceneStarter] Forest regenerated, trees={Scene.GetAllComponents<Tree>().Count()}" );
 	}
 
-	// Full arena spawned in one go. The gate-ring expansion system (chop a
-	// cross-shape barrier to unlock the next radial band) was dropped
-	// 2026-05-21 : "c'est étrange et c'est pas comme ça qu'on progresse dans
-	// mow the lawn". Progression-by-zone is handled by the Teleport-style
-	// unlock system (TODO task #4) tied to prestige level, not in-world gates.
+	// Full arena spawned in one go. Progression comes from tool tiers, wood
+	// types, backpack capacity, prestige, and the dense starter field around
+	// the hub.
+	// Gate-ring expansion was dropped.
 	private void SpawnForest()
 	{
 		float innerR = SpawnPadRadius;
@@ -326,7 +325,7 @@ public sealed class SceneStarter : Component
 		while ( spawned < targetCount && attempts < maxAttempts )
 		{
 			attempts++;
-			// Uniform area sampling in the band : r² uniform in [innerR², outerR²].
+			// Uniform area sampling in the band : r^2 uniform in [innerR^2, outerR^2].
 			float r = MathF.Sqrt( innerR * innerR + (float)rng.NextDouble() * (outerR * outerR - innerR * innerR) );
 			float angle = (float)(rng.NextDouble() * MathF.Tau);
 			float x = MathF.Cos( angle ) * r;
@@ -359,7 +358,7 @@ public sealed class SceneStarter : Component
 			Log.Warning( $"[SceneStarter] Band [{innerR:0}..{outerR:0}] shortfall : {spawned}/{targetCount} trees" );
 	}
 
-	// Guaranteed weak sapling 120u ahead (+X) of the player on boot — test
+	// Guaranteed weak sapling 120u ahead (+X) of the player on boot -- test
 	// convenience so the dev/selftest doesn't have to walk to the forest band.
 	// Inside SpawnPadRadius so the forest's keepout skips it, no crowding.
 	private void SpawnTestSapling()

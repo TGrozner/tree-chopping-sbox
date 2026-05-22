@@ -163,7 +163,7 @@ Fichiers gitignored à noter : `*.csproj`, `*.slnx`, `*.sln`, `obj/`, `bin/`, `.
 
 ## Architecture gameplay actuelle
 
-**Pivot 2026-05-20 : mow-the-lawn-like façon Valheim.** Tu spawnes au sommet d'une montagne où vit ton shop. Tu descends, tu chop des arbres, ils tombent en deux temps (multi-chop debout → fell → landed log à chopper aussi → split en WoodLogs → break en WoodItems pickables au sol). Tu ramasses (magnet de proximité), ton **BackpackWood** se remplit (cappé par BackpackTier). Tu remontes au shop, tu **flush au SELL station → Wood (wallet)**, puis tu upgrade aux autres stations (Tools / Upgrades / Prestige). Continuous play, pas de "fin de run". Cascade domino entre arbres = **wake scripté Phase 8** (cf. non-negotiable #8), pas de propagation physique pure (kinematic standing).
+**Pivot 2026-05-20 : mow-the-lawn-like façon Valheim.** Tu spawnes au sommet d'une montagne où vit ton shop. Tu descends, tu chop des arbres, ils tombent en deux temps (multi-chop debout → fell → landed log à chopper aussi → split direct en WoodItems pickables au sol). Tu ramasses (magnet de proximité), ton **BackpackWood** se remplit (cappé par BackpackTier). Tu remontes au shop, tu **flush au SELL station → Wood (wallet)**, puis tu upgrade aux autres stations (Tools / Upgrades / Prestige). Continuous play, pas de "fin de run". Cascade domino entre arbres = wake scripté déjà implémenté via ImpactEffect-style damage, pas de propagation physique pure (kinematic standing).
 
 ### Layout des biomes
 Anneau de difficulté centré sur le spawn :
@@ -235,18 +235,13 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
     │   → lit visually comme "le tronc s'est cassé à l'impact" sans physics break
     └─ ChopsRemaining = Tunables.LogChopHP[Kind] (le tronc landed reste IChoppable)
   Tree.Chop sur landed log :
-    └─ HP <= 0 → SplitIntoLogs : spawn N WoodLogs alignés sur l'axe du tronc couché,
-       N = LogSplitCount[Kind], items burst au final chop de chaque WoodLog
+    └─ HP <= 0 → SplitIntoLogs : spawn N WoodItems alignés sur l'axe du tronc couché,
+       N = TreeKindLandedDropCount[Kind], items burst au final chop du landed log
        (Luck stat = chance de bonus items, Mythic = +2 items, résolu ici une seule fois)
-  WoodLog (cube tinté inheritant le trunkTint) — IChoppable indépendant :
-    ├─ Chop → ChopsRemaining -= power, darken per-hit, chop_wood SFX (high pitch)
-    └─ HP <= 0 → BreakIntoWoodItems : burst N WoodItems (jitter circle + upward velocity) +
-       ChipBurst leaves + log_break SFX low pitch ; GameObject destroyed
   WoodItem (small physics cube, MassOverride=0.5, brown WoodItemTint) :
     ├─ Spawn velocity = burst up+out, gravity-on initially
     ├─ MAGNET PROXIMITY : in radius < WoodItemMagnetRange → Gravity=off, damping bumped,
-    │   velocity = (toPlayer).Normal × WoodItemMagnetSpeed (fly-to-mouth depuis loin actuel ;
-    │   Phase 8 = ramener à magnet de proximité only, ~30u, no fly-from-far)
+    │   velocity = (toPlayer).Normal × WoodItemMagnetSpeed
     ├─ Pickup quand dist < WoodItemPickupRange : GameState.AddBackpack(round(WoodMultiplier))
     │   ├─ Backpack full → ShowBackpackFullHint + item linger (not consumed)
     │   └─ Banked → ShowWoodPickupToast + "blip" SFX + destroy
@@ -328,7 +323,7 @@ Self-test (headless, mow-the-lawn + upgrade + prestige scenario) :
   Swing : DebugSwingVerbose en loop jusqu'à IsStanding=false (cap 8s).
   Verify : assert target tree transitioned out of Standing. **Phase F note** : on
     n'asserte plus que `Wood` a augmenté — chopping ne crédite plus directement
-    le wallet, le pipeline complet (Tree → log split → WoodLog → WoodItem →
+    le wallet, le pipeline complet (Tree → landed log split → WoodItem →
     pickup → AddBackpack → TrySell) est trop indirect pour le harness. Le
     toppled check est le smoke test minimum.
   TestStats : `_state.AddWood(totalCost)` direct, then exercise TryUpgradeSpeed +
@@ -398,7 +393,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 **Outils d'audit** :
 - `ilspycmd -t <Class> <dll>` pour décompiler une classe ciblée. Cache en `$env:TEMP\valheim_*.cs`.
 - `mcp__sbox__trigger_hotload` pour pousser nos changes dans sbox-dev ouvert.
-- `tools/selftest.ps1` : 7 phases test le pipeline (Verify/TestStump/TestSplit/TestBonusDrop/TestWoodPickup/TestStats/TestPrestige). 10s wall.
+- `tools/selftest.ps1` : phase contract dérivé de `Code/SelfTest.cs`, ~40 PASS markers sur le pipeline chop/economy/Valheim-feel. ~13-15s wall.
 
 **Drift restant dans CE document** : certains détails HUD/shop peuvent encore évoluer vite. Si tu touches au hub/shop, relis `ShopStation.cs`, `WoodHud.cs` et `GameState.cs` avant d'éditer la doc.
 

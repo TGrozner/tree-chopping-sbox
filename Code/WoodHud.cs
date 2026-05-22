@@ -26,7 +26,7 @@ public sealed class WoodHud : Component
 	private TimeSince _sellFlashTime = 999f;
 	private int _lastSellAmount;
 
-	// Called by ShopArea after a successful TryPrestige() so the player gets
+	// Called after a successful TryPrestige() so the player gets
 	// a clear "you just earned N Spirits" beat on top of the chip burst.
 	public void ShowPrestigeBanner( int spiritsGained )
 	{

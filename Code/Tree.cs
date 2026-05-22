@@ -79,8 +79,8 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private bool _landingSnapApplied;
 	private Vector3 _spawnFootPos;
 	private float _biomeDifficulty;
-	// Cached at spawn so SplitIntoLogs can spawn WoodLogs that actually
-	// match the original tree size (Saplings = small log, Veterans = big).
+	// Cached at spawn so landed-log splitting preserves the original tree
+	// size (Saplings = small item burst, Veterans = big).
 	private float _trunkLen;
 	private float _trunkWidth;
 	private Color _trunkTint;
@@ -1161,7 +1161,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 		// Phase F : DON'T credit wood here anymore. Reset ChopsRemaining
 		// to the kind's log HP â€” the player has to actively chop the landed
-		// log to split it into WoodLogs (which then drop pickup items).
+		// log to split it directly into pickup items.
 		ChopsRemaining = Tunables.LogChopHP[(int)Kind];
 	}
 

@@ -4,7 +4,7 @@ namespace TreeChopping;
 // Wood+Core Wood. Index pour Tunables.WoodTypeTints et WoodTypeNames.
 public enum WoodType { Wood = 0, Finewood = 1, CoreWood = 2 }
 
-// Pickable wood unit dropped when a WoodLog is fully chopped. Sits as a small
+// Pickable wood unit dropped when a landed trunk is fully chopped. Sits as a small
 // physics cube on the ground ; flies toward the player on proximity (magnetic
 // pickup, Valheim-feel) then absorbs into BackpackByType[Type].
 public sealed class WoodItem : Component

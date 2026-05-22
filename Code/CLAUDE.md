@@ -18,7 +18,7 @@ Ordre : `OnAwake` → `OnStart` → `OnEnabled` → (loop `OnUpdate`/`OnFixedUpd
 ## Attributs sur les propriétés
 
 - `[Property]` → champ visible/éditable dans l'Inspector, sérialisé dans `.scene`/prefab.
-- `[Property, ReadOnly]` → visible, non éditable (ex: `ShopArea.PlayerInside`).
+- `[Property, ReadOnly]` → visible, non éditable (ex: `ShopStation.PlayerInside`).
 - `[RequireComponent]` → cherche le component sur le même GameObject, **le crée s'il manque**.
 - `[Hide]` → fonctionne et sérialise mais invisible dans l'éditeur.
 - `[Sync]` → propriété répliquée réseau (singleplayer ici, donc ignorer).
