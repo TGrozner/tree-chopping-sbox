@@ -142,6 +142,7 @@ public sealed class AxeController : Component
 		if ( _baseWalkSpeed <= 0f ) { _baseWalkSpeed = Player.WalkSpeed; _baseRunSpeed = Player.RunSpeed; }
 		var gs = GameState.Get( Scene );
 		float mul = gs.IsValid() ? gs.SpeedMultiplier : 1f;
+		if ( _phase != SwingPhase.Idle ) mul *= Tunables.SwingMoveSpeedFactor;
 		Player.WalkSpeed = _baseWalkSpeed * mul;
 		Player.RunSpeed = _baseRunSpeed * mul;
 	}

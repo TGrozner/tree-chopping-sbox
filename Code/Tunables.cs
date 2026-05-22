@@ -168,6 +168,7 @@ public static class Tunables
 	public const float ChopComboWindow = 1.2f;
 	public const float ChopComboFinalDamageMul = 2.0f;
 	public const float ChopComboFinalPushMul = 1.2f;
+	public const float SwingMoveSpeedFactor = 0.42f;
 
 	// Per-tool sub-stats (phase C) : level inside the Tools station to extend
 	// the current axe's reach + speed up the swing recovery. These ladders

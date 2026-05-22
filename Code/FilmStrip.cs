@@ -184,10 +184,11 @@ public sealed class FilmStrip : Component
 		}
 		if ( !_target.IsValid() )
 		{
-			// Spawn-on-demand : pose un tree du TargetKind à 200u devant le player.
+			// Spawn-on-demand : pose un tree du TargetKind dans le starter field.
 			var starter = Scene.GetAllComponents<SceneStarter>().FirstOrDefault();
 			var basePos = starter.IsValid() ? starter.ResolvedPlayerSpawn : _axe.WorldPosition;
-			var spawnPos = basePos + new Vector3( 0f, -1600f, 0f );
+			float forwardOffset = starter.IsValid() ? starter.SpawnPadRadius + 520f : 1450f;
+			var spawnPos = basePos + Vector3.Forward * forwardOffset;
 			if ( TryGetGroundZ( spawnPos.x, spawnPos.y, out float groundZ ) )
 			{
 				spawnPos = spawnPos.WithZ( groundZ );

@@ -1352,6 +1352,12 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( RuntimeValue( Tunables.SwingMoveSpeedFactor ) <= 0f || RuntimeValue( Tunables.SwingMoveSpeedFactor ) >= 1f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: SwingMoveSpeedFactor={Tunables.SwingMoveSpeedFactor} (expected 0..1 attack movement slowdown)" );
+			Finish();
+			return;
+		}
 		if ( !ResourceIsReachableBeforeRecipe( WoodType.Finewood, 3 ) )
 		{
 			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: Finewood is required for Axe T3 but no Finewood tree is choppable at Axe T2" );
