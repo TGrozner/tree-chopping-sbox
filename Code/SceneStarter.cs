@@ -6,11 +6,10 @@ namespace TreeChopping;
 // boot, continuous play.
 public sealed class SceneStarter : Component
 {
-	// Tree budget kept low so the start area reads as "open meadow with a
-	// few saplings" instead of "stifling forest" (Thomas 2026-05-21). The
-	// rebalance toward zone-based plenty is task #4 — for now sparse is fine.
-	[Property] public int TreeCount { get; set; } = 100;
-	[Property] public float MinSpacing { get; set; } = 220f;
+	// Mow-like resource field: the hub stays open, but the first ring beyond
+	// it needs enough saplings to read as "work to clear", not a sparse arena.
+	[Property] public int TreeCount { get; set; } = 130;
+	[Property] public float MinSpacing { get; set; } = 190f;
 	[Property] public int Seed { get; set; } = 0xCA5C;
 	[Property] public Vector3 PlayerSpawn { get; set; } = new( -1000f, 0f, 80f );
 	// Pad needs > ShopStationArcRadius + station footprint AND room around
@@ -243,7 +242,43 @@ public sealed class SceneStarter : Component
 	{
 		float innerR = SpawnPadRadius;
 		float outerR = Tunables.ArenaRadius;
+		SpawnStarterResourceField();
 		SpawnForestBand( innerR, outerR, TreeCount );
+	}
+
+	private void SpawnStarterResourceField()
+	{
+		const int StarterCount = 48;
+		const float StartOffset = 120f;
+		const float EndOffset = 620f;
+		const float Spacing = 145f;
+		var rng = new Random( Seed ^ 0x51A7E7 );
+		var placed = Scene.GetAllComponents<Tree>()
+			.Where( t => t.IsValid() )
+			.Select( t => t.WorldPosition )
+			.ToList();
+
+		int spawned = 0;
+		int attempts = 0;
+		while ( spawned < StarterCount && attempts < StarterCount * 60 )
+		{
+			attempts++;
+			float r = SpawnPadRadius + MathX.Lerp( StartOffset, EndOffset, (float)rng.NextDouble() );
+			float angle = (float)(rng.NextDouble() * MathF.Tau);
+			float x = ResolvedPlayerSpawn.x + MathF.Cos( angle ) * r;
+			float y = ResolvedPlayerSpawn.y + MathF.Sin( angle ) * r;
+			if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
+
+			var pos = new Vector3( x, y, groundZ );
+			if ( placed.Any( p => p.Distance( pos ) < Spacing ) ) continue;
+			placed.Add( pos );
+
+			var kind = spawned % 9 == 8 ? TreeKind.Normal : TreeKind.Sapling;
+			Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: kind );
+			spawned++;
+		}
+
+		Log.Info( $"[SceneStarter] Starter resource field spawned {spawned}/{StarterCount} trees" );
 	}
 
 	private void SpawnForestBand( float innerR, float outerR, int targetCount )

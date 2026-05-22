@@ -16,7 +16,7 @@ public sealed class SelfTest : Component
 
 	enum Phase
 	{
-		Init, Approach, Swing, Verify,
+		Init, TestSpawnDistribution, Approach, Swing, Verify,
 		TestStump, TestSplit, TestBonusDrop, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestSellFlush, TestSellStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
@@ -79,6 +79,7 @@ public sealed class SelfTest : Component
 		switch ( _phase )
 		{
 			case Phase.Init: TickInit(); break;
+			case Phase.TestSpawnDistribution: TickTestSpawnDistribution(); break;
 			case Phase.Approach: TickApproach(); break;
 			case Phase.Swing: TickSwing(); break;
 			case Phase.Verify: TickVerify(); break;
@@ -164,6 +165,52 @@ public sealed class SelfTest : Component
 		_targetTreePos = _targetTree.WorldPosition;
 		_woodBeforeSwings = _state.Wood;
 		Log.Info( $"[TC_TEST] INIT playerPos={_axe.WorldPosition} treePos={_targetTreePos} kind={_targetTree.Kind} chops={_targetTree.ChopsRemaining} wood={_state.Wood} tier={_state.AxeTier}" );
+		Transition( Phase.TestSpawnDistribution );
+	}
+
+	private void TickTestSpawnDistribution()
+	{
+		var starter = Scene.GetAllComponents<SceneStarter>().FirstOrDefault();
+		if ( !starter.IsValid() )
+		{
+			Log.Error( "[TC_TEST] FAIL TestSpawnDistribution: no SceneStarter found" );
+			Finish();
+			return;
+		}
+
+		int insidePad = 0;
+		int starterRing = 0;
+		int starterSaplings = 0;
+		int starterNormals = 0;
+		var origin = starter.ResolvedPlayerSpawn;
+		foreach ( var tree in Scene.GetAllComponents<Tree>() )
+		{
+			if ( !tree.IsValid() || !tree.IsStanding ) continue;
+			float dist = tree.WorldPosition.WithZ( 0f ).Distance( origin.WithZ( 0f ) );
+			if ( dist < starter.SpawnPadRadius && tree.WorldPosition.Distance( _targetTreePos ) > 30f )
+				insidePad++;
+			if ( dist >= starter.SpawnPadRadius + 80f && dist <= starter.SpawnPadRadius + 700f )
+			{
+				starterRing++;
+				if ( tree.Kind == TreeKind.Sapling ) starterSaplings++;
+				if ( tree.Kind == TreeKind.Normal ) starterNormals++;
+			}
+		}
+
+		if ( insidePad > 0 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSpawnDistribution: {insidePad} non-test trees inside spawn pad" );
+			Finish();
+			return;
+		}
+		if ( starterRing < 36 || starterSaplings < 28 || starterNormals < 3 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSpawnDistribution: starterRing={starterRing} saplings={starterSaplings} normals={starterNormals} (expected >=36 / >=28 / >=3)" );
+			Finish();
+			return;
+		}
+
+		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, padClear" );
 		Transition( Phase.Approach );
 	}
 
