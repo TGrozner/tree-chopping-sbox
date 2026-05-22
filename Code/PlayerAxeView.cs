@@ -63,6 +63,16 @@ public sealed class PlayerAxeView : Component
 				rot *= Rotation.From( 20f * snap, -8f * snap, 28f * snap );
 			}
 		}
+		if ( _axeController.IsValid() )
+		{
+			float hit = _axeController.ViewImpactKick;
+			if ( hit > 0f )
+			{
+				float buzz = MathF.Sin( Time.Now * 90f ) * hit;
+				pos += new Vector3( 5f * hit, 1.5f * buzz, -4f * hit );
+				rot *= Rotation.From( 18f * hit, -7f * buzz, 24f * hit );
+			}
+		}
 
 		_axeObject.LocalPosition = pos;
 		_axeObject.LocalRotation = rot;

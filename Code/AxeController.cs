@@ -28,6 +28,8 @@ public sealed class AxeController : Component
 	private TimeSince _shakeStart = 999f;
 	private float _shakeAmplitude;
 	private int _shakeSeed;
+	private TimeSince _viewImpactStart = 999f;
+	private float _viewImpactStrength;
 
 	// Bridge / autopilot hooks.
 	[Property] public bool DebugRequestSwing { get; set; }
@@ -46,6 +48,17 @@ public sealed class AxeController : Component
 				SwingPhase.Recovery => 1f + (_phaseTime / MathF.Max( Tunables.SwingRecoveryDuration, 0.001f )).Clamp( 0f, 1f ),
 				_ => 0f,
 			};
+		}
+	}
+	public float ViewImpactKick
+	{
+		get
+		{
+			const float duration = 0.22f;
+			float t = (float)_viewImpactStart;
+			if ( t >= duration ) return 0f;
+			float decay = 1f - (t / duration);
+			return _viewImpactStrength * decay * decay;
 		}
 	}
 
@@ -125,6 +138,12 @@ public sealed class AxeController : Component
 		_shakeStart = 0f;
 		_shakeAmplitude = MathF.Max( _shakeAmplitude, amplitudeUnits );
 		_shakeSeed = (_shakeSeed + 1) & 0xFF;
+	}
+
+	private void AddViewImpactKick( float strength )
+	{
+		_viewImpactStart = 0f;
+		_viewImpactStrength = MathF.Max( _viewImpactStrength, strength );
 	}
 
 	private void TickHitstop()
@@ -368,6 +387,7 @@ public sealed class AxeController : Component
 		shakeAmp *= MathX.Lerp( 0.85f, 1.25f, damageFeel );
 		if ( heavyHit ) shakeAmp *= 1.4f;
 		AddCameraShake( shakeAmp );
+		AddViewImpactKick( heavyHit ? 1.35f : 0.85f );
 	}
 
 	private void ApplyTooHardFeedback( Vector3 contactPoint, Vector3 forward )
@@ -379,6 +399,7 @@ public sealed class AxeController : Component
 		Sfx.Play( "sounds/axe_too_weak.sound", contactPoint, volume: 0.95f, pitchMin: 0.75f, pitchMax: 0.95f );
 		Sfx.Play( "sounds/axe_hit_wood.sound", contactPoint, volume: 0.45f, pitchMin: 0.55f, pitchMax: 0.70f );
 		AddCameraShake( 0.45f );
+		AddViewImpactKick( 0.45f );
 	}
 
 	private void TriggerAttackAnim()
