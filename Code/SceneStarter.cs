@@ -371,12 +371,20 @@ public sealed class SceneStarter : Component
 
 			placed.Add( pos );
 			float distBeav = MathF.Sqrt( dxPad * dxPad + dyPad * dyPad );
-			float diff = ((distBeav - SpawnPadRadius) / (Tunables.ArenaRadius - SpawnPadRadius)).Clamp( 0f, 1f );
+			float diff = ComputeBiomeDifficulty( distBeav );
 			Tree.SpawnAt( Scene, pos, diff );
 			spawned++;
 		}
 		if ( spawned < targetCount )
 			Log.Warning( $"[SceneStarter] Band [{innerR:0}..{outerR:0}] shortfall : {spawned}/{targetCount} trees" );
+	}
+
+	private float ComputeBiomeDifficulty( float distFromSpawn )
+	{
+		float t = ((distFromSpawn - SpawnPadRadius) / (Tunables.ArenaRadius - SpawnPadRadius)).Clamp( 0f, 1f );
+		if ( t < 0.24f ) return t * 0.25f;
+		if ( t < 0.58f ) return MathX.Lerp( 0.25f, 0.62f, (t - 0.24f) / 0.34f );
+		return MathX.Lerp( 0.72f, 1.0f, (t - 0.58f) / 0.42f );
 	}
 
 	// Guaranteed weak sapling 120u ahead (+X) of the player on boot -- test

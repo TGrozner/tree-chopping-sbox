@@ -183,6 +183,8 @@ public sealed class SelfTest : Component
 		int frontNormals = 0;
 		int laneTrees = 0;
 		int laneSaplings = 0;
+		int midNormals = 0;
+		int outerVeterans = 0;
 		var origin = starter.ResolvedPlayerSpawn;
 		var front = Vector3.Forward;
 		foreach ( var tree in Scene.GetAllComponents<Tree>() )
@@ -209,6 +211,10 @@ public sealed class SelfTest : Component
 					if ( tree.Kind == TreeKind.Sapling ) laneSaplings++;
 				}
 			}
+			if ( dist > starter.SpawnPadRadius + 700f && dist <= starter.SpawnPadRadius + 1250f && tree.Kind == TreeKind.Normal )
+				midNormals++;
+			if ( dist > starter.SpawnPadRadius + 1250f && tree.Kind == TreeKind.Veteran )
+				outerVeterans++;
 		}
 
 		if ( insidePad > 0 )
@@ -235,8 +241,14 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( midNormals < 6 || outerVeterans < 12 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSpawnDistribution: progression bands weak midNormals={midNormals} outerVeterans={outerVeterans} (expected >=6 / >=12)" );
+			Finish();
+			return;
+		}
 
-		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, front={frontRing}/{frontSaplings}/{frontNormals}, lane={laneTrees}/{laneSaplings}, padClear" );
+		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, front={frontRing}/{frontSaplings}/{frontNormals}, lane={laneTrees}/{laneSaplings}, midN={midNormals}, outerV={outerVeterans}, padClear" );
 		Transition( Phase.Approach );
 	}
 
@@ -623,7 +635,7 @@ public sealed class SelfTest : Component
 			{
 				if ( _cascadeSource.Body.PhysicsBody.IsValid() )
 					_cascadeSource.Body.PhysicsBody.Position = sourcePos;
-				_cascadeSource.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 260f);
+				_cascadeSource.Body.Velocity = logAxis * (Tunables.ImpactMinSpeed + 600f);
 				_cascadeSource.Body.AngularVelocity = Vector3.Zero;
 			}
 			_cascadeCollisionStartTime = 0f;
