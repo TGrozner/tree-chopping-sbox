@@ -69,7 +69,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		col.End = new Vector3( 0f, 0f, MathF.Max( radius + 1f, trunkH - radius ) );
 
 		var rb = go.AddComponent<Rigidbody>();
-		rb.MassOverride = MathF.Max( tree.LogMass * MathF.Max( 0.35f, lengthMul * widthMul ), 1f );
+		rb.MassOverride = MathF.Max( tree.LogMass * MathF.Max( 0.75f, lengthMul * widthMul * 2.5f ), Tunables.TreeMass * 0.55f );
 		rb.LinearDamping = 0f;
 		rb.AngularDamping = 0.3f;
 		rb.EnhancedCcd = true;
@@ -260,6 +260,8 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 			Body.AngularDamping = Tunables.TreeAngularDampLanded;
 			Body.LinearDamping = Tunables.TreeLinearDampLanded;
 			Body.SleepThreshold = Tunables.TreeLogSleepThreshold;
+			Body.AngularVelocity *= 0.25f;
+			Body.Velocity *= 0.55f;
 		}
 		float impactScale = ((landingSpeed - Tunables.ImpactMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
 		float softScale = ((landingSpeed - Tunables.ImpactSoftMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
@@ -638,13 +640,13 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 
 		var rb = go.AddComponent<Rigidbody>();
 		float parentMass = Body.IsValid() && Body.PhysicsBody.IsValid() ? Body.PhysicsBody.Mass : Tunables.TreeMass;
-		rb.MassOverride = MathF.Max( 1f, parentMass / MathF.Max( 1, Tunables.TreeKindSubLogCount[(int)Kind] ) );
+		rb.MassOverride = MathF.Max( Tunables.TreeMass * 0.45f, parentMass * 0.85f / MathF.Max( 1, Tunables.TreeKindSubLogCount[(int)Kind] ) );
 		rb.LinearDamping = Tunables.TreeLinearDampLanded;
 		rb.AngularDamping = Tunables.TreeAngularDampLanded;
 		rb.EnhancedCcd = true;
 		rb.SleepThreshold = Tunables.TreeLogSleepThreshold;
-		rb.StartAsleep = false;
-		rb.MotionEnabled = true;
+		rb.StartAsleep = true;
+		rb.MotionEnabled = false;
 
 		var log = go.AddComponent<FallenLog>();
 		log.Body = rb;
@@ -668,6 +670,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		if ( rb.PhysicsBody.IsValid() )
 		{
 			rb.ResetInertiaTensor();
+			rb.PhysicsBody.Position = go.WorldPosition;
 			rb.PhysicsBody.Velocity = (Body.IsValid() ? Body.Velocity * Tunables.SubLogInheritedVelocityMul : Vector3.Zero)
 				+ burstDir * Game.Random.Float( Tunables.SubLogSpawnSpeedMin, Tunables.SubLogSpawnSpeedMax );
 			var spin = Vector3.Cross( burstDir, Vector3.Up );
@@ -681,7 +684,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	private void TickLandedDecay()
 	{
 		if ( !Body.IsValid() ) return;
-		if ( (float)_timeSinceLanded < 1.25f ) ClampAboveGround();
+		ClampAboveGround();
 		if ( _timeSinceLanded < Tunables.TreeLandedManualSleepDelay ) return;
 		Body.Sleeping = Body.Velocity.LengthSquared < Tunables.TreeLandedManualSleepSpeed * Tunables.TreeLandedManualSleepSpeed
 			&& Body.AngularVelocity.LengthSquared < Tunables.TreeLandedManualSleepAngularSpeed * Tunables.TreeLandedManualSleepAngularSpeed;
@@ -714,7 +717,8 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		AccumulateGroundLift( lower, radius, ref lift );
 		AccumulateGroundLift( (lower + upper) * 0.5f, radius, ref lift );
 		AccumulateGroundLift( upper, radius, ref lift );
-		if ( lift <= 0f || lift > 180f ) return;
+		if ( lift <= 0f ) return;
+		if ( lift > 800f ) lift = 800f;
 		WorldPosition += Vector3.Up * lift;
 		if ( Body.PhysicsBody.IsValid() )
 		{
