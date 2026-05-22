@@ -243,7 +243,50 @@ public sealed class SceneStarter : Component
 		float innerR = SpawnPadRadius;
 		float outerR = Tunables.ArenaRadius;
 		SpawnStarterResourceField();
-		SpawnForestBand( innerR, outerR, TreeCount );
+		int scripted = SpawnProgressionGroves();
+		SpawnForestBand( innerR, outerR, Math.Max( 0, TreeCount - scripted ) );
+	}
+
+	private int SpawnProgressionGroves()
+	{
+		int spawned = 0;
+		var placed = Scene.GetAllComponents<Tree>()
+			.Where( t => t.IsValid() )
+			.Select( t => t.WorldPosition )
+			.ToList();
+
+		spawned += SpawnProgressionGrove( placed, new Vector2( 1640f, -520f ), 15, 360f, 210f, TreeKind.Normal, TreeKind.Sapling, 0.62f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 1840f,  520f ), 14, 360f, 220f, TreeKind.Normal, TreeKind.Brittle, 0.58f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 2320f, -260f ), 12, 420f, 260f, TreeKind.Veteran, TreeKind.Normal, 0.68f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 2460f,  420f ), 10, 360f, 240f, TreeKind.Veteran, TreeKind.Brittle, 0.64f );
+
+		Log.Info( $"[SceneStarter] Progression groves spawned {spawned} scripted trees" );
+		return spawned;
+	}
+
+	private int SpawnProgressionGrove( List<Vector3> placed, Vector2 centerOffset, int count, float radiusX, float radiusY, TreeKind primary, TreeKind support, float primaryChance )
+	{
+		var rng = new Random( Seed ^ centerOffset.GetHashCode() ^ ((int)primary << 12) ^ count );
+		int spawned = 0;
+		int attempts = 0;
+		while ( spawned < count && attempts < count * 40 )
+		{
+			attempts++;
+			float a = (float)(rng.NextDouble() * MathF.Tau);
+			float r = MathF.Sqrt( (float)rng.NextDouble() );
+			float x = ResolvedPlayerSpawn.x + centerOffset.x + MathF.Cos( a ) * radiusX * r;
+			float y = ResolvedPlayerSpawn.y + centerOffset.y + MathF.Sin( a ) * radiusY * r;
+			if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
+
+			var pos = new Vector3( x, y, groundZ );
+			if ( placed.Any( p => p.Distance( pos ) < MinSpacing * 0.72f ) ) continue;
+			placed.Add( pos );
+
+			var kind = rng.NextDouble() < primaryChance ? primary : support;
+			Tree.SpawnAt( Scene, pos, biomeDifficulty: primary == TreeKind.Veteran ? 0.86f : 0.45f, forceKind: kind );
+			spawned++;
+		}
+		return spawned;
 	}
 
 	private void SpawnStarterResourceField()

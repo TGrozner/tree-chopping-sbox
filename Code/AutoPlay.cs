@@ -143,7 +143,7 @@ public sealed class AutoPlay : Component
 
 	private static bool AnyUpgradeAffordable( GameState gs )
 	{
-		if ( gs.AxeTier   < Tunables.MaxAxeTier  && gs.Wood >= Tunables.AxeTierCosts[gs.AxeTier + 1] ) return true;
+		if ( gs.CanAffordNextAxe() ) return true;
 		if ( gs.SpeedTier < Tunables.MaxStatTier && gs.Wood >= Tunables.SpeedCosts[gs.SpeedTier + 1] ) return true;
 		if ( gs.LuckTier  < Tunables.MaxStatTier && gs.Wood >= Tunables.LuckCosts[gs.LuckTier + 1] )   return true;
 		if ( gs.PowerTier < Tunables.MaxStatTier && gs.Wood >= Tunables.PowerCosts[gs.PowerTier + 1] ) return true;

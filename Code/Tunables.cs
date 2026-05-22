@@ -223,7 +223,9 @@ public static class Tunables
 	// (no ChopsRemaining decrement, HUD hint). Drives the "buy a better axe
 	// to unlock the bigger trees that drop more wood" progression curve.
 	// Index matches TreeKind enum order : Normal / Sapling / Veteran / Brittle.
-	public static readonly int[] TreeKindMinAxeTier = { 1, 0, 3, 1 };
+	// Veteran unlocks at Bronze/T2 so Finewood is earnable before the Iron/T3
+	// recipe asks for it, matching Valheim's Birch/Oak progression shape.
+	public static readonly int[] TreeKindMinAxeTier = { 1, 0, 2, 1 };
 	// Per-kind respawn delay : seconds the landed log lingers before the
 	// position grows a new tree. Order matches TreeKind enum
 	// {Normal, Sapling, Veteran, Brittle}. Forager/Mow-The-Lawn pattern :

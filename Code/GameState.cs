@@ -323,6 +323,20 @@ public sealed class GameState : Component
 		return true;
 	}
 
+	public bool CanAffordNextAxe()
+	{
+		if ( AxeTier >= Tunables.MaxAxeTier ) return false;
+		var recipe = Tunables.AxeTierCostsByType[AxeTier + 1];
+		return Wood >= recipe[0] && Finewood >= recipe[1] && CoreWood >= recipe[2];
+	}
+
+	public int NextAxeRecipeSortCost()
+	{
+		if ( AxeTier >= Tunables.MaxAxeTier ) return int.MaxValue;
+		var recipe = Tunables.AxeTierCostsByType[AxeTier + 1];
+		return recipe[0] + recipe[1] + recipe[2];
+	}
+
 	public bool TryUpgradeSpeed()
 	{
 		if ( SpeedTier >= Tunables.MaxStatTier ) return false;

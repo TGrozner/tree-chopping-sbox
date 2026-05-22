@@ -552,7 +552,7 @@ public sealed class WoodHud : Component
 		DrawStationHintFrame( hud, 3, "TOOLS — [E] auto-buy cheapest",
 			out float x, out float y, out float w, out float lh, out float fs );
 		DrawShopLine( hud, x, y + 1 * lh + 2f, w, lh, fs, "1",
-			$"Axe T{_state.AxeTier} ({Tunables.AxeTierName[_state.AxeTier]})", AxeNextCost(),
+			$"Axe T{_state.AxeTier} ({Tunables.AxeTierName[_state.AxeTier]})", AxeNextCostText(), _state.CanAffordNextAxe(), _state.AxeTier >= Tunables.MaxAxeTier,
 			_state.AxeTier < Tunables.MaxAxeTier ? $"→ {Tunables.AxeTierName[_state.AxeTier + 1]}" : "+chop/swing" );
 		DrawShopLine( hud, x, y + 2 * lh + 2f, w, lh, fs, "2",
 			$"Range T{_state.ToolRangeTier}", ToolRangeNextCost(),
@@ -605,11 +605,29 @@ public sealed class WoodHud : Component
 			new Rect( x, y, w, h ), TextFlag.LeftCenter );
 	}
 
-	private int AxeNextCost() => _state.AxeTier < Tunables.MaxAxeTier ? Tunables.AxeTierCosts[_state.AxeTier + 1] : -1;
+	private string AxeNextCostText()
+	{
+		if ( _state.AxeTier >= Tunables.MaxAxeTier ) return "MAX";
+		var recipe = Tunables.AxeTierCostsByType[_state.AxeTier + 1];
+		var parts = new List<string>();
+		if ( recipe[0] > 0 ) parts.Add( $"{recipe[0]}W" );
+		if ( recipe[1] > 0 ) parts.Add( $"{recipe[1]}FW" );
+		if ( recipe[2] > 0 ) parts.Add( $"{recipe[2]}CW" );
+		return string.Join( " + ", parts );
+	}
 	private int SpeedNextCost() => _state.SpeedTier < Tunables.MaxStatTier ? Tunables.SpeedCosts[_state.SpeedTier + 1] : -1;
 	private int LuckNextCost() => _state.LuckTier < Tunables.MaxStatTier ? Tunables.LuckCosts[_state.LuckTier + 1] : -1;
 	private int PowerNextCost() => _state.PowerTier < Tunables.MaxStatTier ? Tunables.PowerCosts[_state.PowerTier + 1] : -1;
 	private int PetNextCost() => _state.PetTier < Tunables.MaxPetTier ? Tunables.PetCosts[_state.PetTier + 1] : -1;
+
+	private void DrawShopLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font,
+		string key, string label, string costStr, bool affordable, bool maxed, string effect )
+	{
+		var labelColor = maxed ? TextColor.WithAlpha( 0.40f ) : (affordable ? HotColor : TextColor.WithAlpha( 0.85f ));
+		string line = $"  [{key}]  {label}  Â·  {costStr}  Â·  {effect}";
+		hud.DrawText( new TextRendering.Scope( line, labelColor, font ),
+			new Rect( x, y, w, h ), TextFlag.LeftCenter );
+	}
 
 	private void DrawShopLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font,
 		string key, string label, int cost, string effect )

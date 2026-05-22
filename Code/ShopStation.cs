@@ -211,11 +211,12 @@ public sealed class ShopStation : Component
 
 	private (bool bought, string banner, string sfx, float pmin, float pmax) BuyCheapestTool()
 	{
-		int cAxe   = _state.AxeTier       < Tunables.MaxAxeTier       ? Tunables.AxeTierCosts[_state.AxeTier + 1]       : int.MaxValue;
-		int cRange = _state.ToolRangeTier < Tunables.MaxToolStatTier  ? Tunables.ToolRangeCosts[_state.ToolRangeTier + 1] : int.MaxValue;
-		int cSpd   = _state.ToolSpeedTier < Tunables.MaxToolStatTier  ? Tunables.ToolSpeedCosts[_state.ToolSpeedTier + 1] : int.MaxValue;
+		int AffordableWoodCost( int cost ) => cost != int.MaxValue && _state.Wood >= cost ? cost : int.MaxValue;
+		int cAxe   = _state.CanAffordNextAxe() ? _state.NextAxeRecipeSortCost() : int.MaxValue;
+		int cRange = AffordableWoodCost( _state.ToolRangeTier < Tunables.MaxToolStatTier ? Tunables.ToolRangeCosts[_state.ToolRangeTier + 1] : int.MaxValue );
+		int cSpd   = AffordableWoodCost( _state.ToolSpeedTier < Tunables.MaxToolStatTier ? Tunables.ToolSpeedCosts[_state.ToolSpeedTier + 1] : int.MaxValue );
 		int cheapest = Math.Min( cAxe, Math.Min( cRange, cSpd ) );
-		if ( cheapest == int.MaxValue || _state.Wood < cheapest ) return (false, null, null, 0f, 0f);
+		if ( cheapest == int.MaxValue ) return (false, null, null, 0f, 0f);
 		if ( cheapest == cAxe   && _state.TryUpgradeAxe()       ) return (true, $"AXE → {Tunables.AxeTierName[_state.AxeTier].ToUpper()}", "sounds/upgrade_buy.sound", 0.90f, 1.05f);
 		if ( cheapest == cRange && _state.TryUpgradeToolRange() ) return (true, $"RANGE → T{_state.ToolRangeTier} (×{Tunables.ToolRangeMul[_state.ToolRangeTier]:0.00})", "sounds/upgrade_buy.sound", 1.25f, 1.45f);
 		if ( cheapest == cSpd   && _state.TryUpgradeToolSpeed() ) return (true, $"SWING SPEED → T{_state.ToolSpeedTier}", "sounds/upgrade_buy.sound", 1.45f, 1.70f);
@@ -326,17 +327,18 @@ public sealed class ShopStation : Component
 				return true;
 			}
 		}
-		int cAxe   = state.AxeTier       < Tunables.MaxAxeTier       ? Tunables.AxeTierCosts[state.AxeTier + 1]         : int.MaxValue;
-		int cRange = state.ToolRangeTier < Tunables.MaxToolStatTier  ? Tunables.ToolRangeCosts[state.ToolRangeTier + 1] : int.MaxValue;
-		int cSpd   = state.ToolSpeedTier < Tunables.MaxToolStatTier  ? Tunables.ToolSpeedCosts[state.ToolSpeedTier + 1] : int.MaxValue;
-		int cSpeed = state.SpeedTier     < Tunables.MaxStatTier      ? Tunables.SpeedCosts[state.SpeedTier + 1]         : int.MaxValue;
-		int cLuck  = state.LuckTier      < Tunables.MaxStatTier      ? Tunables.LuckCosts[state.LuckTier + 1]           : int.MaxValue;
-		int cPower = state.PowerTier     < Tunables.MaxStatTier      ? Tunables.PowerCosts[state.PowerTier + 1]         : int.MaxValue;
-		int cBack  = state.BackpackTier  < Tunables.MaxBackpackTier  ? Tunables.BackpackCosts[state.BackpackTier + 1]   : int.MaxValue;
-		int cPet   = state.PetTier       < Tunables.MaxPetTier       ? Tunables.PetCosts[state.PetTier + 1]             : int.MaxValue;
+		int AffordableWoodCost( int cost ) => cost != int.MaxValue && state.Wood >= cost ? cost : int.MaxValue;
+		int cAxe   = state.CanAffordNextAxe() ? state.NextAxeRecipeSortCost() : int.MaxValue;
+		int cRange = AffordableWoodCost( state.ToolRangeTier < Tunables.MaxToolStatTier ? Tunables.ToolRangeCosts[state.ToolRangeTier + 1] : int.MaxValue );
+		int cSpd   = AffordableWoodCost( state.ToolSpeedTier < Tunables.MaxToolStatTier ? Tunables.ToolSpeedCosts[state.ToolSpeedTier + 1] : int.MaxValue );
+		int cSpeed = AffordableWoodCost( state.SpeedTier     < Tunables.MaxStatTier     ? Tunables.SpeedCosts[state.SpeedTier + 1]         : int.MaxValue );
+		int cLuck  = AffordableWoodCost( state.LuckTier      < Tunables.MaxStatTier     ? Tunables.LuckCosts[state.LuckTier + 1]           : int.MaxValue );
+		int cPower = AffordableWoodCost( state.PowerTier     < Tunables.MaxStatTier     ? Tunables.PowerCosts[state.PowerTier + 1]         : int.MaxValue );
+		int cBack  = AffordableWoodCost( state.BackpackTier  < Tunables.MaxBackpackTier ? Tunables.BackpackCosts[state.BackpackTier + 1]   : int.MaxValue );
+		int cPet   = AffordableWoodCost( state.PetTier       < Tunables.MaxPetTier      ? Tunables.PetCosts[state.PetTier + 1]             : int.MaxValue );
 		int cheapest = Math.Min( Math.Min( Math.Min( Math.Min( cAxe, cRange ), Math.Min( cSpd, cSpeed ) ),
 			Math.Min( cLuck, cPower ) ), Math.Min( cBack, cPet ) );
-		if ( cheapest == int.MaxValue || state.Wood < cheapest ) return false;
+		if ( cheapest == int.MaxValue ) return false;
 		if ( cheapest == cAxe   && state.TryUpgradeAxe()       ) return true;
 		if ( cheapest == cRange && state.TryUpgradeToolRange() ) return true;
 		if ( cheapest == cSpd   && state.TryUpgradeToolSpeed() ) return true;

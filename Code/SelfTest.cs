@@ -1052,6 +1052,23 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		_state.ResetForTest();
+		_state.AddWood( Tunables.AxeTierCostsByType[1][0] + Tunables.AxeTierCostsByType[2][0] + Tunables.AxeTierCostsByType[3][0] );
+		_state.TryUpgradeAxe();
+		_state.TryUpgradeAxe();
+		if ( _state.AxeTier != 2 || _state.Finewood != 0 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: setup for multi-resource axe affordability failed axe=T{_state.AxeTier} finewood={_state.Finewood}" );
+			Finish();
+			return;
+		}
+		bool boughtFallback = ShopStation.TryBuyCheapestAcrossAll( Scene );
+		if ( !boughtFallback || _state.AxeTier != 2 || _state.SpeedTier != 1 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestMultiWoodTypes: auto-buy got stuck on unaffordable Axe T3 (bought={boughtFallback}, axe=T{_state.AxeTier}, speed=T{_state.SpeedTier})" );
+			Finish();
+			return;
+		}
 		// Tunables.TreeKindWoodTypeMix proba sum check
 		for ( int k = 0; k < Tunables.TreeKindWoodTypeMix.Length; k++ )
 		{
@@ -1064,7 +1081,7 @@ public sealed class SelfTest : Component
 				return;
 			}
 		}
-		Log.Info( $"[TC_TEST] MULTI_WOOD PASS  AddBackpack par type + TrySell flush (Wood=5 Finewood=3 CoreWood=2), TreeKindWoodTypeMix sums ok" );
+		Log.Info( $"[TC_TEST] MULTI_WOOD PASS  AddBackpack par type + TrySell flush, typed axe recipe fallback, TreeKindWoodTypeMix sums ok" );
 		Transition( Phase.TestStatCounters );
 	}
 
@@ -1335,7 +1352,19 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		Log.Info( $"[TC_TEST] TUNABLES_SANITY PASS  Shake 40/36Hz 1.5° 1s, ImpactInterval 0.5s, recipes 7×3, woodTypes 3×3, wind ok, damping ok, chop pitch S>1>V, whoosh threshold ok" );
+		if ( !ResourceIsReachableBeforeRecipe( WoodType.Finewood, 3 ) )
+		{
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: Finewood is required for Axe T3 but no Finewood tree is choppable at Axe T2" );
+			Finish();
+			return;
+		}
+		if ( !ResourceIsReachableBeforeRecipe( WoodType.CoreWood, 4 ) )
+		{
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: CoreWood is required for Axe T4 but no CoreWood tree is choppable at Axe T3" );
+			Finish();
+			return;
+		}
+		Log.Info( $"[TC_TEST] TUNABLES_SANITY PASS  Shake 40/36Hz 1.5° 1s, ImpactInterval 0.5s, recipes 7×3, woodTypes 3×3, resource ladder reachable, wind ok, damping ok, chop pitch S>1>V, whoosh threshold ok" );
 		if ( RuntimeValue( Tunables.TreeHitFlashDuration ) <= 0f || RuntimeValue( Tunables.TreeHitFlashDuration ) > 0.25f )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeHitFlashDuration={Tunables.TreeHitFlashDuration} (expected quick impact flash <= 0.25s)" );
@@ -1343,6 +1372,21 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Transition( Phase.TestImpactDamageScaling );
+	}
+
+	private static bool ResourceIsReachableBeforeRecipe( WoodType type, int recipeTier )
+	{
+		int resourceIdx = (int)type;
+		if ( recipeTier <= 0 || recipeTier >= Tunables.AxeTierCostsByType.Length ) return true;
+		if ( Tunables.AxeTierCostsByType[recipeTier][resourceIdx] <= 0 ) return true;
+		int playerTierBeforeRecipe = recipeTier - 1;
+		for ( int kind = 0; kind < Tunables.TreeKindWoodTypeMix.Length; kind++ )
+		{
+			if ( Tunables.TreeKindWoodTypeMix[kind].Length <= resourceIdx ) continue;
+			if ( Tunables.TreeKindWoodTypeMix[kind][resourceIdx] <= 0f ) continue;
+			if ( Tunables.TreeKindMinAxeTier[kind] <= playerTierBeforeRecipe ) return true;
+		}
+		return false;
 	}
 
 	private void TickTestImpactDamageScaling()
