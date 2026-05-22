@@ -904,8 +904,10 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// auto-split le tronc qui tombe sans chop manuel.
 		if ( Tunables.ImpactDamageSelf && damage > 0 )
 		{
-			float splitSpeed = Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)Kind];
-			if ( _landed || impactSpeed >= splitSpeed || impactScale >= Tunables.ImpactViolentScale )
+			float splitSpeed = _landed
+				? Tunables.WoodLogBreakImpactSpeed
+				: Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)Kind];
+			if ( impactSpeed >= splitSpeed || (!_landed && impactScale >= Tunables.ImpactViolentScale) )
 			{
 				var selfDir = _preCollisionVelocity.WithZ( 0f );
 				if ( selfDir.LengthSquared < 0.01f ) selfDir = Vector3.Forward;

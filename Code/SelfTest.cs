@@ -1262,6 +1262,12 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( RuntimeValue( Tunables.WoodLogBreakImpactSpeed ) <= RuntimeValue( Tunables.TreeSplitImpactSpeed ) )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: WoodLogBreakImpactSpeed={Tunables.WoodLogBreakImpactSpeed} should exceed TreeSplitImpactSpeed={Tunables.TreeSplitImpactSpeed} so normal landed logs remain chopable" );
+			Finish();
+			return;
+		}
 		// TreeKindChopPitchMul : 4 kinds, Sapling > 1 (high crack), Veteran < 1 (deep thunk)
 		if ( Tunables.TreeKindChopPitchMul.Length != 4 )
 		{

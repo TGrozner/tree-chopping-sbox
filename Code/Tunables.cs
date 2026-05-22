@@ -388,10 +388,10 @@ public static class Tunables
 	// doivent split à seuil bas même si damage incrémental est lent.
 	public const float TreeSplitImpactSpeed = 700f;
 	// WoodLog : un impact au-dessus de ce seuil → BreakIntoWoodItems direct.
-	// 550 = bien au-dessus de tout ce qu'un log peut générer en roulant (un
-	// log au repos est à <50 u/s ; landed from spawn ~135 u/s). Seul un coup
-	// franc (tronc qui tombe dessus, kick cumulé extrême) déclenche le burst.
-	public const float WoodLogBreakImpactSpeed = 550f;
+	// 900 = bien au-dessus d'un atterrissage normal observé (~600-750 u/s),
+	// donc le log peut rester posé en biais et chopable. Seul un coup franc
+	// (cascade violente, tronc qui tombe dessus, kick cumulé extrême) burst.
+	public const float WoodLogBreakImpactSpeed = 900f;
 	// Grace period au spawn d'un WoodLog : ignore les triggers physics les
 	// premières frames pour éviter un auto-break sur le rebond initial.
 	public const float WoodLogPhysicsBreakGrace = 0.5f;
