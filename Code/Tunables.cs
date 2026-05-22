@@ -300,16 +300,16 @@ public static class Tunables
 	public const float InitialFellOmega = 0.18f;
 	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
 	public const float InitialFellTopImpulseSpeed = 10f;
-	public const float LogGroundSkin = 2f;
-	public const float SubLogColliderRadiusMul = 0.86f;
+	public const float LogGroundSkin = 5f;
+	public const float SubLogColliderRadiusMul = 1.08f;
 	public const float SubLogAxisSpawnFrac = 0.34f;
 	public const float SubLogSideSpawnMin = 18f;
 	public const float SubLogSideSpawnMul = 0.75f;
-	public const float SubLogInheritedVelocityMul = 0f;
+	public const float SubLogInheritedVelocityMul = 0.16f;
 	public const float SubLogSpawnSpeedMin = 0f;
-	public const float SubLogSpawnSpeedMax = 0f;
+	public const float SubLogSpawnSpeedMax = 12f;
 	public const float SubLogSpawnAngularMin = 0f;
-	public const float SubLogSpawnAngularMax = 0f;
+	public const float SubLogSpawnAngularMax = 0.08f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.
@@ -391,8 +391,8 @@ public static class Tunables
 	public const float ImpactViolentScale = 0.62f;
 	public const int ImpactBaseDamage = 6;
 	public const float CascadeSweepInterval = 0.18f;
-	public const float CascadeSweepMinSpeed = 160f;
-	public const float CascadeSweepRadius = 34f;
+	public const float CascadeSweepMinSpeed = 90f;
+	public const float CascadeSweepRadius = 46f;
 	public const float CascadeSweepDamageMul = 0.85f;
 	// Le falling tree subit-il aussi le damage (m_damageToSelf) ?
 	// True = TreeLog crash sur sol = peut s'auto-split sur impact violent.

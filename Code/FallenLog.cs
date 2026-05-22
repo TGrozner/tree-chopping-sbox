@@ -292,6 +292,16 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 
 	void Component.ICollisionListener.OnCollisionStart( Collision other )
 	{
+		HandleCollision( other );
+	}
+
+	void Component.ICollisionListener.OnCollisionUpdate( Collision other )
+	{
+		HandleCollision( other );
+	}
+
+	private void HandleCollision( Collision other )
+	{
 		if ( _logSplit ) return;
 		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
 
@@ -357,7 +367,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 			: _preCollisionVelocity;
 	}
 
-	void Component.ICollisionListener.OnCollisionUpdate( Collision other ) { }
 	void Component.ICollisionListener.OnCollisionStop( CollisionStop other ) { }
 
 	private Vector3 EstimateImpactPoint( Tree tree, FallenLog log )
@@ -370,7 +379,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	private void SweepNearbyCascadeTargets()
 	{
 		if ( (float)_timeSinceLastCascadeSweep < Tunables.CascadeSweepInterval ) return;
-		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
 		if ( !Body.IsValid() ) return;
 
 		float motionSpeed = Body.Velocity.Length + Body.AngularVelocity.Length * MathF.Max( _trunkLen, Tunables.TreeHeight ) * 0.20f;
@@ -613,7 +621,8 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 			float centerOff = MathX.Lerp( -_trunkLen * Tunables.SubLogAxisSpawnFrac, _trunkLen * Tunables.SubLogAxisSpawnFrac, t );
 			float sideSign = (i & 1) == 0 ? 1f : -1f;
 			float sideOff = sideSign * MathF.Max( Tunables.SubLogSideSpawnMin, _trunkWidth * Tunables.SubLogSideSpawnMul );
-			var center = LogCenter + axis * centerOff + side * sideOff + Vector3.Up * (2f + i * 1.5f);
+			float spawnLift = MathF.Max( _trunkWidth * Tunables.SubLogColliderRadiusMul * 0.5f + Tunables.LogGroundSkin + 10f, 18f );
+			var center = LogCenter + axis * centerOff + side * sideOff + Vector3.Up * (spawnLift + i * 2f);
 			var start = center - axis * (childLen * 0.5f);
 			var burst = (side * sideSign + Vector3.Up * 0.08f).Normal;
 			SpawnSubLog( start, WorldRotation, childLen, _trunkWidth * 0.82f, drops, burst );
@@ -671,16 +680,38 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		{
 			rb.ResetInertiaTensor();
 			rb.PhysicsBody.Position = go.WorldPosition;
-			rb.PhysicsBody.Velocity = Vector3.Zero;
-			rb.PhysicsBody.AngularVelocity = Vector3.Zero;
+			var inherited = Body.IsValid() ? Body.Velocity * Tunables.SubLogInheritedVelocityMul : Vector3.Zero;
+			rb.PhysicsBody.Velocity = inherited + burstDir * Game.Random.Float( Tunables.SubLogSpawnSpeedMin, Tunables.SubLogSpawnSpeedMax ) + Vector3.Up * 6f;
+			var spin = Vector3.Cross( burstDir, Vector3.Up );
+			rb.PhysicsBody.AngularVelocity = spin.LengthSquared > 0.001f
+				? spin.Normal * Game.Random.Float( Tunables.SubLogSpawnAngularMin, Tunables.SubLogSpawnAngularMax )
+				: Vector3.Zero;
 		}
 		return log;
+	}
+
+	internal float DebugMinGroundClearance()
+	{
+		if ( Scene is null ) return 9999f;
+		var axis = WorldRotation.Up;
+		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
+		axis = axis.Normal;
+		float radius = MathF.Max( _trunkWidth * 0.5f * (_subLogGeneration > 0 ? Tunables.SubLogColliderRadiusMul : 1f), 1f );
+		float length = MathF.Max( _trunkLen, radius * 2f + 1f );
+		var lower = WorldPosition + axis * radius;
+		var upper = WorldPosition + axis * MathF.Max( radius + 1f, length - radius );
+		float clearance = 9999f;
+		AccumulateGroundClearance( lower, radius, ref clearance );
+		AccumulateGroundClearance( (lower + upper) * 0.5f, radius, ref clearance );
+		AccumulateGroundClearance( upper, radius, ref clearance );
+		return clearance;
 	}
 
 	private void TickLandedDecay()
 	{
 		if ( !Body.IsValid() ) return;
 		if ( (float)_timeSinceLanded < 0.15f ) ClampAboveGround();
+		else if ( _subLogGeneration > 0 && DebugMinGroundClearance() < -1f ) ClampAboveGround();
 		if ( _timeSinceLanded < Tunables.TreeLandedManualSleepDelay ) return;
 		Body.Sleeping = Body.Velocity.LengthSquared < Tunables.TreeLandedManualSleepSpeed * Tunables.TreeLandedManualSleepSpeed
 			&& Body.AngularVelocity.LengthSquared < Tunables.TreeLandedManualSleepAngularSpeed * Tunables.TreeLandedManualSleepAngularSpeed;
@@ -732,5 +763,15 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		if ( !hit.Hit ) return;
 		float wantedZ = hit.EndPosition.z + radius + Tunables.LogGroundSkin;
 		lift = MathF.Max( lift, wantedZ - point.z );
+	}
+
+	private void AccumulateGroundClearance( Vector3 point, float radius, ref float clearance )
+	{
+		var hit = Scene.Trace.Ray( point + Vector3.Up * 140f, point - Vector3.Up * 260f )
+			.WithAnyTags( "ground" )
+			.Run();
+		if ( !hit.Hit ) return;
+		float wantedZ = hit.EndPosition.z + radius + Tunables.LogGroundSkin;
+		clearance = MathF.Min( clearance, point.z - wantedZ );
 	}
 }

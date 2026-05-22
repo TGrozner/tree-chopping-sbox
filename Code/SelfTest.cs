@@ -583,9 +583,10 @@ public sealed class SelfTest : Component
 		}
 		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _subLogPos ) < 700f ) )
 		{
-			if ( TryGetGroundZ( log.LogCenter.x, log.LogCenter.y, out var groundZ ) && log.LogCenter.z < groundZ - 12f )
+			float clearance = log.DebugMinGroundClearance();
+			if ( clearance < -2f )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog below terrain centerZ={log.LogCenter.z:F1}, groundZ={groundZ:F1}" );
+				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog penetrates terrain clearance={clearance:F1}u center={log.LogCenter}" );
 				Finish();
 				return;
 			}
