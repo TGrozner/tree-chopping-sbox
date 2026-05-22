@@ -201,6 +201,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		rb.MassOverride = Tunables.TreeMass * scaleMul * scaleMul * scaleMul * kindMassMul;
 		rb.AngularDamping = 1.2f;
 		rb.LinearDamping = 0.3f;
+		rb.EnhancedCcd = true;
 		rb.StartAsleep = true;
 		rb.MotionEnabled = false; // CLAUDE.md non-negotiable #8
 
@@ -880,11 +881,13 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			int bonusMax = Tunables.TreeKindFellBonusItemsMax[kindIdx];
 			int bonusItems = Game.Random.Int( bonusMin, bonusMax );
 			if ( IsMythic ) bonusItems += 1;
+			var mix = Tunables.TreeKindWoodTypeMix[kindIdx];
 			for ( int i = 0; i < bonusItems; i++ )
 			{
 				float ang = Game.Random.Float( 0f, MathF.Tau );
 				var ring = new Vector3( MathF.Cos( ang ), MathF.Sin( ang ), 0f ) * Game.Random.Float( 12f, 24f );
-				WoodItem.SpawnAt( Scene, _spawnFootPos + ring + Vector3.Up * (10f + i * 4f) );
+				var burstDir = (ring.WithZ( 0f ).Normal + Vector3.Up * 0.35f).Normal;
+				WoodItem.SpawnAt( Scene, _spawnFootPos + ring + Vector3.Up * (10f + i * 4f), WorldScale.x, PickWoodType( mix ), burstDir );
 			}
 		}
 
@@ -918,7 +921,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// OnCollisionStart events). 0.5s entre deux cascade damages.
 		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
 
-		float impactSpeed = _preCollisionVelocity.Length;
+		var contactPoint = EstimateImpactPoint( null );
+		var impactVelocity = GetImpactVelocityAt( contactPoint );
+		float impactSpeed = impactVelocity.Length;
 		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
 
 		// Valheim feel : cascade impact crÃ©e un thud + dust burst au point de
@@ -928,7 +933,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
 		float softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed)
 			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-		var contactPoint = EstimateImpactPoint( null );
 
 		// Valheim ImpactEffect.OnCollisionEnter formula verbatim :
 		//   damageFactor = LerpStep(minVelocity, maxVelocity, magnitude)
@@ -948,37 +952,36 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			neighbor = otherGo.Components.Get<Tree>()
 				?? otherGo.Components.Get<Tree>( FindMode.InAncestors );
 		}
-		var cascadeVelocity = _preCollisionVelocity;
 		if ( neighbor.IsValid() )
 		{
-			cascadeVelocity -= neighbor._preCollisionVelocity;
+			contactPoint = EstimateImpactPoint( neighbor );
+			var cascadeVelocity = GetImpactVelocityAt( contactPoint ) - neighbor.GetImpactVelocityAt( contactPoint );
 			float relativeImpactSpeed = cascadeVelocity.Length;
 			impactSpeed = relativeImpactSpeed;
 			impactScale = ((impactSpeed - Tunables.ImpactMinSpeed)
 				/ (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
 			softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed)
 				/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-			contactPoint = EstimateImpactPoint( neighbor );
 			EmitLogImpactFeedback( contactPoint, softScale, impactScale );
 			damage = impactSpeed >= Tunables.ImpactMinSpeed
 				? Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * impactScale ) )
 				: 0;
+			if ( neighbor != this )
+			{
+				var dirOther = cascadeVelocity.WithZ( 0f );
+				if ( dirOther.LengthSquared < 0.01f )
+					dirOther = (neighbor.WorldPosition - WorldPosition).WithZ( 0f );
+				if ( dirOther.LengthSquared > 0.01f )
+				{
+					if ( damage > 0 ) neighbor.ApplyImpactDamage( damage, dirOther.Normal );
+					else neighbor.ReactToSoftImpact( dirOther.Normal, contactPoint );
+					_timeSinceLastImpactDamage = 0f;
+				}
+			}
 		}
 		else
 		{
 			EmitLogImpactFeedback( contactPoint, softScale, impactScale );
-		}
-		if ( neighbor.IsValid() && neighbor != this )
-		{
-			var dirOther = cascadeVelocity.WithZ( 0f );
-			if ( dirOther.LengthSquared < 0.01f )
-				dirOther = (neighbor.WorldPosition - WorldPosition).WithZ( 0f );
-			if ( dirOther.LengthSquared > 0.01f )
-			{
-				if ( damage > 0 ) neighbor.ApplyImpactDamage( damage, dirOther.Normal );
-				else neighbor.ReactToSoftImpact( dirOther.Normal, contactPoint );
-				_timeSinceLastImpactDamage = 0f;
-			}
 		}
 
 		// Self damage (m_damageToSelf=true Valheim TreeLog) : crash dur peut
@@ -990,7 +993,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 				: Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)Kind];
 			if ( impactSpeed >= splitSpeed || (!_landed && impactScale >= Tunables.ImpactViolentScale) )
 			{
-				var selfDir = _preCollisionVelocity.WithZ( 0f );
+				var selfDir = impactVelocity.WithZ( 0f );
 				if ( selfDir.LengthSquared < 0.01f ) selfDir = Vector3.Forward;
 				ApplyImpactDamage( damage, selfDir.Normal );
 				_timeSinceLastImpactDamage = 0f;
@@ -1002,6 +1005,15 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	{
 		if ( neighbor.IsValid() ) return (LogCenter + neighbor.LogCenter) * 0.5f;
 		return LogCenter + Vector3.Up * 8f;
+	}
+
+	internal Vector3 GetImpactVelocityAt( Vector3 point )
+	{
+		if ( !Body.IsValid() ) return _preCollisionVelocity;
+		var pointVelocity = Body.GetVelocityAtPoint( point );
+		return pointVelocity.LengthSquared > _preCollisionVelocity.LengthSquared
+			? pointVelocity
+			: _preCollisionVelocity;
 	}
 
 	private void EmitLogImpactFeedback( Vector3 contactPoint, float softScale, float damageScale )

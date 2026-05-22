@@ -726,7 +726,7 @@ public sealed class SelfTest : Component
 			_cascadeSourceLog = _cascadeSource.SpawnedLog;
 			_cascadeSourceLog.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
 			var logAxis = _cascadeSourceLog.WorldRotation.Up.Normal;
-			sourcePos = neighborPos - logAxis * 150f;
+			sourcePos = neighborPos - logAxis * 95f;
 			sourcePos = sourcePos.WithZ( neighborPos.z + _cascadeNeighbor.TrunkLength * 0.35f );
 			_cascadeSourceLog.WorldPosition = sourcePos;
 			if ( _cascadeSourceLog.Body.IsValid() )

@@ -81,6 +81,7 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		rb.MassOverride = MathF.Max( tree.LogMass, 1f );
 		rb.LinearDamping = 0f;
 		rb.AngularDamping = 0.3f;
+		rb.EnhancedCcd = true;
 		rb.StartAsleep = false;
 		rb.MotionEnabled = true;
 
@@ -281,14 +282,6 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 	{
 		if ( _logSplit ) return;
 		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
-		float impactSpeed = _preCollisionVelocity.Length;
-		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
-
-		float impactScale = ((impactSpeed - Tunables.ImpactMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
-		float softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-		int damage = impactSpeed >= Tunables.ImpactMinSpeed
-			? Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * impactScale ) )
-			: 0;
 
 		var otherGo = other.Other.GameObject;
 		Tree tree = null;
@@ -300,8 +293,20 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 		}
 
 		var contactPoint = EstimateImpactPoint( tree, log );
+		var impactVelocity = GetImpactVelocityAt( contactPoint );
+		if ( tree.IsValid() ) impactVelocity -= tree.GetImpactVelocityAt( contactPoint );
+		else if ( log.IsValid() ) impactVelocity -= log.GetImpactVelocityAt( contactPoint );
+		float impactSpeed = impactVelocity.Length;
+		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
+
+		float impactScale = ((impactSpeed - Tunables.ImpactMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactMinSpeed)).Clamp( 0f, 1f );
+		float softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed) / (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
+		int damage = impactSpeed >= Tunables.ImpactMinSpeed
+			? Math.Max( 1, (int)MathF.Ceiling( Tunables.ImpactBaseDamage * impactScale ) )
+			: 0;
+
 		EmitLogImpactFeedback( contactPoint, softScale, impactScale );
-		var dir = _preCollisionVelocity.WithZ( 0f );
+		var dir = impactVelocity.WithZ( 0f );
 		if ( dir.LengthSquared < 0.01f ) dir = _fellDir;
 		if ( dir.LengthSquared < 0.01f ) dir = Vector3.Forward;
 
@@ -329,6 +334,15 @@ public sealed class FallenLog : Component, IChoppable, Component.ICollisionListe
 			}
 		}
 		if ( consumedImpact ) _timeSinceLastImpactDamage = 0f;
+	}
+
+	internal Vector3 GetImpactVelocityAt( Vector3 point )
+	{
+		if ( !Body.IsValid() ) return _preCollisionVelocity;
+		var pointVelocity = Body.GetVelocityAtPoint( point );
+		return pointVelocity.LengthSquared > _preCollisionVelocity.LengthSquared
+			? pointVelocity
+			: _preCollisionVelocity;
 	}
 
 	void Component.ICollisionListener.OnCollisionUpdate( Collision other ) { }
