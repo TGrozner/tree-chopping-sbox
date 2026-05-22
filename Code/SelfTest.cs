@@ -177,11 +177,16 @@ public sealed class SelfTest : Component
 		int starterRing = 0;
 		int starterSaplings = 0;
 		int starterNormals = 0;
+		int frontRing = 0;
+		int frontSaplings = 0;
+		int frontNormals = 0;
 		var origin = starter.ResolvedPlayerSpawn;
+		var front = Vector3.Forward;
 		foreach ( var tree in Scene.GetAllComponents<Tree>() )
 		{
 			if ( !tree.IsValid() || !tree.IsStanding ) continue;
-			float dist = tree.WorldPosition.WithZ( 0f ).Distance( origin.WithZ( 0f ) );
+			var delta = (tree.WorldPosition - origin).WithZ( 0f );
+			float dist = delta.Length;
 			if ( dist < starter.SpawnPadRadius && tree.WorldPosition.Distance( _targetTreePos ) > 30f )
 				insidePad++;
 			if ( dist >= starter.SpawnPadRadius + 80f && dist <= starter.SpawnPadRadius + 700f )
@@ -189,6 +194,12 @@ public sealed class SelfTest : Component
 				starterRing++;
 				if ( tree.Kind == TreeKind.Sapling ) starterSaplings++;
 				if ( tree.Kind == TreeKind.Normal ) starterNormals++;
+				if ( delta.LengthSquared > 0.01f && delta.Normal.Dot( front ) >= 0.82f )
+				{
+					frontRing++;
+					if ( tree.Kind == TreeKind.Sapling ) frontSaplings++;
+					if ( tree.Kind == TreeKind.Normal ) frontNormals++;
+				}
 			}
 		}
 
@@ -204,8 +215,14 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		if ( frontRing < 14 || frontSaplings < 11 || frontNormals < 2 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSpawnDistribution: frontRing={frontRing} saplings={frontSaplings} normals={frontNormals} (expected >=14 / >=11 / >=2)" );
+			Finish();
+			return;
+		}
 
-		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, padClear" );
+		Log.Info( $"[TC_TEST] SPAWN_DISTRIBUTION PASS  starterRing={starterRing}, saplings={starterSaplings}, normals={starterNormals}, front={frontRing}/{frontSaplings}/{frontNormals}, padClear" );
 		Transition( Phase.Approach );
 	}
 

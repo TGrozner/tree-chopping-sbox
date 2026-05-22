@@ -252,6 +252,7 @@ public sealed class SceneStarter : Component
 		const float StartOffset = 120f;
 		const float EndOffset = 620f;
 		const float Spacing = 145f;
+		const float FrontStep = 150f;
 		var rng = new Random( Seed ^ 0x51A7E7 );
 		var placed = Scene.GetAllComponents<Tree>()
 			.Where( t => t.IsValid() )
@@ -259,6 +260,30 @@ public sealed class SceneStarter : Component
 			.ToList();
 
 		int spawned = 0;
+		for ( int row = 0; row < 4 && spawned < StarterCount; row++ )
+		{
+			float r = SpawnPadRadius + StartOffset + row * FrontStep;
+			float[] angles = row % 2 == 0
+				? new[] { -30f, -15f, 0f, 15f, 30f }
+				: new[] { -24f, -8f, 8f, 24f };
+
+			for ( int i = 0; i < angles.Length && spawned < StarterCount; i++ )
+			{
+				float angle = angles[i].DegreeToRadian();
+				float x = ResolvedPlayerSpawn.x + MathF.Cos( angle ) * r;
+				float y = ResolvedPlayerSpawn.y + MathF.Sin( angle ) * r;
+				if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
+
+				var pos = new Vector3( x, y, groundZ );
+				if ( placed.Any( p => p.Distance( pos ) < Spacing ) ) continue;
+				placed.Add( pos );
+
+				var kind = spawned % 7 == 6 ? TreeKind.Normal : TreeKind.Sapling;
+				Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: kind );
+				spawned++;
+			}
+		}
+
 		int attempts = 0;
 		while ( spawned < StarterCount && attempts < StarterCount * 60 )
 		{
