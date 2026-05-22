@@ -830,8 +830,8 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// Per-kind groan : sapling = aigu et net, veteran = profond et lent,
 		// brittle = crack sec. Multiplie autour du range Normal {0.48, 0.62}.
 		float pitchMul = Tunables.TreeKindGroanPitchMul[(int)Kind];
-		Sfx.Play( "sounds/log_break.sound", WorldPosition + Vector3.Up * 40f,
-			volume: 0.40f, pitchMin: 0.48f * pitchMul, pitchMax: 0.62f * pitchMul );
+		Sfx.Play( "sounds/tree_groan.sound", WorldPosition + Vector3.Up * 40f,
+			volume: 0.52f, pitchMin: 0.55f * pitchMul, pitchMax: 0.72f * pitchMul );
 
 		// Mythic = Valheim DamageText.Bonus popup (orange +50% size, 3s lifetime).
 		// Le joueur voit "MYTHIC!" floating au-dessus de l'arbre rare dorÃ©.

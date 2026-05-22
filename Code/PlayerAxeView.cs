@@ -11,6 +11,8 @@ public sealed class PlayerAxeView : Component
 	private GameObject _axeObject;
 	private Vector3 _basePosition;
 	private Rotation _baseRotation;
+	private Vector3 _prevWorldPosition;
+	private float _walkBobWeight;
 	private float _bobbleSeed;
 
 	protected override void OnStart()
@@ -30,6 +32,7 @@ public sealed class PlayerAxeView : Component
 		axe.LocalRotation = _baseRotation;
 		axe.LocalScale = Vector3.One * 1.55f;
 		_axeObject = axe;
+		_prevWorldPosition = WorldPosition;
 
 		AxeRenderer = axe.AddComponent<ModelRenderer>();
 		AxeRenderer.Model = Model.Load( AxeModelPath );
@@ -41,7 +44,11 @@ public sealed class PlayerAxeView : Component
 		_axeController ??= Components.Get<AxeController>( FindMode.InAncestors );
 
 		_bobbleSeed += Time.Delta;
-		float walkBob = MathF.Sin( _bobbleSeed * 8.0f ) * 0.8f;
+		float speed = Time.Delta > 0f ? (WorldPosition - _prevWorldPosition).WithZ( 0f ).Length / Time.Delta : 0f;
+		_prevWorldPosition = WorldPosition;
+		float targetBob = (speed / 130f).Clamp( 0f, 1f );
+		_walkBobWeight = MathX.Lerp( _walkBobWeight, targetBob, 12f * Time.Delta );
+		float walkBob = MathF.Sin( _bobbleSeed * 8.0f ) * 0.75f * _walkBobWeight;
 		float idleBob = MathF.Sin( _bobbleSeed * 2.2f ) * 0.4f;
 		var pos = _basePosition + new Vector3( 0f, idleBob, walkBob );
 		var rot = _baseRotation;
@@ -49,18 +56,19 @@ public sealed class PlayerAxeView : Component
 		if ( _axeController.IsValid() && _axeController.IsSwinging )
 		{
 			float p = _axeController.SwingViewProgress;
+			float combo = 1f + 0.10f * _axeController.ChainLevel;
 			if ( p <= 1f )
 			{
-				float wind = MathF.Sin( p * MathF.PI * 0.5f );
-				pos += new Vector3( -4f * wind, -3f * wind, 7f * wind );
-				rot *= Rotation.From( -28f * wind, 10f * wind, -38f * wind );
+				float wind = 1f - MathF.Pow( 1f - p, 3f );
+				pos += new Vector3( -5.5f * wind, -3.6f * wind, 8.5f * wind ) * combo;
+				rot *= Rotation.From( -38f * wind * combo, 12f * wind, -50f * wind * combo );
 			}
 			else
 			{
-				float r = 1f - (p - 1f);
+				float r = (1f - (p - 1f)).Clamp( 0f, 1f );
 				float snap = r * r;
-				pos += new Vector3( 7f * snap, 2f * snap, -5f * snap );
-				rot *= Rotation.From( 20f * snap, -8f * snap, 28f * snap );
+				pos += new Vector3( 8f * snap, 2.6f * snap, -7f * snap ) * combo;
+				rot *= Rotation.From( 30f * snap * combo, -11f * snap, 40f * snap * combo );
 			}
 		}
 		if ( _axeController.IsValid() )
