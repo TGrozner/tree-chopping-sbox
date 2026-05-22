@@ -44,7 +44,7 @@ public partial class PolygonMeshBuilder : Pooled<PolygonMeshBuilder>
 	private bool _validated;
 
 	/// <summary>
-	/// Number of edges that will be affected by calls to methods like <see cref="Bevel"/>, <see cref="Round"/>, and <see cref="Close"/>.
+	/// Number of edges that will be affected by edge-shaping calls.
 	/// </summary>
 	public int ActiveEdgeCount => _activeEdges.Count;
 
@@ -406,7 +406,7 @@ public partial class PolygonMeshBuilder : Pooled<PolygonMeshBuilder>
 	}
 
 	/// <summary>
-	/// Perform successive <see cref="Bevel"/>s so that the edge of the polygon curves inwards in a quarter circle arc.
+	/// Perform successive bevels so that the edge of the polygon curves inwards in a quarter circle arc.
 	/// </summary>
 	/// <param name="radius">Radius of the arc.</param>
 	/// <param name="faces">How many bevels to split the rounded edge into.</param>
@@ -418,7 +418,7 @@ public partial class PolygonMeshBuilder : Pooled<PolygonMeshBuilder>
 	}
 
 	/// <summary>
-	/// Perform successive <see cref="Bevel"/>s so that the edge of the polygon curves inwards in a quarter circle arc.
+	/// Perform successive bevels so that the edge of the polygon curves inwards in a quarter circle arc.
 	/// </summary>
 	/// <param name="width">Total distance inwards.</param>
 	/// <param name="height">Total distance upwards, away from the plane of the polygon.</param>

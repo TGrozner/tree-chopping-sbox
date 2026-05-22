@@ -6,11 +6,20 @@ namespace TreeChopping;
 // boot, continuous play.
 public sealed class SceneStarter : Component
 {
-	[Property] public int TreeCount { get; set; } = 400;
-	[Property] public float MinSpacing { get; set; } = 180f;
+	// Tree budget kept low so the start area reads as "open meadow with a
+	// few saplings" instead of "stifling forest" (Thomas 2026-05-21). The
+	// rebalance toward zone-based plenty is task #4 — for now sparse is fine.
+	[Property] public int TreeCount { get; set; } = 100;
+	[Property] public float MinSpacing { get; set; } = 220f;
 	[Property] public int Seed { get; set; } = 0xCA5C;
 	[Property] public Vector3 BeaverSpawn { get; set; } = new( -1000f, 0f, 80f );
-	[Property] public float SpawnPadRadius { get; set; } = 180f;
+	// Pad needs > ShopStationArcRadius + station footprint AND room around
+	// the player so the spawn feels respirable (no trees in their face).
+	[Property] public float SpawnPadRadius { get; set; } = 1100f;
+	// 4 shop stations on a forward arc (+X), spread ±67.5°. At 650u radius,
+	// neighbor-to-neighbor distance is ~497u — well separated (Thomas
+	// 2026-05-21 : "elles sont trop proches").
+	[Property] public float ShopStationArcRadius { get; set; } = 650f;
 
 	[ConVar( "tc_selftest_seed", Help = "If >0, overrides SceneStarter.Seed before bootstrap." )]
 	public static int SeedOverride { get; set; }
@@ -32,6 +41,7 @@ public sealed class SceneStarter : Component
 			EnsureHud();
 			EnsureSingleton<AutoPlay>( "AutoPlay" );
 			EnsureSingleton<PerfProbe>( "PerfProbe" );
+			EnsureSingleton<FilmStrip>( "FilmStrip" );
 			EnsureSelfTest();
 
 			SetupLighting();
@@ -45,7 +55,12 @@ public sealed class SceneStarter : Component
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var beaver = SpawnBeaver( camera );
 			SpawnShop();
+			HubProps.Spawn( Scene, ResolvedBeaverSpawn, ShopStationArcRadius );
+			// HubAmphitheatre dropped 2026-05-21 : "vire tous les trucs en
+			// pierre du spawn". Hub is now just terrain + wooden props + the
+			// 4 invisible station zones with their worldspace labels.
 			SpawnForest();
+			SpawnTestSapling();
 			SpawnPet( beaver );
 
 			Log.Info( $"[SceneStarter] Bootstrap OK — beaver pos={beaver?.WorldPosition}, trees={Scene.GetAllComponents<Tree>().Count()}" );
@@ -62,23 +77,33 @@ public sealed class SceneStarter : Component
 	// + fill-weak = sun-facing faces bright, away-faces black. Bump both.
 	private void SetupLighting()
 	{
+		// Daylight palette pivot 2026-05-21 : the warm-sunset cast was
+		// crushing the hub silhouettes (Mow-the-lawn comparison showed our
+		// stations/amphi/perso all blending into the same orange tone).
+		// Shift toward bright golden hour : warm-white sun ×2.5 + bright
+		// blue sky fill + much less aggressive fog. Skybox + fog overridden
+		// here (not in main.scene) so the values land even if the editor
+		// hasn't reloaded the scene file.
 		var sun = Scene.GetAllComponents<DirectionalLight>().FirstOrDefault();
 		if ( sun.IsValid() )
 		{
-			// Keep the scene's warm sunset cast — bump intensity (×1.7) without
-			// neutralising the orange. Sky cool-blue lifted ×2 from the scene's
-			// 0.22/0.32/0.48 so shaded trunks gain a fill instead of clipping
-			// to black.
-			sun.LightColor = new Color( 1.00f, 0.78f, 0.48f, 1f ) * 1.7f;
-			sun.SkyColor = new Color( 0.44f, 0.58f, 0.78f, 1f );
+			sun.LightColor = new Color( 1.00f, 0.94f, 0.82f, 1f ) * 2.5f;
+			sun.SkyColor = new Color( 0.62f, 0.78f, 1.00f, 1f ) * 1.4f;
 			sun.Shadows = true;
-			// Softer shadow edges = less crisp banding on big trees casting on
-			// terrain. Default ~1.0, drop to 0.5 for ~PCF-ish softness.
-			sun.ShadowHardness = 0.5f;
+			sun.ShadowHardness = 0.45f;
 			sun.FogMode = DirectionalLight.FogInfluence.Enabled;
-			sun.FogStrength = 1.1f;
-			Log.Info( "[SceneStarter] Sun warm sunset intensity ×1.7, sky fill ×2, soft shadows" );
+			sun.FogStrength = 0.45f;
 		}
+		var sky = Scene.GetAllComponents<SkyBox2D>().FirstOrDefault();
+		if ( sky.IsValid() ) sky.Tint = new Color( 1.00f, 0.96f, 0.88f, 1f );
+		var fog = Scene.GetAllComponents<GradientFog>().FirstOrDefault();
+		if ( fog.IsValid() )
+		{
+			fog.Color = new Color( 0.78f, 0.86f, 0.95f, 1f );
+			fog.StartDistance = 1400f;
+			fog.EndDistance = 3600f;
+		}
+		Log.Info( "[SceneStarter] Daylight palette applied (sun ×2.5, sky-blue fill ×1.4, fog 1400→3600u soft-blue)" );
 	}
 
 	private void DisableSceneGround()
@@ -155,32 +180,7 @@ public sealed class SceneStarter : Component
 		var cam = existingCamera;
 		if ( cam.IsValid() ) beaver.Camera = cam;
 
-		AttachAxe( renderer, animHelper );
 		return beaver;
-	}
-
-	private void AttachAxe( SkinnedModelRenderer renderer, Sandbox.Citizen.CitizenAnimationHelper animHelper )
-	{
-		if ( !renderer.IsValid() ) return;
-		var hand = renderer.GetBoneObject( "hand_R" );
-		if ( !hand.IsValid() ) return;
-
-		const string axePath = "models/props/trim_sheets/tools/woodaxe.vmdl";
-		Model axe;
-		try { axe = Model.Load( axePath ); }
-		catch { axe = null; }
-		if ( axe is null )
-		{
-			Log.Info( $"[SceneStarter] {axePath} not mounted — install facepunch.woodaxe" );
-			return;
-		}
-
-		var axeGo = Scene.CreateObject();
-		axeGo.Name = "Axe";
-		axeGo.SetParent( hand );
-		var mr = axeGo.AddComponent<ModelRenderer>();
-		mr.Model = axe;
-		if ( animHelper.IsValid() ) animHelper.IkLeftHand = null;
 	}
 
 	private void SpawnPet( BeaverController beaver )
@@ -193,49 +193,27 @@ public sealed class SceneStarter : Component
 
 	private void SpawnShop()
 	{
-		var go = Scene.CreateObject();
-		go.Name = "ShopArea";
-		go.WorldPosition = ResolvedBeaverSpawn;
-		go.AddComponent<ShopArea>();
+		// 4 stations on a forward arc (+X) so the player faces them on spawn.
+		// Matches the Mow-the-lawn layout : Tools / Sell / Upgrades / Prestige
+		// spread ±67.5° from the spawn forward direction.
+		// Totem dropped 2026-05-21 — the tall flagpole made no sense vs the
+		// physical stations which are the actual nav landmark.
+		SpawnStationAt( -67.5f, StationKind.Tools );
+		SpawnStationAt( -22.5f, StationKind.Sell );
+		SpawnStationAt(  22.5f, StationKind.Upgrades );
+		SpawnStationAt(  67.5f, StationKind.Prestige );
+	}
 
-		// Compact wooden disk under the shop — 120u radius (was 250u and
-		// dominated the camera foreground, hiding the green terrain).
-		var disk = Scene.CreateObject();
-		disk.Name = "ShopDisk";
-		disk.SetParent( go );
-		disk.LocalPosition = new Vector3( 0f, 0f, -65f );
-		disk.LocalScale = new Vector3( 120f, 120f, 14f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( disk, new Color( 0.62f, 0.42f, 0.18f, 1f ) );
-
-		// Vertical totem — tall enough to poke above the canopy from anywhere
-		// on the slope so the player can navigate back to the shop visually.
-		// Average tree top is ~ trunkH * scale * 1.5 (canopy + flag) ~ 900u
-		// at max kind=Veteran scale, our totem reaches 1200u above ground.
-		var pillar = Scene.CreateObject();
-		pillar.Name = "ShopPillar";
-		pillar.SetParent( go );
-		pillar.LocalPosition = new Vector3( 0f, 0f, 600f );
-		pillar.LocalScale = new Vector3( 30f, 30f, 1200f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( pillar, new Color( 0.55f, 0.35f, 0.16f, 1f ) );
-
-		// Gold cap on top of the totem — visible from a distance against the
-		// warm copper fog. Uses the same gold as Mythic trees so the visual
-		// language reads "valuable target = shop".
-		var cap = Scene.CreateObject();
-		cap.Name = "ShopFlag";
-		cap.SetParent( go );
-		cap.LocalPosition = new Vector3( 0f, 0f, 1180f );
-		cap.LocalScale = new Vector3( 90f, 90f, 60f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( cap, Tunables.MythicTrunkTint );
-
-		// Slimmer secondary cap to suggest a lantern silhouette rather than
-		// a flat slab.
-		var capTop = Scene.CreateObject();
-		capTop.Name = "ShopFlagTop";
-		capTop.SetParent( go );
-		capTop.LocalPosition = new Vector3( 0f, 0f, 1230f );
-		capTop.LocalScale = new Vector3( 60f, 60f, 40f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( capTop, Tunables.MythicCanopyTint );
+	private void SpawnStationAt( float arcAngleDeg, StationKind kind )
+	{
+		float rad = arcAngleDeg * MathF.PI / 180f;
+		float dx = MathF.Cos( rad ) * ShopStationArcRadius;
+		float dy = MathF.Sin( rad ) * ShopStationArcRadius;
+		var pos = new Vector3( ResolvedBeaverSpawn.x + dx, ResolvedBeaverSpawn.y + dy, ResolvedBeaverSpawn.z );
+		// Drop to the local ground at the station's XY so the disc sits flush
+		// on the terrain instead of floating where the spawn plateau ends.
+		if ( TryGetGroundZ( pos.x, pos.y, out float groundZ ) ) pos.z = groundZ + 60f;
+		ShopStation.SpawnAt( Scene, pos, kind );
 	}
 
 	public void RegenerateForest()
@@ -253,70 +231,16 @@ public sealed class SceneStarter : Component
 		Log.Info( $"[SceneStarter] Forest regenerated, trees={Scene.GetAllComponents<Tree>().Count()}" );
 	}
 
-	// Forest outer ring is gated : starts at InitialOuterRadius and expands
-	// by GateRingWidth each time OnGateBroken fires.
-	private float CurrentOuterRadius()
-	{
-		var gs = GameState.Get( Scene );
-		int gates = gs.IsValid() ? gs.GatesBroken : 0;
-		float outer = Tunables.InitialOuterRadius + gates * Tunables.GateRingWidth;
-		return MathF.Min( outer, Tunables.ArenaRadius );
-	}
-
+	// Full arena spawned in one go. The gate-ring expansion system (chop a
+	// cross-shape barrier to unlock the next radial band) was dropped
+	// 2026-05-21 : "c'est étrange et c'est pas comme ça qu'on progresse dans
+	// mow the lawn". Progression-by-zone is handled by the Teleport-style
+	// unlock system (TODO task #4) tied to prestige level, not in-world gates.
 	private void SpawnForest()
 	{
 		float innerR = SpawnPadRadius;
-		float outerR = CurrentOuterRadius();
-		int budget = (int)(TreeCount * outerR / Tunables.ArenaRadius);
-		SpawnForestBand( innerR, outerR, budget );
-		SpawnGateAtBoundary( outerR );
-	}
-
-	// Called from Tree.GiveWoodOnce when a gate fells. Wipes the other 3
-	// gates on the same ring, spawns the next band of trees + 4 new gates
-	// at the new boundary.
-	public void OnGateBroken()
-	{
-		int gates = GameState.Get( Scene )?.GatesBroken ?? 1;
-		float oldOuter = Tunables.InitialOuterRadius + Math.Max( 0, gates - 1 ) * Tunables.GateRingWidth;
-		float newOuter = CurrentOuterRadius();
-		DestroyRemainingGates();
-		int budget = (int)(TreeCount * (newOuter - oldOuter) / Tunables.ArenaRadius);
-		SpawnForestBand( oldOuter, newOuter, budget );
-		if ( newOuter < Tunables.ArenaRadius ) SpawnGateAtBoundary( newOuter );
-		Log.Info( $"[SceneStarter] Ring expanded {oldOuter:0}u → {newOuter:0}u, +{budget} trees" );
-		var hud = Scene.GetAllComponents<WoodHud>().FirstOrDefault();
-		if ( hud.IsValid() ) hud.ShowRingBanner( gates );
-	}
-
-	private void SpawnGateAtBoundary( float radius )
-	{
-		// Four gates per ring at the cardinal directions (E/N/W/S) so the
-		// player can pick which side to expand into. Breaking any one fires
-		// OnGateBroken — the other three are wiped + the next ring spawns
-		// uniformly. Gate yaw is set so its cross-beam axis is tangent to
-		// the ring (the +X face of the cube points outward).
-		int gates = GameState.Get( Scene )?.GatesBroken ?? 0;
-		int chops = (int)MathF.Round( Tunables.GateBaseChops * MathF.Pow( Tunables.GateChopsGrowth, gates ) );
-		float[] anglesDeg = { 0f, 90f, 180f, 270f };
-		foreach ( var aDeg in anglesDeg )
-		{
-			float a = aDeg * MathF.PI / 180f;
-			float x = ResolvedBeaverSpawn.x + MathF.Cos( a ) * radius;
-			float y = ResolvedBeaverSpawn.y + MathF.Sin( a ) * radius;
-			if ( !TryGetGroundZ( x, y, out float groundZ ) ) continue;
-			Tree.SpawnGate( Scene, new Vector3( x, y, groundZ ), chops, aDeg );
-		}
-	}
-
-	private void DestroyRemainingGates()
-	{
-		foreach ( var t in Scene.GetAllComponents<Tree>().ToList() )
-		{
-			if ( !t.IsValid() || !t.IsGate || !t.IsStanding ) continue;
-			var go = t.GameObject;
-			if ( go.IsValid() ) { go.Enabled = false; go.Destroy(); }
-		}
+		float outerR = Tunables.ArenaRadius;
+		SpawnForestBand( innerR, outerR, TreeCount );
 	}
 
 	private void SpawnForestBand( float innerR, float outerR, int targetCount )
@@ -366,6 +290,20 @@ public sealed class SceneStarter : Component
 		}
 		if ( spawned < targetCount )
 			Log.Warning( $"[SceneStarter] Band [{innerR:0}..{outerR:0}] shortfall : {spawned}/{targetCount} trees" );
+	}
+
+	// Guaranteed weak sapling 120u ahead (+X) of the player on boot — test
+	// convenience so the dev/selftest doesn't have to walk to the forest band.
+	// Inside SpawnPadRadius so the forest's keepout skips it, no crowding.
+	private void SpawnTestSapling()
+	{
+		const float distAhead = 120f;
+		float x = ResolvedBeaverSpawn.x + distAhead;
+		float y = ResolvedBeaverSpawn.y;
+		if ( !TryGetGroundZ( x, y, out float z ) ) z = ResolvedBeaverSpawn.z;
+		var pos = new Vector3( x, y, z );
+		Tree.SpawnAt( Scene, pos, biomeDifficulty: 0f, forceKind: TreeKind.Sapling );
+		Log.Info( $"[SceneStarter] Test sapling spawned at {pos}" );
 	}
 
 	private bool TryGetGroundZ( float x, float y, out float groundZ )

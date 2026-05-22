@@ -98,7 +98,6 @@ partial class PolygonMeshBuilder
 	/// </summary>
 	/// <param name="path">SVG path element.</param>
 	/// <param name="options">Options for generating vertices from paths.</param>
-	/// <param name="targetBounds">Rescale and translate the imported SVG to fill the given bounds</param>
 	public PolygonMeshBuilder AddPath( SvgPath path, AddSvgOptions options = null )
 	{
 		options ??= AddSvgOptions.Default;

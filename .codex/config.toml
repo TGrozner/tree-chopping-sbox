@@ -1,0 +1,3 @@
+[mcp_servers.sbox]
+args = ["C:/dev/sbox-claude/sbox-mcp-server/dist/index.js"]
+command = "node"

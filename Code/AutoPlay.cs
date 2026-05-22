@@ -131,8 +131,7 @@ public sealed class AutoPlay : Component
 		// gameplay video — without the wait the screenshot capture would
 		// catch the beaver still mid-teleport.
 		if ( (float)_sinceShopArrived < 1f ) return;
-		var shop = Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
-		if ( shop.IsValid() && shop.BuyCheapestAffordable() )
+		if ( ShopStation.TryBuyCheapestAcrossAll( Scene ) )
 		{
 			var gs = GameState.Get( Scene );
 			CurrentAction = gs.IsValid()

@@ -65,7 +65,7 @@ partial class Sdf2DMeshWriter : Pooled<Sdf2DMeshWriter>
 			}
 			else if ( Indices.Count > 0 )
 			{
-				mesh.CreateVertexBuffer( Vertices.Count, Vertex.Layout, Vertices );
+				mesh.CreateVertexBuffer( Vertices.Count, Vertices );
 				mesh.CreateIndexBuffer( Indices.Count, Indices );
 			}
 		}
@@ -483,19 +483,6 @@ partial class Sdf2DMeshWriter : Pooled<Sdf2DMeshWriter>
 
 		return count > 0;
 
-		offset = index;
-		count = 1;
-
-		Assert.True( EdgeLoops[offset].Area > 0f );
-
-		while ( offset + count < EdgeLoops.Count && EdgeLoops[offset + count].Area < 0f )
-		{
-			++count;
-		}
-
-		index += count;
-
-		return count > 0;
 	}
 
 	private void InitPolyMeshBuilder( PolygonMeshBuilder builder, int offset, int count )

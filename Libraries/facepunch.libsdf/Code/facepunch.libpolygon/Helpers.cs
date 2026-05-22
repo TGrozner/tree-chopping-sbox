@@ -68,7 +68,7 @@ internal static class Helpers
 	{
 		if ( !mesh.HasIndexBuffer )
 		{
-			mesh.CreateVertexBuffer( vertices.Count, layout, vertices );
+			mesh.CreateVertexBuffer( vertices.Count, vertices );
 			mesh.CreateIndexBuffer( indices.Count, indices );
 		}
 		else if ( indices.Count > 0 && vertices.Count > 0 )

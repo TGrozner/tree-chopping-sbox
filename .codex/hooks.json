@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\dev\\tree-chopping-sbox\\tools\\hooks\\post-edit-build.ps1\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\dev\\tree-chopping-sbox\\tools\\hooks\\stop-selftest.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}

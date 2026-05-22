@@ -12,17 +12,19 @@ public sealed class WoodHud : Component
 	public static bool DebugVisible { get; private set; }
 
 	private GameState _state;
-	private ShopArea _shop;
+	private BeaverController _beaver;
+	private ShopStation _activeStation;
 	private int _lastShownWood;
 	private bool _woodSynced;
 	private TimeSince _woodChangedTime = 999f;
 	private bool _woodWasSpent;
 	private TimeSince _prestigeBannerTime = 999f;
 	private int _prestigeBannerSpirits;
-	private TimeSince _ringBannerTime = 999f;
-	private int _ringBannerNumber;
 	private TimeSince _upgradeBannerTime = 999f;
 	private string _upgradeBannerText = "";
+	private TimeSince _backpackFullTime = 999f;
+	private TimeSince _sellFlashTime = 999f;
+	private int _lastSellAmount;
 
 	// Called by ShopArea after a successful TryPrestige() so the player gets
 	// a clear "you just earned N Spirits" beat on top of the chip burst.
@@ -32,28 +34,124 @@ public sealed class WoodHud : Component
 		_prestigeBannerSpirits = spiritsGained;
 	}
 
-	// Called by SceneStarter.OnGateBroken so the ring expansion gets a HUD
-	// acknowledgement matching the chip burst at the gate site.
-	public void ShowRingBanner( int ringNumber )
-	{
-		_ringBannerTime = 0f;
-		_ringBannerNumber = ringNumber;
-	}
-
 	// Small toast for every shop purchase — "AXE → IRON" / "SPEED +1" /
-	// "PET → YELLOW FINCH" / etc. Lower-priority than the ring / prestige
-	// banners so it can co-exist without fighting for the same eye-space.
+	// "PET → YELLOW FINCH" / etc. Lower-priority than the prestige banner
+	// so it can co-exist without fighting for the same eye-space.
 	public void ShowUpgradeBanner( string text )
 	{
 		_upgradeBannerTime = 0f;
 		_upgradeBannerText = text;
 	}
 
+	// Fired by Tree.GiveWoodOnce when the backpack overflowed (extra wood
+	// dropped on the ground = wasted). HUD shows a "BACKPACK FULL" pulse.
+	public void ShowBackpackFullHint() => _backpackFullTime = 0f;
+
+	// Fired by Tree.Chop when the player's axe tier can't fell this kind.
+	// Phase E progression gate : "buy a better axe to chop Normals/Veterans".
+	public void ShowAxeTooWeakHint( TreeKind kind, int neededTier )
+	{
+		_axeTooWeakTime = 0f;
+		_axeTooWeakKind = kind;
+		_axeTooWeakNeededTier = neededTier;
+	}
+
+	private TimeSince _axeTooWeakTime = 999f;
+	private TreeKind _axeTooWeakKind;
+	private int _axeTooWeakNeededTier;
+
+	// Fired by SELL station after a TrySell — shows the amount transferred
+	// as a brief floating "+N" so the action reads.
+	public void ShowSellFlash( int amount )
+	{
+		_sellFlashTime = 0f;
+		_lastSellAmount = amount;
+	}
+
+	// Fired by WoodItem.OnPickup. Stack-merge Valheim MessageHud pattern (lignes
+	// 210-224 MessageHud.cs) : si le dernier toast est récent (< MergeWindow s)
+	// ET du même type, bump son Amount/Count. Sinon nouveau toast.
+	public void ShowWoodPickupToast( int amount, WoodType type = WoodType.Wood )
+	{
+		const float MergeWindow = 1.0f; // Valheim use 4s ; raccourci à 1s pour notre rythme arcade rapide
+		if ( _pickupToasts.Count > 0 )
+		{
+			int last = _pickupToasts.Count - 1;
+			var lastToast = _pickupToasts[last];
+			if ( lastToast.Type == type && (float)lastToast.Time < MergeWindow )
+			{
+				lastToast.Amount += amount;
+				lastToast.Count += 1;
+				lastToast.Time = 0f; // refresh fade window
+				_pickupToasts[last] = lastToast;
+				return;
+			}
+		}
+		_pickupToasts.Add( new PickupToast { Time = 0f, Amount = amount, Count = 1, Type = type } );
+		// Cap so a mass pickup doesn't grow the list unboundedly.
+		if ( _pickupToasts.Count > 12 ) _pickupToasts.RemoveAt( 0 );
+	}
+
+	private struct PickupToast { public TimeSince Time; public int Amount; public int Count; public WoodType Type; }
+	private readonly List<PickupToast> _pickupToasts = new();
+
+	// Test hook : exposer le count de toasts actifs pour TestPickupStackMerge.
+	internal int GetPickupToastDebugCount() => _pickupToasts.Count;
+
+	// Damage popups Valheim-style — port direct de DamageText.AddInworldText.
+	// Float-up text au hit point + offset random, rise lent, cubic alpha decay,
+	// distance cull 30m, font size switch à 10m. Cap 200 popups (= Valheim).
+	private struct DamagePopup
+	{
+		public TimeSince Time;
+		public Vector3 WorldPos;
+		public string Text;
+		public Color Tint;
+		public bool IsBonus; // Bonus = +50% size, 3s duration
+	}
+	private readonly List<DamagePopup> _damagePopups = new();
+
+	// Distance cull match `m_maxTextDistance = 30f` Valheim (30m).
+	// En sbox units (inches) 30m = ~1180u.
+	const float DamageTextMaxDistance = 1180f;
+	// Switch font small/large à 10m Valheim (≈ 400u sbox).
+	const float DamageTextSmallFontDistance = 400f;
+	const float DamageTextLifetime = 1.5f;
+	const float DamageTextBonusLifetime = 3f;
+
+	// Valheim colors verbatim (DamageText.AddInworldText switch type).
+	public static readonly Color DamageTextNormal     = new( 1f, 1f, 1f, 1f );
+	public static readonly Color DamageTextResistant  = new( 0.6f, 0.6f, 0.6f, 1f );
+	public static readonly Color DamageTextWeak       = new( 1f, 1f, 0f, 1f );
+	public static readonly Color DamageTextTooHard    = new( 0.8f, 0.7f, 0.7f, 1f );
+	public static readonly Color DamageTextBonus      = new( 1f, 0.63f, 0.24f, 1f );
+	public static readonly Color DamageTextHeal       = new( 0.5f, 1f, 0.5f, 0.7f );
+
+	public void ShowDamageText( string text, Vector3 worldPos, Color tint, bool isBonus = false )
+	{
+		// Random offset Valheim : `pos + Random.insideUnitSphere * 0.5f` — 0.5m
+		// sphere. En sbox units (inches) ≈ 20u.
+		var jittered = worldPos + new Vector3(
+			Game.Random.Float( -20f, 20f ),
+			Game.Random.Float( -20f, 20f ),
+			Game.Random.Float( -20f, 20f ) );
+		_damagePopups.Add( new DamagePopup
+		{
+			Time = 0f,
+			WorldPos = jittered,
+			Text = text,
+			Tint = tint,
+			IsBonus = isBonus,
+		} );
+		if ( _damagePopups.Count > 200 ) _damagePopups.RemoveAt( 0 );
+	}
+
 	private bool _welcomeShown;
 	protected override void OnUpdate()
 	{
 		_state ??= GameState.Get( Scene );
-		_shop ??= Scene?.GetAllComponents<ShopArea>().FirstOrDefault();
+		_activeStation = Scene?.GetAllComponents<ShopStation>()
+			.FirstOrDefault( s => s.IsValid() && s.PlayerInside );
 		if ( Input.Pressed( "DebugToggle" ) ) DebugVisible = !DebugVisible;
 		if ( !_welcomeShown && _state.IsValid() )
 		{
@@ -67,28 +165,83 @@ public sealed class WoodHud : Component
 		var hud = camera.Hud;
 
 		DrawCrosshair( hud );
+		DrawComboPips( hud );
 		DrawWoodPanel( hud );
+		DrawBackpackPanel( hud );
 		DrawTierBadge( hud );
 		DrawShopHint( hud );
 		DrawTeleportHint( hud );
 		DrawPrestigeBanner( hud );
-		DrawRingBanner( hud );
 		DrawUpgradeBanner( hud );
+		DrawBackpackFullWarning( hud );
+		DrawSellFlash( hud );
+		DrawAxeTooWeakHint( hud );
+		DrawPickupToasts( hud );
+		DrawDamagePopups( hud, camera );
 
 		if ( DebugVisible ) DrawDebugBlock( hud );
 	}
 
-	private void DrawCrosshair( Sandbox.Rendering.HudPainter hud )
+	// Combo pips sous le crosshair — 3 dots qui s'allument selon ChainLevel.
+	// Le dernier pip (final hit) flashe en orange quand chain est au max.
+	// Match Valheim's combo indicator pattern (chain feedback visuel pour que
+	// le joueur perçoive qu'il combo).
+	private void DrawComboPips( Sandbox.Rendering.HudPainter hud )
 	{
-		// Small "+" with a gap in the middle. Reads as a reticle, not a fly
-		// stuck on the screen. Stays subtle (alpha 0.55) so it doesn't fight
-		// the chop preview highlight on the targeted tree.
+		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
+		if ( !_beaver.IsValid() ) return;
+		int chain = _beaver.ChainLevel;
+		int maxChain = Tunables.ChopComboMaxLevels;
+
 		float cx = Screen.Width * 0.5f;
 		float cy = Screen.Height * 0.5f;
-		var tint = new Color( 0.95f, 0.95f, 0.95f, 0.55f );
-		const float armLen = 7f;
-		const float armThick = 2f;
-		const float gap = 3f;
+		float pipSize = 6f;
+		float pipGap = 8f;
+		float totalW = maxChain * pipSize + (maxChain - 1) * pipGap;
+		float startX = cx - totalW * 0.5f;
+		float y = cy + 26f; // sous le crosshair
+
+		for ( int i = 0; i < maxChain; i++ )
+		{
+			float x = startX + i * (pipSize + pipGap);
+			bool lit = i <= chain;
+			bool isFinal = i == maxChain - 1;
+			Color tint;
+			if ( !lit )
+			{
+				tint = new Color( 0.95f, 0.95f, 0.95f, 0.25f );
+			}
+			else if ( isFinal && chain == maxChain - 1 )
+			{
+				// Final hit pip — orange flash (Valheim DamageText.Bonus color).
+				tint = DamageTextBonus.WithAlpha( 1f );
+			}
+			else
+			{
+				tint = HotColor.WithAlpha( 0.85f );
+			}
+			hud.DrawRect( new Rect( x, y, pipSize, pipSize ), tint );
+		}
+	}
+
+	private void DrawCrosshair( Sandbox.Rendering.HudPainter hud )
+	{
+		// Small "+" with a gap in the middle. Idle = subtle white alpha 0.55.
+		// Target locked (HasAimTarget = tree under reticle inside SwingRange) =
+		// HotColor + opaque + larger gap + thicker arms. Reads as a meaty
+		// "this swing will connect" signal without crowding the screen when
+		// the beaver is just walking around.
+		_beaver ??= Scene?.GetAllComponents<BeaverController>().FirstOrDefault();
+		bool locked = _beaver.IsValid() && _beaver.HasAimTarget;
+
+		float cx = Screen.Width * 0.5f;
+		float cy = Screen.Height * 0.5f;
+		var tint = locked
+			? HotColor.WithAlpha( 0.95f )
+			: new Color( 0.95f, 0.95f, 0.95f, 0.55f );
+		float armLen = locked ? 9f : 7f;
+		float armThick = locked ? 3f : 2f;
+		float gap = locked ? 5f : 3f;
 		hud.DrawRect( new Rect( cx - armLen - gap, cy - armThick * 0.5f, armLen, armThick ), tint );
 		hud.DrawRect( new Rect( cx + gap, cy - armThick * 0.5f, armLen, armThick ), tint );
 		hud.DrawRect( new Rect( cx - armThick * 0.5f, cy - armLen - gap, armThick, armLen ), tint );
@@ -122,6 +275,144 @@ public sealed class WoodHud : Component
 		var valueRect = new Rect( padL, padT + labelSize, boxW, valueSize * 1.3f );
 		hud.DrawText( new TextRendering.Scope( _state.Wood.ToString(), pulseColor, valueSize ),
 			valueRect, TextFlag.LeftCenter );
+	}
+
+	private void DrawBackpackPanel( Sandbox.Rendering.HudPainter hud )
+	{
+		if ( _state is null ) return;
+		float padL = 36f;
+		// Sit just under the WOOD value (which spans ~ padT + label + value ~ 90px).
+		float y = 110f;
+		float labelSize = 12f;
+		float valueSize = 22f;
+		float boxW = 220f;
+		var col = _state.BackpackFull ? HotColor : TextColor.WithAlpha( 0.80f );
+		hud.DrawText( new TextRendering.Scope( "BACKPACK", TextColor.WithAlpha( 0.45f ), labelSize ),
+			new Rect( padL, y, boxW, labelSize * 1.4f ), TextFlag.LeftCenter );
+		var str = $"{_state.BackpackWood} / {_state.BackpackCapacity}";
+		hud.DrawText( new TextRendering.Scope( str, col, valueSize ),
+			new Rect( padL, y + labelSize, boxW, valueSize * 1.3f ), TextFlag.LeftCenter );
+	}
+
+	private void DrawBackpackFullWarning( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 1.0f;
+		float t = (float)_backpackFullTime / duration;
+		if ( t >= 1f ) return;
+		float alpha = (1f - t).Clamp( 0f, 1f );
+		float size = 30f;
+		var rect = new Rect( 0f, Screen.Height * 0.18f, Screen.Width, size * 1.6f );
+		hud.DrawText( new TextRendering.Scope( "BACKPACK FULL — RETURN TO SELL", HotColor.WithAlpha( alpha ), size ),
+			rect, TextFlag.Center );
+	}
+
+	private void DrawDamagePopups( Sandbox.Rendering.HudPainter hud, CameraComponent camera )
+	{
+		var camPos = camera.WorldPosition;
+		// Cull expired (lifetime = bonus 3s / normal 1.5s match Valheim m_textDuration).
+		for ( int i = _damagePopups.Count - 1; i >= 0; i-- )
+		{
+			float life = _damagePopups[i].IsBonus ? DamageTextBonusLifetime : DamageTextLifetime;
+			if ( (float)_damagePopups[i].Time > life ) _damagePopups.RemoveAt( i );
+		}
+
+		foreach ( var p in _damagePopups )
+		{
+			float life = p.IsBonus ? DamageTextBonusLifetime : DamageTextLifetime;
+			float t = ((float)p.Time / life).Clamp( 0f, 1f );
+
+			// Distance cull à 30m Valheim (1180u sbox).
+			float distance = camPos.Distance( p.WorldPos );
+			if ( distance > DamageTextMaxDistance ) continue;
+
+			// Rise lent : Valheim `worldPos.y += dt` → 1u/s en mètres. En inches
+			// c'est ~40u/s. Sur 1.5s lifetime = ~60u de rise total.
+			var risingPos = p.WorldPos + Vector3.Up * (t * life * 40f);
+
+			// Projection via BBox dégénérée (sbox n'expose pas de WorldToScreen direct).
+			var bbox = new BBox( risingPos - new Vector3( 0.5f ), risingPos + new Vector3( 0.5f ) );
+			var rect = camera.BBoxToScreenPixels( bbox, out var behind );
+			if ( behind ) continue;
+			float cx = rect.Left + rect.Width * 0.5f;
+			float cy = rect.Top + rect.Height * 0.5f;
+
+			// Cubic alpha decay match Valheim : `color.a = 1 - pow(t, 3)`. Reste
+			// opaque la majorité du temps, fade hard à la fin.
+			float alpha = 1f - MathF.Pow( t, 3f );
+
+			// Distance-based font size : Valheim large=16 / small=8 split à 10m.
+			// On scale large=28 / small=18 dans nos unités HUD.
+			float baseSize = distance > DamageTextSmallFontDistance ? 18f : 28f;
+			if ( p.IsBonus ) baseSize *= 1.5f;
+
+			var drawRect = new Rect( cx - 70f, cy - baseSize * 0.5f, 140f, baseSize * 1.4f );
+			hud.DrawText( new TextRendering.Scope( p.Text, p.Tint.WithAlpha( alpha ), baseSize ),
+				drawRect, TextFlag.Center );
+		}
+	}
+
+	private void DrawPickupToasts( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 1.6f;
+		// Cull expired entries from the head of the list (insertion order
+		// preserves the visual stack from top = oldest to bottom = newest).
+		while ( _pickupToasts.Count > 0 && (float)_pickupToasts[0].Time > duration )
+			_pickupToasts.RemoveAt( 0 );
+		float padL = 36f;
+		float baseY = 200f;
+		float lineH = 26f;
+		float size = 18f;
+		for ( int i = 0; i < _pickupToasts.Count; i++ )
+		{
+			var t = (float)_pickupToasts[i].Time / duration;
+			float alpha = t < 0.10f ? (t / 0.10f) : (1f - (t - 0.10f) / 0.90f);
+			alpha = alpha.Clamp( 0f, 1f );
+			float y = baseY + i * lineH;
+			// Valheim MessageHud lignes 220-224 : "text x{amount}" si amount > 1.
+			// Notre Count = nombre de pickups stackés. Amount = somme. Nom du type
+			// Valheim verbatim ("Wood" / "Finewood" / "Core Wood").
+			string typeName = Tunables.WoodTypeNames[(int)_pickupToasts[i].Type];
+			string label = _pickupToasts[i].Count > 1
+				? $"{typeName} +{_pickupToasts[i].Amount} x{_pickupToasts[i].Count}"
+				: $"{typeName} +{_pickupToasts[i].Amount}";
+			// Tint match le type Wood/Finewood/CoreWood pour identification rapide.
+			var typeColor = Color.Lerp( TextColor, Tunables.WoodTypeTints[(int)_pickupToasts[i].Type], 0.6f );
+			hud.DrawText(
+				new TextRendering.Scope( label, typeColor.WithAlpha( alpha ), size ),
+				new Rect( padL, y, 260f, lineH ), TextFlag.LeftCenter );
+		}
+	}
+
+	private void DrawAxeTooWeakHint( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 1.2f;
+		float t = (float)_axeTooWeakTime / duration;
+		if ( t >= 1f ) return;
+		float alpha = (1f - t).Clamp( 0f, 1f );
+		string need = _axeTooWeakNeededTier >= 0 && _axeTooWeakNeededTier < Tunables.AxeTierName.Length
+			? Tunables.AxeTierName[_axeTooWeakNeededTier].ToUpper()
+			: $"T{_axeTooWeakNeededTier}";
+		string msg = $"AXE TOO WEAK — {_axeTooWeakKind.ToString().ToUpper()} NEEDS {need}";
+		float size = 26f;
+		var rect = new Rect( 0f, Screen.Height * 0.28f, Screen.Width, size * 1.6f );
+		hud.DrawText( new TextRendering.Scope( msg, HotColor.WithAlpha( alpha ), size ), rect, TextFlag.Center );
+	}
+
+	private void DrawSellFlash( Sandbox.Rendering.HudPainter hud )
+	{
+		const float duration = 1.2f;
+		float t = (float)_sellFlashTime / duration;
+		if ( t >= 1f || _lastSellAmount <= 0 ) return;
+		float alpha = t < 0.10f ? (t / 0.10f) : (1f - (t - 0.10f) / 0.90f);
+		alpha = alpha.Clamp( 0f, 1f );
+		// Float upward from the wallet position.
+		float padL = 36f;
+		float y0 = 70f;
+		float yOff = -50f * t;
+		float size = 32f;
+		var rect = new Rect( padL, y0 + yOff, 240f, size * 1.4f );
+		hud.DrawText( new TextRendering.Scope( $"+{_lastSellAmount}", TextColor.WithAlpha( alpha ), size ),
+			rect, TextFlag.LeftCenter );
 	}
 
 	private void DrawTierBadge( Sandbox.Rendering.HudPainter hud )
@@ -158,38 +449,84 @@ public sealed class WoodHud : Component
 
 	private void DrawShopHint( Sandbox.Rendering.HudPainter hud )
 	{
-		if ( !_shop.IsValid() || !_shop.PlayerInside ) return;
-		if ( _state is null ) return;
+		if ( !_activeStation.IsValid() || _state is null ) return;
+		switch ( _activeStation.Kind )
+		{
+			case StationKind.Tools:    DrawToolsHint( hud );    break;
+			case StationKind.Sell:     DrawSellHint( hud );     break;
+			case StationKind.Upgrades: DrawUpgradesHint( hud ); break;
+			case StationKind.Prestige: DrawPrestigeHint( hud ); break;
+		}
+	}
 
+	private void DrawSellHint( Sandbox.Rendering.HudPainter hud )
+	{
+		string header = _state.BackpackWood > 0
+			? $"SELL — auto on entry · [E] / [1] to flush again ({_state.BackpackWood} carried)"
+			: "SELL — backpack empty, go chop";
+		DrawStationHintFrame( hud, 0, header,
+			out _, out _, out _, out _, out _ );
+	}
+
+	private void DrawStationHintFrame( Sandbox.Rendering.HudPainter hud, int lineCount, string header, out float backX, out float backY, out float backW, out float lineH, out float fontSize )
+	{
 		float w = Screen.Width;
 		float h = Screen.Height;
-		float fontSize = 18f;
-		float lineH = fontSize * 1.6f;
-		float backW = MathF.Min( 780f, w * 0.60f );
-		float backH = lineH * 7f + 12f;
-		float backX = (w - backW) * 0.5f;
-		float backY = h * 0.52f;
+		fontSize = 18f;
+		lineH = fontSize * 1.6f;
+		backW = MathF.Min( 780f, w * 0.60f );
+		float backH = lineH * (lineCount + 1) + 12f;
+		backX = (w - backW) * 0.5f;
+		backY = h * 0.52f;
 		hud.DrawRect( new Rect( backX, backY, backW, backH ), new Color( 0f, 0f, 0f, 0.62f ) );
-
-		string header = _state.Spirits > 0
-			? $"SHOP — [E] auto-buy cheapest    ✦ {_state.Spirits} Spirits (+{_state.Spirits}% wood)"
-			: "SHOP — [E] auto-buy cheapest";
-		hud.DrawText( new TextRendering.Scope( header,
-			TextColor.WithAlpha( 0.75f ), fontSize * 1.05f ),
+		hud.DrawText( new TextRendering.Scope( header, TextColor.WithAlpha( 0.75f ), fontSize * 1.05f ),
 			new Rect( backX, backY + 4f, backW, lineH ), TextFlag.Center );
+	}
 
-		DrawShopLine( hud, backX, backY + lineH + 2f, backW, lineH, fontSize, "1",
+	private void DrawToolsHint( Sandbox.Rendering.HudPainter hud )
+	{
+		DrawStationHintFrame( hud, 3, "TOOLS — [E] auto-buy cheapest",
+			out float x, out float y, out float w, out float lh, out float fs );
+		DrawShopLine( hud, x, y + 1 * lh + 2f, w, lh, fs, "1",
 			$"Axe T{_state.AxeTier} ({Tunables.AxeTierName[_state.AxeTier]})", AxeNextCost(),
 			_state.AxeTier < Tunables.MaxAxeTier ? $"→ {Tunables.AxeTierName[_state.AxeTier + 1]}" : "+chop/swing" );
-		DrawShopLine( hud, backX, backY + 2 * lineH + 2f, backW, lineH, fontSize, "2",
+		DrawShopLine( hud, x, y + 2 * lh + 2f, w, lh, fs, "2",
+			$"Range T{_state.ToolRangeTier}", ToolRangeNextCost(),
+			$"×{Tunables.ToolRangeMul[_state.ToolRangeTier]:0.00} swing reach" );
+		DrawShopLine( hud, x, y + 3 * lh + 2f, w, lh, fs, "3",
+			$"Swing Speed T{_state.ToolSpeedTier}", ToolSpeedNextCost(),
+			$"recover ×{Tunables.ToolSpeedMul[_state.ToolSpeedTier]:0.00}" );
+	}
+
+	private int ToolRangeNextCost() => _state.ToolRangeTier < Tunables.MaxToolStatTier ? Tunables.ToolRangeCosts[_state.ToolRangeTier + 1] : -1;
+	private int ToolSpeedNextCost() => _state.ToolSpeedTier < Tunables.MaxToolStatTier ? Tunables.ToolSpeedCosts[_state.ToolSpeedTier + 1] : -1;
+
+	private void DrawUpgradesHint( Sandbox.Rendering.HudPainter hud )
+	{
+		string header = _state.Spirits > 0
+			? $"UPGRADES — [E] auto-buy cheapest    ✦ {_state.Spirits} Spirits (+{_state.Spirits}% wood)"
+			: "UPGRADES — [E] auto-buy cheapest";
+		DrawStationHintFrame( hud, 5, header,
+			out float x, out float y, out float w, out float lh, out float fs );
+		DrawShopLine( hud, x, y + 1 * lh + 2f, w, lh, fs, "1",
 			$"Speed T{_state.SpeedTier}", SpeedNextCost(), $"×{Tunables.SpeedMul[_state.SpeedTier]:0.00} walk" );
-		DrawShopLine( hud, backX, backY + 3 * lineH + 2f, backW, lineH, fontSize, "3",
+		DrawShopLine( hud, x, y + 2 * lh + 2f, w, lh, fs, "2",
 			$"Luck T{_state.LuckTier}", LuckNextCost(), $"{(Tunables.LuckChance[_state.LuckTier] * 100):0}% × 2 chance" );
-		DrawShopLine( hud, backX, backY + 4 * lineH + 2f, backW, lineH, fontSize, "4",
+		DrawShopLine( hud, x, y + 3 * lh + 2f, w, lh, fs, "3",
 			$"Power T{_state.PowerTier}", PowerNextCost(), $"+{Tunables.PowerBonus[_state.PowerTier]} chop power" );
-		DrawShopLine( hud, backX, backY + 5 * lineH + 2f, backW, lineH, fontSize, "5",
+		DrawShopLine( hud, x, y + 4 * lh + 2f, w, lh, fs, "4",
+			$"Backpack T{_state.BackpackTier}", BackpackNextCost(), $"{_state.BackpackCapacity} cap" );
+		DrawShopLine( hud, x, y + 5 * lh + 2f, w, lh, fs, "5",
 			$"Pet T{_state.PetTier}", PetNextCost(), "cosmetic companion" );
-		DrawPrestigeLine( hud, backX, backY + 6 * lineH + 2f, backW, lineH, fontSize );
+	}
+
+	private int BackpackNextCost() => _state.BackpackTier < Tunables.MaxBackpackTier ? Tunables.BackpackCosts[_state.BackpackTier + 1] : -1;
+
+	private void DrawPrestigeHint( Sandbox.Rendering.HudPainter hud )
+	{
+		DrawStationHintFrame( hud, 1, "PRESTIGE — [E] / [1] replant the forest",
+			out float x, out float y, out float w, out float lh, out float fs );
+		DrawPrestigeLine( hud, x, y + lh + 2f, w, lh, fs );
 	}
 
 	private void DrawPrestigeLine( Sandbox.Rendering.HudPainter hud, float x, float y, float w, float h, float font )
@@ -257,27 +594,11 @@ public sealed class WoodHud : Component
 			new Rect( 0, h * 0.74f, w, fontSize * 1.6f ), TextFlag.Center );
 	}
 
-	private void DrawRingBanner( Sandbox.Rendering.HudPainter hud )
-	{
-		const float duration = 2.0f;
-		float t = (float)_ringBannerTime / duration;
-		if ( t >= 1f ) return;
-		float w = Screen.Width;
-		float h = Screen.Height;
-		float alpha = t < 0.12f ? (t / 0.12f) : (1f - (t - 0.12f) / 0.88f);
-		alpha = alpha.Clamp( 0f, 1f );
-		float fontSize = 44f;
-		var title = $"RING {_ringBannerNumber} UNLOCKED";
-		hud.DrawRect( new Rect( 0, h * 0.22f, w, fontSize * 1.6f ),
-			new Color( 0f, 0f, 0f, 0.50f * alpha ) );
-		hud.DrawText( new TextRendering.Scope( title, HotColor.WithAlpha( alpha ), fontSize ),
-			new Rect( 0, h * 0.22f, w, fontSize * 1.6f ), TextFlag.Center );
-	}
-
 	private void DrawTeleportHint( Sandbox.Rendering.HudPainter hud )
 	{
-		// Hide the hint when player is inside shop (shop hint is more important).
-		if ( _shop.IsValid() && _shop.PlayerInside ) return;
+		// Hide the hint when player is inside any shop station (the station
+		// hint is more important and would overlap).
+		if ( _activeStation.IsValid() ) return;
 		float fontSize = 16f;
 		var tint = TextColor.WithAlpha( 0.40f );
 		var rect = new Rect( 0, Screen.Height * 0.92f, Screen.Width, fontSize * 1.4f );

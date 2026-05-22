@@ -27,7 +27,7 @@ public enum EdgeStyle
 /// <summary>
 /// Controls the appearance and physical properties of a layer in a <see cref="Sdf2DWorld"/>.
 /// </summary>
-[GameResource( "SDF 2D Layer", "sdflayer", $"Properties of a layer in a {nameof( Sdf2DWorld )}", Icon = "layers" )]
+[AssetType( Name = "SDF 2D Layer", Extension = "sdflayer", Category = "sdf" )]
 public class Sdf2DLayer : SdfResource<Sdf2DLayer>
 {
 	/// <summary>

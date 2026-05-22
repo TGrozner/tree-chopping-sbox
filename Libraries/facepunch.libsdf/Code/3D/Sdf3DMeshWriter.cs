@@ -149,7 +149,7 @@ internal partial class Sdf3DMeshWriter : Pooled<Sdf3DMeshWriter>, IMeshWriter
 		}
 		else if ( Indices.Count > 0 )
 		{
-			mesh.CreateVertexBuffer( Vertices.Count, Vertex.Layout, Vertices );
+			mesh.CreateVertexBuffer( Vertices.Count, Vertices );
 			mesh.CreateIndexBuffer( Indices.Count, Indices );
 		}
 	}

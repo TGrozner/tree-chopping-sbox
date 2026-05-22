@@ -379,7 +379,7 @@ public readonly struct TextureSdf : ISdf2D
 
 	private TextureSdf( Texture texture, int gradientWidthPixels, ColorChannel channel, Vector2 worldSize, Vector2 worldOffset )
 	{
-		if ( texture.ResourceId == 0 )
+		if ( string.IsNullOrWhiteSpace( texture.ResourcePath ) )
 		{
 			throw new ArgumentException( "Texture must be a resource loaded from disc." );
 		}

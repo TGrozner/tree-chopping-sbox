@@ -137,23 +137,10 @@ public static class TerrainHeightmap
 		terrain.TerrainHeight = Tunables.TerrainMaxHeight;
 		terrain.EnableCollision = true;
 		terrain.Static = true;
-		// Tinted runtime copy of the default vmat. Skips the whole
-		// TerrainMaterial/ControlMap pipeline (which needs authored .tmat
-		// assets with vtex_c textures) — for now a solid grass-green tint
-		// reads as "ground" instead of the dev checker.
-		// Authored .vmat in Assets/materials/ground.vmat — alpha=1 tint so it
-		// actually shows green (default.vmat has alpha=0 which suppresses the
-		// tint and falls back to the beige TGA albedo).
-		var mat = Material.Load( "materials/ground.vmat" );
-		if ( mat is not null )
-		{
-			terrain.MaterialOverride = mat;
-			Log.Info( $"[TerrainHeightmap] Ground material loaded (shader '{mat.ShaderName}')" );
-		}
-		else
-		{
-			Log.Warning( "[TerrainHeightmap] materials/ground.vmat not found — terrain will use dev checker" );
-		}
+		// DO NOT touch this — Thomas locked the ground to the dev checker
+		// 2026-05-21. Uniform tinted materials hide the heightmap relief and
+		// kill scale readability ; the checker is the source of truth visual.
+		// Engine default = dev checker, so no MaterialOverride.
 		terrain.Create();
 
 		Log.Info( $"[TerrainHeightmap] Built terrain {res}×{res} @ {Tunables.TerrainSize}u, max height {Tunables.TerrainMaxHeight}u" );

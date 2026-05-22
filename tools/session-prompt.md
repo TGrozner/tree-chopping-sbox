@@ -1,6 +1,6 @@
 # Prompt de session — Tree Chopping (s&box, mow-the-lawn)
 
-À copier-coller en début de nouvelle conversation Claude Code pour reprendre proprement, ou que tu lises en premier si une session démarre cold sur ce repo.
+À copier-coller en début de nouvelle conversation Codex pour reprendre proprement, ou que tu lises en premier si une session démarre cold sur ce repo.
 
 ---
 
@@ -10,8 +10,8 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 
 ## Avant de toucher au code
 
-1. **Lis `CLAUDE.md`** en entier — non-négociables (whitelist, Source 2, AZERTY, F-keys, MotionEnabled, etc.).
-2. **Lis `Code/CLAUDE.md`** dès que tu touches `Code/**/*.cs` — patterns Component lifecycle / Property attrs / hotload / spawn par code / HUD / Source 2 gotchas.
+1. **Lis `AGENTS.md`** en entier — non-négociables (whitelist, Source 2, AZERTY, F-keys, MotionEnabled, etc.).
+2. **Lis `Code/AGENTS.md`** dès que tu touches `Code/**/*.cs` — patterns Component lifecycle / Property attrs / hotload / spawn par code / HUD / Source 2 gotchas.
 3. **MEMORY.md** — pointeurs vers les notes durables (1 ligne chacune).
 4. **Confirme l'état de départ est vert** :
    ```powershell
@@ -26,18 +26,19 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 1. **Plan 3-5 puces max.** Quels fichiers tu touches, pourquoi. Attends `ok` ou implicit OK avant code.
 2. **Petits changements.** Pas de refactor opportuniste. Un changement = une intention. Si tu vois autre chose, signale et demande.
 3. **Build automatique** : un PostToolUse hook lance `dotnet build` après chaque Edit/Write sur `Code/**/*.cs`. Échec → blocking message qui te remonte les erreurs. **Tu ne peux pas accumuler 4 fichiers cassés sans le savoir.**
-4. **Selftest automatique** : un Stop hook lance `tools/selftest.ps1` si tu as touché `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `ShopArea.cs`. Échec → bloque le stop. **Couvre le chop pipeline + le wood payout.**
+4. **Selftest automatique** : un Stop hook lance `tools/selftest.ps1` si tu as touché `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `WoodItem.cs` / `ShopStation.cs`. Échec → bloque le stop. **Couvre le chop pipeline + le wood payout.**
 5. **Play GUI obligatoire** si tu touches rendering / scale / HUD / particles / camera / input / lighting. Le headless ne rend pas. **Dis-le explicitement** quand le headless ne suffit pas, ne réclame jamais "ça marche" sans validation visuelle quand le visuel est en jeu.
 6. **Pas de commit sans demande explicite (`commit ça`, `commit push`, etc.).** Je fais mes propres commits `phase5X:`.
-7. **MCP `sbox` bridge** : si sbox-dev.exe est ouvert + dock Claude Bridge visible, tu peux driver l'éditeur live (start_play, take_screenshot, get_scene_hierarchy, set_runtime_property, etc.). Voir mémoire `sbox-claude-bridge-mcp`.
+7. **MCP `sbox` bridge** : si sbox-dev.exe est ouvert + dock bridge visible, tu peux driver l'éditeur live (start_play, take_screenshot, get_scene_hierarchy, set_runtime_property, etc.).
 
 ## Architecture en cours (rapide)
 
 - **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, beaver, shop+totem, forêt initiale, 4 gates, pet)
-- **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog (5s timeout) → GiveWoodOnce. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
+- **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog → split landed log → WoodItem drops. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
 - **`BeaverController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch, applique GameState.SpeedMultiplier sur PlayerController.WalkSpeed, AerialView toggle pour top-down screenshot
 - **`GameState.cs`** : Wood + AxeTier (0..6) + Speed/Luck/Power tiers (0..5) + PetTier (0..5) + Spirits + GatesBroken + TotalWoodEarned persistence (FileSystem.Data/progress_{steamId}.json — per-user clé en MP)
-- **`ShopArea.cs`** : detect player-in-radius, E=auto-buy-cheapest, Slot1-6=Axe/Speed/Luck/Power/Pet/Replant, FirePrestigeBurst sur Replant
+- **`ShopStation.cs`** : stations Tools / Sell / Upgrades / Prestige, inputs contextualisés, sell backpack → wallet
+- **`WoodItem.cs`** : items bois pickables, magnet de proximité, backpack
 - **`WoodHud.cs`** : wood pulse + axe tier badge avec nom (Hands→Chainsaw) + 7 pips + 6-line shop menu + replant line + teleport hint
 - **`AutoPlay.cs`** : autonomous full-loop driver (chop → shop → upgrade → repeat) + LookBack one-shot
 - **`SelfTest.cs`** : Init → Approach → Swing → Verify(Wood>0), wait-on-condition. GameState.Save short-circuits when active (no clobber)
@@ -48,7 +49,7 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 - **`PerfProbe.cs`** : FpsAvg/Min + Renderers/Trees lisibles via bridge sans HUD
 - **`Mat.cs`** + **`Sfx.cs`** : helpers
 
-Architecture détaillée : `CLAUDE.md` section "Architecture gameplay actuelle".
+Architecture détaillée : `AGENTS.md` section "Architecture gameplay actuelle".
 
 ## Pièges déjà payés
 
@@ -77,7 +78,7 @@ Architecture détaillée : `CLAUDE.md` section "Architecture gameplay actuelle".
 
 ## Style
 
-Tabs + `if ( foo )` (espaces dans parens). Default zéro commentaire — uniquement quand le *why* est non-évident. Pas de wrappers legacy, pas de stubs hypothétiques. FR OK dans logs/commits/CLAUDE.md ; EN pour XML docs sbox-facing.
+Tabs + `if ( foo )` (espaces dans parens). Default zéro commentaire — uniquement quand le *why* est non-évident. Pas de wrappers legacy, pas de stubs hypothétiques. FR OK dans logs/commits/AGENTS.md ; EN pour XML docs sbox-facing.
 
 ## Si tu hésites
 

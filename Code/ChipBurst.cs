@@ -6,7 +6,10 @@ namespace TreeChopping;
 // 27/1. Custom transforms hold ≥30 FPS for the same visual.
 public static class ChipBurst
 {
-	public static void Spawn( Scene scene, Vector3 worldPos, Vector3 awayDir, int count )
+	// Default tint = Tunables.ChipTint (oak-brown). Per-tree-kind overrides
+	// passées par la Tree au moment du chop pour matcher la couleur du bois
+	// chopped (Valheim chips reflect le wood type frappé).
+	public static void Spawn( Scene scene, Vector3 worldPos, Vector3 awayDir, int count, Color? chipTint = null, Color? splinterTint = null )
 	{
 		if ( scene is null ) return;
 		var dir = awayDir.WithZ( 0f );
@@ -15,9 +18,11 @@ public static class ChipBurst
 		// for the splinter pattern that scatters left/right at impact.
 		var side = Vector3.Cross( dir, Vector3.Up ).Normal;
 
-		for ( int i = 0; i < count; i++ ) SpawnChip( scene, worldPos, dir );
+		var actualChipTint = chipTint ?? Tunables.ChipTint;
+		var actualSplinterTint = splinterTint ?? Tunables.ChipSplinterTint;
+		for ( int i = 0; i < count; i++ ) SpawnChip( scene, worldPos, dir, actualChipTint );
 		for ( int i = 0; i < Tunables.ChipSplinterCount; i++ )
-			SpawnSplinter( scene, worldPos, dir, side, i % 2 == 0 ? 1f : -1f );
+			SpawnSplinter( scene, worldPos, dir, side, i % 2 == 0 ? 1f : -1f, actualSplinterTint );
 	}
 
 	// Leaf burst — small flat green flakes kicked upward, drifting down with
@@ -52,7 +57,7 @@ public static class ChipBurst
 		chip.Lifetime = Game.Random.Float( 2.2f, 3.6f );
 	}
 
-	private static void SpawnChip( Scene scene, Vector3 pos, Vector3 dir )
+	private static void SpawnChip( Scene scene, Vector3 pos, Vector3 dir, Color tint )
 	{
 		var go = scene.CreateObject();
 		go.Name = "Chip";
@@ -60,7 +65,7 @@ public static class ChipBurst
 		go.WorldRotation = Rotation.Random;
 		var size = Game.Random.Float( Tunables.ChipSizeMin, Tunables.ChipSizeMax );
 		go.WorldScale = new Vector3( size ) / Tunables.CubeBase;
-		Mat.AddTintedCube( go, Tunables.ChipTint );
+		Mat.AddTintedCube( go, tint );
 
 		var chip = go.AddComponent<Chip>();
 		var kick = (Vector3.Up + (-dir) * 0.6f + Vector3.Random * 0.5f).Normal;
@@ -70,7 +75,7 @@ public static class ChipBurst
 		chip.Lifetime = Game.Random.Float( Tunables.ChipLifetime * 0.7f, Tunables.ChipLifetime * 1.2f );
 	}
 
-	private static void SpawnSplinter( Scene scene, Vector3 pos, Vector3 dir, Vector3 side, float sideSign )
+	private static void SpawnSplinter( Scene scene, Vector3 pos, Vector3 dir, Vector3 side, float sideSign, Color tint )
 	{
 		var go = scene.CreateObject();
 		go.Name = "Splinter";
@@ -78,7 +83,7 @@ public static class ChipBurst
 		go.WorldRotation = Rotation.Random;
 		float len = Game.Random.Float( 12f, 18f );
 		go.WorldScale = new Vector3( len, 2.5f, 2.5f ) / Tunables.CubeBase;
-		Mat.AddTintedCube( go, Tunables.ChipSplinterTint );
+		Mat.AddTintedCube( go, tint );
 
 		var chip = go.AddComponent<Chip>();
 		var kick = (side * sideSign * 0.85f + Vector3.Up * 0.3f + (-dir) * 0.2f + Vector3.Random * 0.35f).Normal;

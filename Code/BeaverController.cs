@@ -19,6 +19,12 @@ public sealed class BeaverController : Component
 	private float _fovOffset;
 	private int _hitstopFramesLeft;
 	private Tree _previewTree;
+	// Combo chain Valheim Attack.m_attackChainLevels — chain reset à 0 si gap
+	// > ChopComboWindow ou level atteint max. Level final = chop damage ×
+	// ChopComboFinalDamageMul + push × ChopComboFinalPushMul. Expose en
+	// [Property, ReadOnly] pour HUD pip indicator + selftest visibility.
+	[Property, ReadOnly] public int ChainLevel { get; private set; }
+	private TimeSince _timeSinceLastSwing = 999f;
 	private TimeSince _shakeStart = 999f;
 	private float _shakeAmplitude;
 	private int _shakeSeed;
@@ -28,11 +34,6 @@ public sealed class BeaverController : Component
 	[Property] public Vector3 DebugTeleportTo { get; set; }
 	[Property] public bool DebugApplyTeleport { get; set; }
 	[Property] public float DebugTeleportYawDegrees { get; set; }
-	// Top-down screenshot mode : when true, OnPreRender pins the runtime
-	// camera at (-1000, 0, 4000) looking straight down. Player rigidbody
-	// stays grounded — only the camera moves, so we don't violate the
-	// "no flying" rule.
-	[Property] public bool AerialView { get; set; }
 
 	protected override void OnAwake()
 	{
@@ -62,15 +63,6 @@ public sealed class BeaverController : Component
 		if ( !Camera.IsValid() ) return;
 		if ( _baseFov <= 0f ) _baseFov = Camera.FieldOfView;
 		Camera.FieldOfView = _baseFov + _fovOffset;
-		if ( AerialView )
-		{
-			var spawn = Scene.GetAllComponents<SceneStarter>().FirstOrDefault()?.ResolvedBeaverSpawn
-				?? new Vector3( -1000f, 0f, 600f );
-			Camera.WorldPosition = spawn + Vector3.Up * 3500f;
-			Camera.WorldRotation = Rotation.LookAt( Vector3.Down );
-			Camera.FieldOfView = 60f;
-			return;
-		}
 		// Anti-clip : trace from the player head toward the third-person
 		// camera position, pull the cam in if a tree trunk is between. Stops
 		// the "camera inside a wooden cube" frames when the player teleports
@@ -216,15 +208,33 @@ public sealed class BeaverController : Component
 		if ( DebugRequestSwing ) DebugRequestSwing = false;
 		if ( !requested ) return;
 
+		// Combo chain Valheim Attack.cs lignes 401-403 : si gap > 0.2s ou chain
+		// déjà au max, reset à 0. Sinon increment au level suivant.
+		if ( (float)_timeSinceLastSwing > Tunables.ChopComboWindow
+			|| ChainLevel >= Tunables.ChopComboMaxLevels - 1 )
+		{
+			ChainLevel = 0;
+		}
+		else
+		{
+			ChainLevel++;
+		}
+		_timeSinceLastSwing = 0f;
+
 		_pendingForward = EyeForwardFlat();
 		_phase = SwingPhase.WindUp;
 		_phaseTime = 0f;
 
 		_fovOffset += Tunables.SwingFovPunch * 0.4f;
-		var handPos = WorldPosition + Vector3.Up * (Tunables.BeaverEyeHeight * 0.8f) + _pendingForward * 30f;
-		ChipBurst.Spawn( Scene, handPos, _pendingForward, 4 );
+		// No chip burst at swing-start anymore (Thomas 2026-05-21 : "quand on
+		// chop dans le vide on a quand même des wood chips"). Chips only fire
+		// on actual impact, via ApplyImpactFeedback.
 		TriggerAttackAnim();
-		Sfx.Play( "sounds/swing.sound", WorldPosition, volume: 0.80f, pitchMin: 1.40f, pitchMax: 1.65f );
+		// Pitch swing sound varies par chain level pour audio feedback (level 0
+		// "ah", level 1 "uhh", level 2 "HEH" — hint sonore que le combo monte).
+		float swingPitchMul = 1f + 0.10f * ChainLevel;
+		Sfx.Play( "sounds/swing.sound", WorldPosition,
+			volume: 0.80f, pitchMin: 1.40f * swingPitchMul, pitchMax: 1.65f * swingPitchMul );
 	}
 
 	private void TickWindUp()
@@ -241,10 +251,27 @@ public sealed class BeaverController : Component
 		{
 			if ( impactPoint == default )
 				impactPoint = hit.WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.3f);
-			int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
-			if ( hit is Tree t ) t.Chop( forward, chopPower );
-			else hit.Chop( forward );
-			ApplyImpactFeedback( impactPoint, forward );
+			int basePower = GameState.Get( Scene )?.ChopPower ?? 1;
+			// Final hit du combo (last level) = damage × FinalDamageMul.
+			// Valheim Attack.cs ligne 1094-1098 : `hitData.m_damage.Modify(m_lastChainDamageMultiplier)`.
+			bool isFinalHit = ChainLevel == Tunables.ChopComboMaxLevels - 1;
+			int chopPower = isFinalHit
+				? Math.Max( 1, (int)MathF.Ceiling( basePower * Tunables.ChopComboFinalDamageMul ) )
+				: basePower;
+			if ( hit is Tree t ) t.Chop( forward, chopPower, impactPoint );
+			else hit.Chop( forward, impactPoint );
+			// Pass tree tint pour que les chips reflètent la couleur du bois
+			// frappé (Valheim chips wood-type colored). Pitch SFX par kind :
+			// Sapling = high crackle (×1.25), Veteran = deep thunk (×0.75),
+			// Brittle = dry (×1.10), Normal = baseline.
+			Color? chipTint = null;
+			float chopPitchMul = 1f;
+			if ( hit is Tree treeHit )
+			{
+				chipTint = treeHit.TrunkTint;
+				chopPitchMul = Tunables.TreeKindChopPitchMul[(int)treeHit.Kind];
+			}
+			ApplyImpactFeedback( impactPoint, forward, chipTint, chopPitchMul );
 		}
 		else
 		{
@@ -258,24 +285,43 @@ public sealed class BeaverController : Component
 	private void TickRecovery()
 	{
 		_phaseTime += Time.Delta;
-		if ( _phaseTime >= Tunables.SwingRecoveryDuration ) _phase = SwingPhase.Idle;
+		float speedMul = GameState.Get( Scene )?.SwingSpeedMultiplier ?? 1f;
+		if ( _phaseTime >= Tunables.SwingRecoveryDuration * speedMul ) _phase = SwingPhase.Idle;
 	}
 
-	private void ApplyImpactFeedback( Vector3 contactPoint, Vector3 forward )
+	private void ApplyImpactFeedback( Vector3 contactPoint, Vector3 forward, Color? chipTint = null, float chopPitchMul = 1f )
 	{
-		ChipBurst.Spawn( Scene, contactPoint, forward, Tunables.ChipBurstCount );
-		_fovOffset += Tunables.SwingFovPunch;
+		// Final hit du combo = burst plus dense + amplified hit feedback. Match
+		// Valheim Attack.cs ligne 1097 où pushForce × 1.2 et damage × 2 — on
+		// boost aussi la sensation visuelle.
+		bool isFinalHit = ChainLevel == Tunables.ChopComboMaxLevels - 1;
+		int chipCount = isFinalHit
+			? (int)(Tunables.ChipBurstCount * 1.6f)
+			: Tunables.ChipBurstCount;
+		ChipBurst.Spawn( Scene, contactPoint, forward, chipCount, chipTint );
+		_fovOffset += isFinalHit
+			? Tunables.SwingFovPunch * 1.5f
+			: Tunables.SwingFovPunch;
 		Scene.TimeScale = Tunables.HitstopTimeScale;
-		_hitstopFramesLeft = Tunables.HitstopFrames;
+		_hitstopFramesLeft = isFinalHit ? Tunables.HitstopFrames + 2 : Tunables.HitstopFrames;
 		// Valheim-style audio layering : primary thunk + higher-pitched crack
 		// stacked so the impact reads as a real wood-vs-axe hit instead of
-		// one flat sample.
-		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: 0.95f, pitchMin: 0.85f, pitchMax: 1.15f );
-		Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.45f, pitchMin: 1.45f, pitchMax: 1.75f );
-		// Positional camera shake — amplitude scales gently with chop power
-		// so a Chainsaw hit feels heavier than a Hands hit.
+		// one flat sample. Final hit = louder + lower pitch (heavier hit).
+		float vol = isFinalHit ? 1.10f : 0.95f;
+		float pitchShift = isFinalHit ? 0.85f : 1.0f;
+		// Per-kind pitch mul appliqué sur les deux layers : chop = corps du
+		// bois (Sapling high crackle / Veteran deep thunk), break = aigus du
+		// crack qui suit. Pitch range conservé proportionnellement.
+		float kindPitch = pitchShift * chopPitchMul;
+		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: vol, pitchMin: 0.85f * kindPitch, pitchMax: 1.15f * kindPitch );
+		Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.45f * vol, pitchMin: 1.45f * kindPitch, pitchMax: 1.75f * kindPitch );
+		// Positional camera shake — kept very subtle after the Phase D revert.
+		// Was 1.6 + power×0.2 (up to 3.2u) → felt "shake de fou" ; halved.
+		// Final hit boost le shake aussi.
 		int power = GameState.Get( Scene )?.ChopPower ?? 1;
-		AddCameraShake( 1.6f + MathF.Min( power * 0.20f, 1.6f ) );
+		float shakeAmp = 0.7f + MathF.Min( power * 0.08f, 0.7f );
+		if ( isFinalHit ) shakeAmp *= 1.4f;
+		AddCameraShake( shakeAmp );
 	}
 
 	private void TriggerAttackAnim()
@@ -307,8 +353,8 @@ public sealed class BeaverController : Component
 		var hit = ChooseSwingTarget( origin, forward );
 		if ( hit is null ) return null;
 		int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
-		if ( hit is Tree t ) t.Chop( forward, chopPower );
-		else hit.Chop( forward );
+		if ( hit is Tree t ) t.Chop( forward, chopPower, default );
+		else hit.Chop( forward, default );
 		return hit;
 	}
 
@@ -329,7 +375,7 @@ public sealed class BeaverController : Component
 			var to = c.WorldPosition - origin;
 			to.z = 0f;
 			var dist = to.Length;
-			if ( dist > Tunables.SwingRange ) { droppedRange++; continue; }
+			if ( dist > SwingRangeNow() ) { droppedRange++; continue; }
 			var dot = forward.Dot( to.Normal );
 			if ( dot < Tunables.SwingConeDot ) { droppedCone++; continue; }
 			var score = dot - dist * 0.005f;
@@ -338,22 +384,26 @@ public sealed class BeaverController : Component
 		Log.Info( $"[TC_TEST] DebugSwingVerbose considered={considered} droppedValid={droppedValid} droppedTool={droppedTool} droppedRange={droppedRange} droppedCone={droppedCone} best={(best == null ? "null" : best.GetType().Name)}" );
 		if ( best is null ) return null;
 		int chopPower = GameState.Get( Scene )?.ChopPower ?? 1;
-		if ( best is Tree t ) t.Chop( forward, chopPower );
-		else best.Chop( forward );
+		if ( best is Tree t ) t.Chop( forward, chopPower, default );
+		else best.Chop( forward, default );
 		return best;
 	}
+
+	// Effective swing range — base × per-tool Range sub-stat multiplier.
+	private float SwingRangeNow() => Tunables.SwingRange * (GameState.Get( Scene )?.SwingRangeMultiplier ?? 1f);
 
 	private IChoppable ChooseSwingTarget( Vector3 origin, Vector3 forward )
 	{
 		IChoppable best = null;
 		var bestScore = float.NegativeInfinity;
+		float range = SwingRangeNow();
 		foreach ( var c in Scene.GetAllComponents<IChoppable>() )
 		{
 			if ( !c.IsValid() || !c.AcceptsTool( ToolKind.Axe ) ) continue;
 			var to = c.WorldPosition - origin;
 			to.z = 0f;
 			var dist = to.Length;
-			if ( dist > Tunables.SwingRange ) continue;
+			if ( dist > range ) continue;
 			var dot = forward.Dot( to.Normal );
 			if ( dot < Tunables.SwingConeDot ) continue;
 			var score = dot - dist * 0.005f;
@@ -361,6 +411,11 @@ public sealed class BeaverController : Component
 		}
 		return best;
 	}
+
+	// HUD hit-or-miss indicator : true when there's a chop target under the
+	// reticle within melee range. Re-evaluated at ~20Hz by TickAimPreview,
+	// so reading this from WoodHud each frame is cheap (no extra trace).
+	public bool HasAimTarget => _previewTree.IsValid();
 
 	public IChoppable PickCameraAimTarget( out Vector3 hitPos )
 	{
@@ -395,7 +450,7 @@ public sealed class BeaverController : Component
 
 		var hp = trace.EndPosition;
 		var beaverToHit = (hp - origin).WithZ( 0f );
-		if ( beaverToHit.Length > Tunables.SwingRange ) return null;
+		if ( beaverToHit.Length > SwingRangeNow() ) return null;
 
 		hitPos = hp;
 		return ic;
@@ -406,7 +461,20 @@ public interface IChoppable
 {
 	Vector3 WorldPosition { get; }
 	bool IsValid();
-	void Chop( Vector3 direction );
+	// hitPoint = where the axe actually contacted, in world coords. Used for
+	// impulse application matching Valheim's Destructible/TreeLog pattern
+	// (hit.m_dir * hit.m_pushForce at hit.m_point). Callers can pass default
+	// (Vector3.Zero) to fall back to WorldPosition + a fixed offset inside
+	// the implementor.
+	void Chop( Vector3 direction, Vector3 hitPoint );
+	// Valheim IDestructible.Damage(HitData) — universal damage entrypoint.
+	// Default implementation forwards to legacy Chop signature pour
+	// rétrocompat. Components peuvent override pour utiliser HitData.ChopPower,
+	// ToolTier, Skill, etc.
+	void Damage( HitData hit )
+	{
+		Chop( hit.Direction, hit.HitPoint );
+	}
 	bool AcceptsTool( ToolKind tool );
 }
 

@@ -1,15 +1,15 @@
-# Claude Code Stop hook
-# Fires when Claude tries to end the turn. If any of the critical runtime
-# files (Tree / SceneStarter / BeaverController / GameState / ShopArea)
+# Codex / Claude Code Stop hook
+# Fires when the agent tries to end the turn. If any of the critical runtime
+# files (Tree / SceneStarter / BeaverController / GameState / WoodItem / ShopStation)
 # have been modified vs HEAD, run tools\selftest.ps1. Failure -> exit 2,
-# blocks the stop and forces Claude to keep working.
+# blocks the stop and forces the agent to keep working.
 #
-# Enforces CLAUDE.md non-negotiable #2 ("relance le selftest apres TOUT
+# Enforces AGENTS.md non-negotiable #2 ("relance le selftest apres TOUT
 # changement dans Tree / GameState / SceneStarter.SpawnForest /
 # BeaverController swing path") automatically.
 #
 # Escape hatch: stop_hook_active=true on the second Stop attempt -- after
-# one block, Claude is allowed to stop on the next try so the user is not
+# one block, the agent is allowed to stop on the next try so the user is not
 # trapped if the selftest fails for an expected reason.
 
 $ErrorActionPreference = "SilentlyContinue"
@@ -23,11 +23,12 @@ try {
     exit 0
 }
 
-# Already blocked once; let Claude stop now. Avoids infinite loops when
-# the selftest stays red for a reason Claude can't fix in-session.
+# Already blocked once; let the agent stop now. Avoids infinite loops when
+# the selftest stays red for a reason the agent can't fix in-session.
 if ( $payload.stop_hook_active -eq $true ) { exit 0 }
 
-$projectDir = $env:CLAUDE_PROJECT_DIR
+$projectDir = $env:CODEX_PROJECT_DIR
+if ( -not $projectDir ) { $projectDir = $env:CLAUDE_PROJECT_DIR }
 if ( -not $projectDir ) { $projectDir = "C:\dev\tree-chopping-sbox" }
 
 # git status --porcelain reports modified+untracked files relative to
@@ -37,7 +38,14 @@ if ( -not $projectDir ) { $projectDir = "C:\dev\tree-chopping-sbox" }
 $gitStatus = & git -C $projectDir status --porcelain 2>$null
 if ( -not $gitStatus ) { exit 0 }
 
-$critical = @('Tree.cs', 'SceneStarter.cs', 'BeaverController.cs', 'GameState.cs', 'ShopArea.cs')
+$critical = @(
+    'Tree.cs',
+    'SceneStarter.cs',
+    'BeaverController.cs',
+    'GameState.cs',
+    'WoodItem.cs',
+    'ShopStation.cs'
+)
 $touched = $null
 foreach ( $line in $gitStatus ) {
     foreach ( $f in $critical ) {

@@ -31,3 +31,7 @@ Exports/
 .almanac/index.db-wal
 .almanac/index.db-shm
 .almanac/runs/
+_valheim-decompile/
+.valheim-audio-ref/
+_valheim-audio-ref/
+_valheim-visual-ref/

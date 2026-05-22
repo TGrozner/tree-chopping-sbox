@@ -1,0 +1,36 @@
+{
+  "UI": false,
+  "Volume": "0.55",
+  "Pitch": "1.0",
+  "Decibels": 60,
+  "SelectionMode": "Random",
+  "Sounds": [
+    "sounds/cc0/leaves/rustle01.vsnd",
+    "sounds/cc0/leaves/rustle02.vsnd",
+    "sounds/cc0/leaves/rustle03.vsnd",
+    "sounds/cc0/leaves/rustle04.vsnd",
+    "sounds/cc0/leaves/rustle05.vsnd",
+    "sounds/cc0/leaves/rustle06.vsnd",
+    "sounds/cc0/leaves/rustle07.vsnd",
+    "sounds/cc0/leaves/rustle08.vsnd",
+    "sounds/cc0/leaves/rustle09.vsnd",
+    "sounds/cc0/leaves/rustle10.vsnd"
+  ],
+  "Occlusion": true,
+  "AirAbsorption": true,
+  "Transmission": true,
+  "OcclusionRadius": 32,
+  "DistanceAttenuation": true,
+  "Distance": 3000,
+  "Falloff": [
+    { "x": 0, "y": 1, "in": 0, "out": -2.5, "mode": "Mirrored" },
+    { "x": 0.1, "y": 0.18, "in": 0, "out": 0, "mode": "Mirrored" },
+    { "x": 1, "y": 0, "in": 0, "out": 0, "mode": "Mirrored" }
+  ],
+  "DefaultMixer": {
+    "Name": "unknown",
+    "Id": "00000000-0000-0000-0000-000000000000"
+  },
+  "__references": [],
+  "__version": 1
+}

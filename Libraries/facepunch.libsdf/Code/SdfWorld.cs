@@ -277,7 +277,7 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 			var modification = Modifications[from + i];
 
 			writer.Write( (byte)modification.Operator );
-			writer.Write( modification.Resource.ResourceId );
+			writer.Write( modification.Resource.ResourcePath );
 			modification.Sdf.Write( ref writer, sdfTypes );
 		}
 	}
@@ -330,8 +330,8 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 		for ( var i = 0; i < count; ++i )
 		{
 			var op = (Operator)reader.Read<byte>();
-			var resId = reader.Read<int>();
-			var res = ResourceLibrary.Get<TResource>( resId );
+			var resPath = reader.Read<string>();
+			var res = ResourceLibrary.Get<TResource>( resPath );
 
 			var sdf = ISdf<TSdf>.Read( ref reader, sdfTypes );
 
@@ -663,7 +663,7 @@ public abstract partial class SdfWorld<TWorld, TChunk, TResource, TChunkKey, TAr
 				Transform = Transform.World
 			};
 
-			PhysicsBody.SetComponentSource( this );
+			PhysicsBody.Component = this;
 		}
 
 		return PhysicsBody.AddMeshShape( vertices, indices );

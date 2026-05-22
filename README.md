@@ -35,11 +35,12 @@ dotnet build Code/tree_chopping.csproj
 
 | Fichier | Rôle |
 |---|---|
-| `Code/SceneStarter.cs` | Bootstrap : singletons (GameState, WoodHud, AutoPlay, PerfProbe, SelfTest), terrain procédural, mountain borders, beaver spawn, forêt biome-biased, shop area |
-| `Code/Tree.cs` | Multi-chop + StartFell + force-land timeout + GiveWoodOnce. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
+| `Code/SceneStarter.cs` | Bootstrap : singletons, terrain procédural, mountain borders, beaver spawn, forêt biome-biased, hub/shop stations |
+| `Code/Tree.cs` | Multi-chop + StartFell + landed-log split + wood item drops. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
 | `Code/BeaverController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
 | `Code/GameState.cs` | Persistence (FileSystem.Data/progress_{steamId}.json) : Wood, AxeTier 0..6, Speed/Luck/Power tiers 0..5, PetTier 0..5, Spirits + TotalWoodEarned (prestige), GatesBroken (ring unlock). Derived : ChopPower, WoodMultiplier, SpeedMultiplier, LuckChance |
-| `Code/ShopArea.cs` | Player-near-shop detect + E to upgrade |
+| `Code/ShopStation.cs` | Stations Tools / Sell / Upgrades / Prestige autour du hub |
+| `Code/WoodItem.cs` | Items bois pickables, magnet de proximité, backpack |
 | `Code/WoodHud.cs` | HUD immediate-mode (crosshair, wood balance pulse, axe tier badge, shop hint, teleport hint) |
 | `Code/AutoPlay.cs` | Autonomous chop-loop in-forest driver (Active=true via MCP bridge). Teleporte le castor vers le tree le plus proche, swing until fell, repeat |
 | `Code/PerfProbe.cs` | Rolling-window FPS + renderer/tree counts via `[Property, ReadOnly]`. Lisible par MCP bridge sans toucher au HUD debug |
@@ -62,24 +63,19 @@ dotnet build Code/tree_chopping.csproj
 | Espace | Jump |
 | Shift | Sprint |
 | Click gauche | Swing axe |
-| E ("Use") | Shop : auto-buy cheapest affordable upgrade |
-| 1 ("Slot1") | Shop : upgrade Axe |
-| 2 ("Slot2") | Shop : upgrade Speed |
-| 3 ("Slot3") | Shop : upgrade Luck |
-| 4 ("Slot4") | Shop : upgrade Power |
-| 5 ("Slot5") | Shop : buy Pet |
-| 6 ("Slot6") | Shop : Replant Forest (prestige) |
+| E ("Use") | Station Sell : vendre le backpack |
+| 1-7 ("Slot1".."Slot7") | Actions de la station active (tools/upgrades/prestige) |
 | R ("Reload") | Téléport au shop |
 | B ("DebugToggle") | FPS + tree counts HUD overlay |
 
-## Workflow Claude
+## Workflow Codex
 
-Patterns + non-negotiables dans `CLAUDE.md` (root) et `Code/CLAUDE.md` (chargé quand on touche `Code/`). Hook automation :
+Patterns + non-negotiables dans `AGENTS.md` (root) et `Code/AGENTS.md` (chargé quand on touche `Code/`). Hook automation :
 
 - **PostToolUse hook** : `dotnet build` après chaque edit sur `Code/**/*.cs`. Échec → blocking message.
-- **Stop hook** : `tools/selftest.ps1` si `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `ShopArea.cs` modifiés. Échec → bloque le stop.
+- **Stop hook** : `tools/selftest.ps1` si `Tree.cs` / `SceneStarter.cs` / `BeaverController.cs` / `GameState.cs` / `WoodItem.cs` / `ShopStation.cs` modifiés. Échec → bloque le stop.
 
-Hooks dans `.claude/settings.json`, scripts `tools/hooks/`.
+Hooks dans `.codex/hooks.json` (et `.claude/settings.json` en compat legacy), scripts `tools/hooks/`.
 
 ## Source 2 / s&box gotchas
 
@@ -89,4 +85,4 @@ Hooks dans `.claude/settings.json`, scripts `tools/hooks/`.
 - Standing tree Rigidbody **doit** être `MotionEnabled = false` (sinon player les fait tomber juste en marchant dedans).
 - `System.Environment.*` est sur le deny-list du compiler — flags via `[ConVar]` + `sbox-server.exe +name value`.
 
-Voir `Code/CLAUDE.md` pour la liste complète des patterns.
+Voir `Code/AGENTS.md` pour la liste complète des patterns.

@@ -6,7 +6,7 @@ namespace Sandbox.Sdf;
 /// <summary>
 /// Controls the appearance and physical properties of a volume in a <see cref="Sdf3DWorld"/>.
 /// </summary>
-[GameResource( "SDF 3D Volume", "sdfvol", $"Properties of a volume in a Sdf3DWorld", Icon = "view_in_ar" )]
+[AssetType( Name = "SDF 3D Volume", Extension = "sdfvol", Category = "sdf" )]
 public class Sdf3DVolume : SdfResource<Sdf3DVolume>
 {
 	/// <summary>
