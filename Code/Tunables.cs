@@ -216,8 +216,8 @@ public static class Tunables
 	public static readonly int[] TreeKindWoodReward = { 3, 1, 8, 2 };
 	public static readonly int MythicWoodBonus = 12;
 
-	// Per-kind chops required at T0. Sapling bumped 1→2 so even the easiest
-	// tree takes 2 hands swings : "galère à les casser avec nos outils de base".
+	// Per-kind chops required at T0. Sapling bumped 1->2 so even the easiest
+	// tree takes 2 hands swings : starter tool should feel weak.
 	public static readonly int[] TreeKindChopsBase = { 4, 2, 12, 3 };
 
 	// Per-kind minimum AxeTier required to chop. Lower tiers just bounce off
@@ -236,17 +236,16 @@ public static class Tunables
 	// Mythic respawn is an extra-long timer on top of the kind base — a
 	// mythic Veteran (300+600=900s = 15 min) is a "weekend visit" reward.
 	public const float MythicRespawnExtra = 600f;
+	// Valheim TreeBase -> TreeLog. Standing tree -> falls -> landed log
+	// (chopable) -> smaller landed logs or items.
 
-	// Valheim TreeBase → TreeLog → drops directly (aligné 2026-05-21, on a
-	// supprimé le sub-log intermediate qui était notre déviation). Standing
-	// tree → falls → landed log (chopable) → à HP=0 drop directement N items.
-	// LogChopHP = HP du landed log avant sublogs/items.
+	// LogChopHP = HP du landed log avant split-logs/items.
 	// TreeKindLandedDropCount = nombre d'items lâchés au split (= total wood
 	// kind, modulé par luck + mythic à runtime).
 	public static readonly int[] LogChopHP                  = { 2, 1, 3, 1 };
 	public static readonly int[] TreeKindLandedDropCount    = { 4, 1, 9, 2 };
-	public static readonly int[] TreeKindSubLogCount        = { 2, 0, 3, 0 };
-	public static readonly int[] TreeKindSubLogHP           = { 1, 0, 2, 0 };
+	public static readonly int[] TreeKindSplitLogCount      = { 2, 0, 3, 0 };
+	public static readonly int[] TreeKindSplitLogHP         = { 1, 0, 2, 0 };
 	public static readonly float[] TreeKindLogLengthMul     = { 0.34f, 0.42f, 0.30f, 0.34f };
 	public static readonly float[] TreeKindLogWidthMul      = { 0.58f, 0.64f, 0.52f, 0.55f };
 	public const float WoodItemPickupRange = 30f;
@@ -301,15 +300,9 @@ public static class Tunables
 	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
 	public const float InitialFellTopImpulseSpeed = 10f;
 	public const float LogGroundSkin = 5f;
-	public const float SubLogColliderRadiusMul = 1.08f;
-	public const float SubLogAxisSpawnFrac = 0.34f;
-	public const float SubLogSideSpawnMin = 18f;
-	public const float SubLogSideSpawnMul = 0.75f;
-	public const float SubLogInheritedVelocityMul = 0.16f;
-	public const float SubLogSpawnSpeedMin = 0f;
-	public const float SubLogSpawnSpeedMax = 12f;
-	public const float SubLogSpawnAngularMin = 0f;
-	public const float SubLogSpawnAngularMax = 0.08f;
+	public const float SplitLogAxisSpawnFrac = 0.34f;
+	public const float SplitLogSideSpawnMin = 18f;
+	public const float SplitLogSideSpawnMul = 0.75f;
 
 	// Per-kind multipliers pour différencier le feel à la chute. Index match
 	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.
@@ -334,7 +327,7 @@ public static class Tunables
 	public static readonly int[] TreeKindFellBonusItemsMax = { 2, 1, 4, 2 };
 	public static readonly float[] TreeKindFellBonusDropChance = { 0.85f, 0.55f, 1.00f, 0.95f };
 
-	// Tree respawn grow animation — Valheim TreeBase.GrowAnimation anime
+	// Tree respawn grow animation - Valheim TreeBase.GrowAnimation anime
 	// localScale × t/0.3f sur 0.3s avant d'activer le trunk définitif.
 	// Notre TreeStump applique le même au moment du respawn (scale 0 → 1).
 	public const float TreeGrowDuration = 0.3f;
@@ -349,7 +342,8 @@ public static class Tunables
 	public const float TreeLandedManualSleepDelay = 2.2f;
 	public const float TreeLandedManualSleepSpeed = 4.0f;
 	public const float TreeLandedManualSleepAngularSpeed = 0.28f;
-	// Tree is "landed" once its up-axis tilts past this dot threshold.
+
+	// Tree is 'landed' once its up-axis tilts past this dot threshold.
 	public const float TreeFallenUpDotMax = 0.28f;
 	public const float TreeRestingTiltUpDotMax = 0.75f;
 	public const float TreeRestingLandingDelay = 1.4f;

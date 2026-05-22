@@ -12,7 +12,7 @@ public sealed class SelfTest : Component
 	enum Phase
 	{
 		Init, TestSpawnDistribution, Approach, Swing, Verify,
-		TestStump, TestSplit, TestLandedLogChopGrace, TestBonusDrop, TestSubLogSplit, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
+		TestStump, TestSplit, TestLandedLogChopGrace, TestBonusDrop, TestSplitLogSpawn, TestWoodPickup, TestPhysicsAutoSplit, TestStumpRespawn, TestCascadeDamage, TestCascadeCollision,
 		TestAxeTierGate, TestLogTierGate, TestChopPowerScaling, TestImpactBelowMin, TestImpactZeroNoOp,
 		TestBackpackFull, TestDepositFlush, TestDepositStationEntry, TestPrestigeFormula, TestFallingImpactSplit, TestComboFinalDamage, TestMultiWoodTypes,
 		TestStatCounters, TestWoodCuttingLevel, TestPickupStackMerge, TestEnvWindSanity, TestStrictTooHard, TestTunablesValheimSanity,
@@ -42,12 +42,14 @@ public sealed class SelfTest : Component
 	private bool _bonusDropSpawned;
 	private Vector3 _bonusDropPos;
 	private int _woodItemsBeforeBonusDrop;
-	private Tree _subLogTree;
-	private FallenLog _subLogParent;
-	private bool _subLogSpawned;
-	private TimeSince _subLogSinceLanded;
-	private int _subLogSwings;
-	private Vector3 _subLogPos;
+	private Tree _splitLogTree;
+	private FallenLog _splitLogParent;
+	private bool _splitLogSpawned;
+	private TimeSince _splitLogSinceLanded;
+	private TimeSince _splitLogValidationSince;
+	private bool _splitLogSpawnObserved;
+	private int _splitLogSwings;
+	private Vector3 _splitLogPos;
 	private Tree _landedGraceTree;
 	private FallenLog _landedGraceLog;
 	private bool _landedGraceSpawned;
@@ -109,7 +111,7 @@ public sealed class SelfTest : Component
 			case Phase.TestSplit: TickTestSplit(); break;
 			case Phase.TestLandedLogChopGrace: TickTestLandedLogChopGrace(); break;
 			case Phase.TestBonusDrop: TickTestBonusDrop(); break;
-			case Phase.TestSubLogSplit: TickTestSubLogSplit(); break;
+			case Phase.TestSplitLogSpawn: TickTestSplitLogSpawn(); break;
 			case Phase.TestWoodPickup: TickTestWoodPickup(); break;
 			case Phase.TestPhysicsAutoSplit: TickTestPhysicsAutoSplit(); break;
 			case Phase.TestStumpRespawn: TickTestStumpRespawn(); break;
@@ -530,81 +532,91 @@ public sealed class SelfTest : Component
 			return;
 		}
 		Log.Info( $"[TC_TEST] BONUS_DROP PASS  delta={delta} items (expected {minExpected}..{Tunables.TreeKindFellBonusItemsMax[(int)TreeKind.Veteran]})" );
-		Transition( Phase.TestSubLogSplit );
+		Transition( Phase.TestSplitLogSpawn );
 	}
 
-	private void TickTestSubLogSplit()
+	private void TickTestSplitLogSpawn()
 	{
-		if ( !_subLogSpawned )
+		if ( !_splitLogSpawned )
 		{
 			UpgradeAxeTo( Tunables.TreeKindMinAxeTier[(int)TreeKind.Normal] );
 			var spawnPos = _targetTreePos + new Vector3( 360f, 620f, 0f );
 			if ( TryGetGroundZ( spawnPos.x, spawnPos.y, out var groundZ ) )
 				spawnPos = spawnPos.WithZ( groundZ );
-			_subLogPos = spawnPos;
-			_subLogTree = Tree.SpawnAt( Scene, spawnPos, 0.5f, TreeKind.Normal );
-			_subLogTree.StartFell( Vector3.Forward );
-			_subLogParent = _subLogTree.SpawnedLog;
-			_subLogSinceLanded = 0f;
-			_subLogSpawned = true;
+			ClearTestObjectsAround( spawnPos, 760f );
+			_splitLogPos = spawnPos;
+			_splitLogTree = Tree.SpawnAt( Scene, spawnPos, 0.5f, TreeKind.Normal );
+			_splitLogTree.StartFell( Vector3.Forward );
+			_splitLogParent = _splitLogTree.SpawnedLog;
+			_splitLogSinceLanded = 0f;
+			_splitLogSpawned = true;
 			return;
 		}
 
-		if ( _subLogParent.IsValid() && !_subLogParent.IsFallenLog )
+		if ( _splitLogParent.IsValid() && !_splitLogParent.IsFallenLog )
 		{
-			_subLogSinceLanded = 0f;
+			_splitLogSinceLanded = 0f;
 			return;
 		}
-		if ( _subLogParent.IsValid() && (float)_subLogSinceLanded < Tunables.WoodLogChopGrace + 0.08f )
+		if ( _splitLogParent.IsValid() && (float)_splitLogSinceLanded < Tunables.WoodLogChopGrace + 0.08f )
 			return;
 
-		if ( _subLogParent.IsValid() )
+		if ( _splitLogParent.IsValid() )
 		{
-			if ( _subLogSwings > 6 )
+			if ( _splitLogSwings > 6 )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: parent log still valid after {_subLogSwings} swings hp={_subLogParent.ChopsRemaining}" );
+				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: parent log still valid after {_splitLogSwings} swings hp={_splitLogParent.ChopsRemaining}" );
 				Finish();
 				return;
 			}
-			ParkPlayerFacing( _subLogParent.LogCenter );
+			ParkPlayerFacing( _splitLogParent.LogCenter );
 			_axe.DebugSwingVerbose();
-			_subLogSwings++;
+			_splitLogSwings++;
 			return;
 		}
 
-		int subLogs = Scene.GetAllComponents<FallenLog>()
-			.Count( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _subLogPos ) < 700f );
-		int expected = Tunables.TreeKindSubLogCount[(int)TreeKind.Normal];
-		if ( subLogs < expected )
+		if ( !_splitLogSpawnObserved )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublogs={subLogs}, expected >= {expected}" );
+			_splitLogSpawnObserved = true;
+			_splitLogValidationSince = 0f;
+			return;
+		}
+		if ( (float)_splitLogValidationSince < 0.8f )
+			return;
+
+		int splitLogs = Scene.GetAllComponents<FallenLog>()
+			.Count( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _splitLogPos ) < 700f );
+		int expected = Tunables.TreeKindSplitLogCount[(int)TreeKind.Normal];
+		if ( splitLogs < expected )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: splitLogs={splitLogs}, expected >= {expected}" );
 			Finish();
 			return;
 		}
-		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _subLogPos ) < 700f ) )
+		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _splitLogPos ) < 700f ) )
 		{
 			if ( log.DebugAxisUpDot() > 0.35f )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog too vertical upDot={log.DebugAxisUpDot():F2} center={log.LogCenter}" );
+				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log too vertical upDot={log.DebugAxisUpDot():F2} center={log.LogCenter}" );
 				Finish();
 				return;
 			}
 			float clearance = log.DebugMinGroundClearance();
 			if ( clearance < -2f )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog penetrates terrain clearance={clearance:F1}u center={log.LogCenter}" );
+				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log penetrates terrain clearance={clearance:F1}u center={log.LogCenter}" );
 				Finish();
 				return;
 			}
 			if ( log.Body.IsValid() && log.Body.Velocity.Length > 220f )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestSubLogSplit: sublog spawned too hot vel={log.Body.Velocity.Length:F1}u/s" );
+				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log spawned too hot vel={log.Body.Velocity.Length:F1}u/s" );
 				Finish();
 				return;
 			}
 		}
-		Log.Info( $"[TC_TEST] SUBLOG_SPLIT PASS  Normal parent log -> {subLogs} sublogs" );
-		ClearTestObjectsAround( _subLogPos, 900f );
+		Log.Info( $"[TC_TEST] SPLIT_LOGS PASS  Normal parent log -> {splitLogs} smaller logs" );
+		ClearTestObjectsAround( _splitLogPos, 900f );
 		Transition( Phase.TestWoodPickup );
 	}
 
@@ -1629,10 +1641,10 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( Tunables.TreeKindSubLogCount.Length != 4 || Tunables.TreeKindSubLogHP.Length != 4
+		if ( Tunables.TreeKindSplitLogCount.Length != 4 || Tunables.TreeKindSplitLogHP.Length != 4
 			|| Tunables.TreeKindLogLengthMul.Length != 4 || Tunables.TreeKindLogWidthMul.Length != 4 )
 		{
-			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: log/sublog kind arrays must have 4 entries" );
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: log/split-log kind arrays must have 4 entries" );
 			Finish();
 			return;
 		}

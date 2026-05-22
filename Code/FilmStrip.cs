@@ -346,9 +346,9 @@ public sealed class FilmStrip : Component
 		Transition( FilmPhase.ChopTrunk );
 	}
 
-	// Chop le landed trunk jusqu'à ce que SplitIntoLogs détruise la Tree —
-	// les items spawnent direct (Valheim TreeLog.Destroy pattern), pas de
-	// sub-log intermediate à chopper. Transition direct vers Pickup.
+	// Chop le landed trunk jusqu'à ce que SplitIntoLogs détruise la Tree :
+	// le split donne soit des smaller landed logs, soit des items directs
+	// (Valheim TreeLog.Destroy pattern). Pickup quand il ne reste plus de log.
 	private void TickChopTrunk()
 	{
 		if ( !_targetLog.IsValid() )
@@ -359,7 +359,7 @@ public sealed class FilmStrip : Component
 			{
 				_targetLog = nextLog;
 				_lastReSwing = 0.999f;
-				Log.Info( "[TC_FILM] trunk split -> sub-log phase" );
+				Log.Info( "[TC_FILM] trunk split -> smaller-log phase" );
 				return;
 			}
 			Log.Info( "[TC_FILM] trunk split → pickup phase" );

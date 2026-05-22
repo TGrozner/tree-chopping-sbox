@@ -1305,7 +1305,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	}
 
 	// Valheim TreeLog.Destroy : Ã  HP=0 du landed log, drop directement les
-	// items via DropTable, pas de sub-log intermediate. Items distribuÃ©s le
+	// items via DropTable, ou via smaller landed logs. Items distribuÃ©s le
 	// long de l'axe du tronc avec offset random (m_spawnDistance).
 	// Pick a WoodType from a probability mix [Wood, Finewood, CoreWood].
 	// Mix probs must sum to ~1.0. Valheim DropTable weighted random pattern
