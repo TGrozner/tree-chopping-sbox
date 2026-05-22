@@ -53,14 +53,14 @@ public sealed class ShopStation : Component
 		go.WorldPosition = pos;
 		var station = go.AddComponent<ShopStation>();
 		station.Kind = kind;
-		BuildGroundRing( scene, go, station.RingTint );
+		station.Radius = kind == StationKind.Sell ? 230f : 160f;
+		BuildGroundRing( scene, go, station.RingTint, station.Radius );
 		return station;
 	}
 
-	private static void BuildGroundRing( Scene scene, GameObject parent, Color tint )
+	private static void BuildGroundRing( Scene scene, GameObject parent, Color tint, float radius )
 	{
 		const int Segments = 24;
-		const float Radius = 160f;
 		const float Thickness = 10f;
 		const float LengthMul = 0.95f;
 		for ( int i = 0; i < Segments; i++ )
@@ -69,9 +69,9 @@ public sealed class ShopStation : Component
 			var seg = scene.CreateObject();
 			seg.Name = "StationRingSegment";
 			seg.SetParent( parent );
-			seg.LocalPosition = new Vector3( MathF.Cos( a ) * Radius, MathF.Sin( a ) * Radius, -58f );
+			seg.LocalPosition = new Vector3( MathF.Cos( a ) * radius, MathF.Sin( a ) * radius, -58f );
 			seg.LocalRotation = Rotation.FromYaw( a * 180f / MathF.PI + 90f );
-			seg.LocalScale = new Vector3( (MathF.PI * 2f * Radius / Segments) * LengthMul, Thickness, 3f ) / Tunables.CubeBase;
+			seg.LocalScale = new Vector3( (MathF.PI * 2f * radius / Segments) * LengthMul, Thickness, 3f ) / Tunables.CubeBase;
 			Mat.AddTintedCube( seg, tint.WithAlpha( 0.78f ) );
 		}
 	}
