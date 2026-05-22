@@ -125,7 +125,9 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 
 `Phase` + `Elapsed` + `WoodAtFinish` + `SwingsFired` exposed en `[Property, ReadOnly]` pour polling via bridge. `GameState.Save` skip quand FilmStrip est actif → la save user n'est jamais nukée par le `ResetForTest`.
 
-**Côté orchestrateur (Codex dans une session avec sbox-dev ouvert)** — procédure standard :
+**Chemin recommandé (validé 2026-05-22)** : `tools\capture-feel.ps1 -TargetKind Normal -AudioLog` pilote le bridge, capture des frames, génère `feel.mp4`, `contact-sheet.jpg`, `events.log`, puis permet de lire les PNG/contact sheet directement. Utilise ça en priorité pour les passes Valheim-feel ; le loop MCP manuel reste le fallback si le script casse.
+
+**Côté orchestrateur manuel (Codex dans une session avec sbox-dev ouvert)** — procédure standard :
 1. `mcp__sbox__get_bridge_status` → `connected:true`
 2. `mcp__sbox__is_playing` ; si false → `mcp__sbox__start_play`
 3. `mcp__sbox__get_scene_hierarchy` → repère le GameObject `FilmStrip`
