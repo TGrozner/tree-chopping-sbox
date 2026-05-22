@@ -267,11 +267,8 @@ public sealed class AxeController : Component
 		// Pitch swing sound varies par chain level pour audio feedback (level 0
 		// "ah", level 1 "uhh", level 2 "HEH" — hint sonore que le combo monte).
 		float swingPitchMul = 1f + 0.10f * ChainLevel;
-		var swingPos = Camera.IsValid()
-			? Camera.WorldPosition
-			: WorldPosition + Vector3.Up * Tunables.PlayerEyeHeight;
-		Sfx.Play( "sounds/swing.sound", swingPos,
-			volume: 1.00f, pitchMin: 1.28f * swingPitchMul, pitchMax: 1.52f * swingPitchMul );
+		Sfx.PlayLocal( "sounds/swing.sound",
+			volume: 1.25f, pitchMin: 1.28f * swingPitchMul, pitchMax: 1.52f * swingPitchMul );
 	}
 
 	private void TickWindUp()
@@ -332,8 +329,8 @@ public sealed class AxeController : Component
 		else
 		{
 			_fovOffset += Tunables.SwingFovPunch * 0.25f;
-			Sfx.Play( "sounds/swing.sound", origin + forward * 70f,
-				volume: 0.38f, pitchMin: 1.55f, pitchMax: 1.85f );
+			Sfx.PlayLocal( "sounds/swing.sound",
+				volume: 0.80f, pitchMin: 1.55f, pitchMax: 1.85f );
 		}
 
 		_phase = SwingPhase.Recovery;
@@ -373,8 +370,8 @@ public sealed class AxeController : Component
 		// Per-kind pitch mul: Sapling high crackle, Veteran deep thunk.
 		float kindPitch = pitchShift * chopPitchMul;
 		float logPitch = isLogHit ? 0.82f : 1f;
-		Sfx.Play( "sounds/axe_hit_wood.sound", contactPoint, volume: (isLogHit ? 1.55f : 1.42f) * vol, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
-		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: (isLogHit ? 0.68f : 0.56f) * vol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
+		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: (isLogHit ? 1.85f : 1.70f) * vol, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
+		Sfx.PlayLocal( "sounds/chop_wood.sound", volume: (isLogHit ? 0.95f : 0.82f) * vol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
 		if ( heavyHit )
 		{
 			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.18f * vol, pitchMin: 1.25f * kindPitch, pitchMax: 1.45f * kindPitch );

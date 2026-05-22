@@ -36,6 +36,38 @@ public static class Sfx
 		catch { }
 	}
 
+	public static void PlayLocal( string path, float volume = 1f, float pitchMin = 0.95f, float pitchMax = 1.05f )
+	{
+		try
+		{
+			var h = Sound.Play( path );
+			float actualPitch = 1f;
+			if ( h is not null )
+			{
+				h.Volume = volume;
+				if ( pitchMax > pitchMin )
+				{
+					actualPitch = Game.Random.Float( pitchMin, pitchMax );
+					h.Pitch = actualPitch;
+				}
+			}
+			if ( DebugLog )
+			{
+				string line = $"{Time.Now:F3}\t{path}\tLOCAL\tvol={volume:F2}\tpitch=[{pitchMin:F2}..{pitchMax:F2}]->{actualPitch:F2}";
+				Log.Info( $"[TC_SFX] {line}" );
+				try
+				{
+					string existing = FileSystem.Data.FileExists( LogFile )
+						? FileSystem.Data.ReadAllText( LogFile )
+						: "# audio_log - Sfx.Play events\n";
+					FileSystem.Data.WriteAllText( LogFile, existing + line + "\n" );
+				}
+				catch { }
+			}
+		}
+		catch { }
+	}
+
 	public static void ClearAudioLog()
 	{
 		try { FileSystem.Data.WriteAllText( LogFile, "# audio_log - Sfx.Play events\n" ); }
