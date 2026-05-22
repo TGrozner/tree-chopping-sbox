@@ -1096,7 +1096,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// feuilles arrachÃ©es. Couleur _canopyTint (per-kind tint prÃ©servÃ©).
 		// SFX : leaves_rustle (CC0 pack rustle01..10) added 2026-05-22 â€” Valheim
 		// Hit_Leaves equivalent qu'on n'avait pas en sound.
-		if ( _primaryCanopy.IsValid() && (float)_timeSinceLastLeafShed > 0.08f )
+		if ( _primaryCanopy.IsValid() && (float)_timeSinceLastLeafShed > 0.14f )
 		{
 			float angVel = Body.AngularVelocity.Length;
 			// Threshold 0.2 (was 0.5) car Veteran starts at 0.385 (omega 0.55 Ã—
@@ -1112,7 +1112,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 					ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, shedDir.Normal, count, _canopyTint );
 					// Random rustle SFX trÃ¨s discret (vol scale par count) â€” too loud serait
 					// gÃªnant car fired ~12Ã—/s pendant la chute.
-					float rustleVol = (count / 6f).Clamp( 0.1f, 0.4f );
+					float rustleVol = (count / 6f).Clamp( 0.06f, 0.22f );
 					Sfx.Play( "sounds/leaves_rustle.sound", _primaryCanopy.WorldPosition,
 						volume: rustleVol, pitchMin: 0.85f, pitchMax: 1.15f );
 				}

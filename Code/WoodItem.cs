@@ -109,7 +109,7 @@ public sealed class WoodItem : Component
 		if ( !_magnetized && dist < Tunables.WoodItemMagnetRange )
 		{
 			_magnetized = true;
-			Sfx.Play( "sounds/wood_magnet.sound", WorldPosition, volume: 0.38f, pitchMin: 1.28f, pitchMax: 1.62f );
+			Sfx.Play( "sounds/wood_magnet.sound", WorldPosition, volume: 0.20f, pitchMin: 1.18f, pitchMax: 1.42f );
 			// Disable the rigidbody's gravity influence so the item flies in a
 			// straight line toward the player instead of arcing down.
 			if ( Body.IsValid() )
@@ -160,7 +160,7 @@ public sealed class WoodItem : Component
 			}
 			// Tiny "blip" pitch on consume for the satisfaction-tick feel.
 			Sfx.Play( "sounds/wood_pickup.sound", WorldPosition,
-				volume: 0.46f, pitchMin: 2.15f, pitchMax: 2.42f );
+				volume: 0.34f, pitchMin: 1.85f, pitchMax: 2.15f );
 			GameObject?.Destroy();
 		}
 	}

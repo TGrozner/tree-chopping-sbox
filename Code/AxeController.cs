@@ -354,7 +354,7 @@ public sealed class AxeController : Component
 		float kindPitch = pitchShift * chopPitchMul;
 		float logPitch = isLogHit ? 0.82f : 1f;
 		Sfx.Play( "sounds/axe_hit_wood.sound", contactPoint, volume: (isLogHit ? 1.35f : 1.20f) * vol, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
-		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: (isLogHit ? 0.48f : 0.36f) * vol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
+		Sfx.Play( "sounds/chop_wood.sound", contactPoint, volume: (isLogHit ? 0.58f : 0.44f) * vol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
 		if ( heavyHit )
 		{
 			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.35f * vol, pitchMin: 1.25f * kindPitch, pitchMax: 1.45f * kindPitch );
