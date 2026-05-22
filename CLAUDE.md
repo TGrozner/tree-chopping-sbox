@@ -24,7 +24,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 
 7. **`SetCursorPos` dans le viewport Play envoie de l'`Input.AnalogLook`** — chaque move souris pivote la caméra. Donc "click puis screenshot stable" ne marche pas, le click déplace d'abord le curseur. Privilégier le headless selftest pour valider la logique. GUI screenshot ([[sbox-screenshot-runtime]]) seulement quand il faut des pixels.
 
-8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le player les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` flippe la valeur à `true` quand `ChopsRemaining` tombe à 0 (multi-chop). **Conséquence directe : un tronc qui tombe ne peut PAS knock down ses voisins debout par collision physique** (target kinematic ne se déplace pas). Le domino "Valheim-style" actuellement annoncé en commentaire dans `Tree.cs` n'existe pas dans le code — Phase 8 ajoute un wake scripté (`OnCollisionStart` sur le tronc qui tombe → force `StartFell` sur le voisin debout, direction = direction de l'impact). Garde le kinematic-standing, ajoute la chaîne au-dessus.
+8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le player les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` flippe la valeur à `true` quand `ChopsRemaining` tombe à 0 (multi-chop). Les voisins debout restent donc kinematic, et la cascade Valheim passe par `Tree.OnCollisionStart` + `ApplyImpactDamage` : vitesse d'impact → damage → shake/fell/split. Garde le kinematic-standing, ne reviens pas à une propagation physique pure.
 
 9. **Un test qui prend un raccourci passe pendant que le chemin réel est cassé.** Le premier SelfTest appelait `Tree.Chop()` direct et a caché 2 bugs prod (`GetAllComponents<Component>` retournant 0, `Tree.IChoppable.IsValid` excluant les landed logs). Chaque phase de selftest DOIT exercer au moins un code path joueur réel — `AxeController.DebugSwing → ChooseSwingTarget → Chop`, pas `Chop()` direct. **Corollaire TDD : quand tu ajoutes un nouveau pipeline runtime, écris d'abord la phase de selftest qui DOIT échouer sans ton impl, puis ajoute l'impl. Si la phase passe avant que tu codes l'impl, elle ne teste rien.**
 
@@ -192,8 +192,6 @@ SceneStarter.OnStart()
  │                    ├─ keepout central + SpawnPadRadius autour du shop
  │                    ├─ raycast au sol pour foot Z (terrain contour)
  │                    └─ Tree.SpawnAt(scene, pos, biomeDifficulty)
- ├─ SpawnGateAtBoundary(1200u) : 4 Tree.SpawnGate aux cardinaux NSEW (Tree.IsGate=true,
- │   ChopsRemaining = 20 × 1.5^GatesBroken, cross-beams perpendiculaires au radial)
  └─ SpawnPet(player) : Pet GameObject orbite le player (auto-sync avec GameState.PetTier)
 
 Player loop (Sandbox.PlayerController + AxeController) :
@@ -248,11 +246,10 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
     │   └─ Banked → ShowWoodPickupToast + "blip" SFX + destroy
     └─ WoodItemDespawnDelay timeout pour cleanup si abandonné
 
-  **Cascade domino** : ❌ ABSENT du code malgré le commentaire dans Tree.cs.
-    Standing trees = MotionEnabled=false → un tronc qui tombe les heurte sans effet.
-    Phase 8 ajoute un wake scripté (OnCollisionStart sur le tronc en fall → StartFell
-    forcé sur le voisin debout, direction = impact direction). Pas de propagation
-    physique pure (casserait gotcha #8).
+  **Cascade domino** : implémentée via `Tree.OnCollisionStart` + `ApplyImpactDamage`.
+    Standing trees = MotionEnabled=false jusqu'à `StartFell`, donc un tronc qui tombe
+    ne pousse pas réellement le voisin debout : il lui applique un damage scalé par
+    vitesse d'impact façon Valheim ImpactEffect, puis le voisin shake/fell/split selon HP.
 
 Économie deux-pool (Wood vs BackpackWood) :
   BackpackWood = ramassé sur le terrain, cappé par BackpackCapacity[BackpackTier].
@@ -270,7 +267,7 @@ Shop / progression (GameState + ShopStation) :
     ├─ ToolRangeTier / ToolSpeedTier : 0..N (per-tool sub-stats appliquées
     │   par AxeController au swing path — range et recovery speed)
     ├─ PetTier : 0..5 (cosmetic companion, no gameplay effect)
-    ├─ Spirits + GatesBroken : prestige + ring-unlock counters
+    ├─ Spirits : prestige permanent multiplier
     ├─ ChopPower = AxeTierChopPower[axe] + PowerBonus[power]
     ├─ WoodMultiplier = AxeTierWoodMul[axe] × (1 + 0.01·Spirits) (appliqué au
     │   pickup d'un WoodItem, pas au fell)

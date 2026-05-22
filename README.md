@@ -9,13 +9,13 @@ Multiplayer s&box (Source 2 + C#/.NET, up to 4 players). Pas de score, pas de ru
 1. Tu spawn sur un plateau au sommet d'une montagne. Le totem doré + le shop disk sont sous tes pieds.
 2. Tu descends la pente. Forêt biome-biased autour : saplings (1 chop) près du shop, veterans (8 chops) au bord.
 3. Click gauche = swing. Chop multiple selon le tier (T0=1 → T6=20 chops par swing).
-4. Tree fells, le trunk roule, paye du bois (Sapling 1, Normal 3, Veteran 8, Brittle 2, Mythic +12). Forêt respawn auto (Sapling 30s → Veteran 5min).
-5. R = téléport au shop. Au shop : E = auto-buy cheapest · Slot1-6 = manuel sur les 6 axes (Axe / Speed / Luck / Power / Pet / Replant).
-6. Boundary ring : 4 dark-red gates aux cardinaux. Casse-en un (20 → 30 → 45 chops chaque tier) → ouvre la prochaine bande de forêt.
-7. Long-term : 500 lifetime wood → Replant prestige. Gain `√(woodEarned/50)` Sapling Spirits = +1% wood perma chacun. Reset tier + ring.
-8. Wood + tiers + spirits persistent dans `progress_{steamId}.json` (`FileSystem.Data`, per-user clé en MP).
+4. Tree fells, le trunk roule, devient un landed log, puis se rechoppe pour split en WoodItems pickables. Le backpack se vend ensuite à la station SELL.
+5. R = téléport au shop. Stations visibles : Tools / Sell / Upgrades / Prestige. SELL flush le backpack vers le wallet.
+6. La première couronne de saplings est dense façon mow-the-lawn ; plus loin, la forêt devient biome-biased avec saplings proches et veterans au bord.
+7. Long-term : 500 lifetime wood → Replant prestige. Gain `√(woodEarned/50)` Sapling Spirits = +1% wood perma chacun. Reset des tiers de run.
+8. Wood + wood types + tiers + spirits persistent dans `progress.json` (`FileSystem.Data`, local profile actuel).
 
-Trees tombent en physique naturelle — un trunk qui tombe peut bumper un voisin debout (Valheim soft cascade). Pas de CascadeStrike scripté.
+Trees tombent en physique, mais les voisins debout restent kinematic jusqu'à être wake par un ImpactEffect scripté façon Valheim : vitesse d'impact → damage → fell/split si HP tombe à 0.
 
 ## Run
 
@@ -38,13 +38,13 @@ dotnet build Code/tree_chopping.csproj
 | `Code/SceneStarter.cs` | Bootstrap : singletons, terrain procédural, mountain borders, player spawn, forêt biome-biased, hub/shop stations |
 | `Code/Tree.cs` | Multi-chop + StartFell + landed-log split + wood item drops. Biome-biased Kind picker (Easy/Hard weight blend by distance to spawn) |
 | `Code/AxeController.cs` | Swing state machine (Idle → WindUp → Recovery), hit-stop, FOV punch, axe wired to hand_R |
-| `Code/GameState.cs` | Persistence (FileSystem.Data/progress_{steamId}.json) : Wood, AxeTier 0..6, Speed/Luck/Power tiers 0..5, PetTier 0..5, Spirits + TotalWoodEarned (prestige), GatesBroken (ring unlock). Derived : ChopPower, WoodMultiplier, SpeedMultiplier, LuckChance |
+| `Code/GameState.cs` | Persistence (FileSystem.Data/progress.json) : Wood/Finewood/CoreWood wallets + backpack, AxeTier 0..6, Speed/Luck/Power tiers 0..5, PetTier 0..5, Spirits + TotalWoodEarned (prestige). Derived : ChopPower, WoodMultiplier, SpeedMultiplier, LuckChance |
 | `Code/ShopStation.cs` | Stations Tools / Sell / Upgrades / Prestige autour du hub |
 | `Code/WoodItem.cs` | Items bois pickables, magnet de proximité, backpack |
 | `Code/WoodHud.cs` | HUD immediate-mode (crosshair, wood balance pulse, axe tier badge, shop hint, teleport hint) |
 | `Code/AutoPlay.cs` | Autonomous chop-loop in-forest driver (Active=true via MCP bridge). Teleporte le player vers le tree le plus proche, swing until fell, repeat |
 | `Code/PerfProbe.cs` | Rolling-window FPS + renderer/tree counts via `[Property, ReadOnly]`. Lisible par MCP bridge sans toucher au HUD debug |
-| `Code/SelfTest.cs` | Headless harness phases : Init → Approach → Swing → Verify(Wood>0). Wait-on-condition, pas time-based |
+| `Code/SelfTest.cs` | Headless harness phases : player swing path, spawn distribution, stump/respawn, split, pickup/sell, cascade, too-hard, stats, prestige. Wait-on-condition, pas time-based |
 | `Code/TerrainHeightmap.cs` | Procedural cone + 3-octave FBM noise terrain (Sandbox.Terrain), MaterialOverride sur `materials/ground.vmat` |
 | `Code/MapBorders.cs` | Ring de mountain segments tagged "border" (pas "ground") au-delà de la forêt |
 | `Code/ChipBurst.cs` | Chips/leaves/splinters custom-physics (no Rigidbody — pattern dans memory `sbox-particle-rigidbody-trap`) |

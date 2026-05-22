@@ -3,9 +3,9 @@ namespace TreeChopping;
 public enum TreeKind { Normal, Sapling, Veteran, Brittle }
 
 // Mow-the-lawn style tree : multiple chops required (per kind), falls
-// physically when HP drops to 0, drops wood into the GameState. No cascade
-// strikes coded â€” neighbors only get pushed by natural rigidbody collisions
-// (Valheim-style "soft" cascade : a falling trunk bumps a small one).
+// physically when HP drops to 0, becomes a landed log, then splits into
+// WoodItems. Falling trunks use Valheim-style ImpactEffect damage to wake or
+// split other trees/logs while standing trees stay kinematic until felled.
 public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 {
 	[Property] public Rigidbody Body { get; set; }

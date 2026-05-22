@@ -7,7 +7,7 @@
 #   1. Phase contract — chaque phase emit [TC_TEST] PHASE_OK <name>.
 #   2. FAIL markers — toute ligne [TC_TEST] *FAIL* ou [TC_INV] FAIL.
 #   3. Exception watchdog — Exception/FATAL/Unhandled hors allowlist.
-#   4. PASS count — 1 ([TC_TEST] PASS au Verify).
+#   4. PASS count — au moins 1 marker [TC_TEST] *PASS*.
 
 [CmdletBinding()]
 param(
@@ -24,7 +24,31 @@ $ErrorActionPreference = "Stop"
 if ( -not (Test-Path $Sbox) )    { Write-Error "sbox-server.exe missing at $Sbox"; exit 2 }
 if ( -not (Test-Path $Project) ) { Write-Error "sbproj missing at $Project"; exit 2 }
 
-$expectedPhases = @( 'Init', 'Approach', 'Swing', 'Verify', 'TestStats', 'TestPrestige' )
+function Get-ExpectedPhases {
+    $repoRoot = Split-Path $PSScriptRoot -Parent
+    $selfTestPath = Join-Path $repoRoot "Code\SelfTest.cs"
+    if ( Test-Path $selfTestPath ) {
+        $text = Get-Content $selfTestPath -Raw
+        $match = [regex]::Match( $text, 'enum\s+Phase\s*\{(?<body>.*?)\}', [System.Text.RegularExpressions.RegexOptions]::Singleline )
+        if ( $match.Success ) {
+            $phases = @( $match.Groups['body'].Value -split ',' | ForEach-Object {
+                ($_ -replace '//.*$', '').Trim()
+            } | Where-Object { $_ -and $_ -ne 'Done' } )
+            if ( $phases.Count -gt 0 ) { return $phases }
+        }
+    }
+
+    @( 'Init', 'TestSpawnDistribution', 'Approach', 'Swing', 'Verify',
+        'TestStump', 'TestSplit', 'TestBonusDrop', 'TestWoodPickup', 'TestPhysicsAutoSplit', 'TestStumpRespawn', 'TestCascadeDamage', 'TestCascadeCollision',
+        'TestAxeTierGate', 'TestChopPowerScaling', 'TestImpactBelowMin', 'TestImpactZeroNoOp',
+        'TestBackpackFull', 'TestSellFlush', 'TestSellStationEntry', 'TestPrestigeFormula', 'TestFallingImpactSplit', 'TestComboFinalDamage', 'TestMultiWoodTypes',
+        'TestStatCounters', 'TestWoodCuttingLevel', 'TestPickupStackMerge', 'TestEnvWindSanity', 'TestStrictTooHard', 'TestTunablesValheimSanity',
+        'TestImpactDamageScaling', 'TestWindDirRotation', 'TestRespawnJitterRange', 'TestWoodTypeDistribution', 'TestTreeShakeReset', 'TestCascadeShakeNoFell',
+        'TestRollingLogsDamping', 'TestEnvWindDeterministic', 'TestWoodTypeMixSumsAll', 'TestHitDataDamage',
+        'TestStats', 'TestPrestige' )
+}
+
+$expectedPhases = Get-ExpectedPhases
 $expectedPassCount = 1
 
 $stderrNoiseAllowlist = @(
@@ -133,7 +157,7 @@ function Test-SelftestIteration {
     $exceptionLines = @( $stderr | Where-Object { $_ -notmatch $allowRegex } |
         Where-Object { $_ -match 'Exception|Unhandled|FATAL|StackTrace|System\.NullReferenceException|InvalidOperationException' } )
 
-    $passCount = @( $tcLines | Where-Object { $_ -match '\[TC_TEST\] PASS' } ).Count
+    $passCount = @( $tcLines | Where-Object { $_ -match '\[TC_TEST\].*PASS' } ).Count
 
     $elapsed = if ( $Proc.DoneAt ) { ($Proc.DoneAt - $Proc.Started).TotalSeconds } else { -1 }
 

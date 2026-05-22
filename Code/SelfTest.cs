@@ -1,13 +1,8 @@
 namespace TreeChopping;
 
-// Headless test of the mow-the-lawn loop. Phases :
-//   Init           — locate player + tree + game state
-//   Approach       — park player in front of a target tree
-//   Swing          — call DebugSwingVerbose until target tree fells
-//   Verify         — assert : GameState.Wood increased, target tree felled
-//   TestStats      — assert : TryUpgradeSpeed pays wood + bumps tier
-//   TestPrestige   — assert : prestige formula + tier reset + lifetime kept
-//   Done
+// Headless test of the mow-the-lawn loop. The PowerShell harness derives its
+// phase contract from the enum below, so adding a phase here automatically
+// makes it mandatory in tools/selftest.ps1.
 //
 // ConVar tc_selftest=1 to enable. PowerShell harness greps [TC_TEST] markers.
 public sealed class SelfTest : Component

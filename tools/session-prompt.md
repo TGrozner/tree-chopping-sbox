@@ -36,12 +36,12 @@ Je suis Thomas. Projet : **mow-the-lawn-like dans s&box** (Source 2 + C#/.NET). 
 - **`SceneStarter.cs`** : bootstrap (singletons, terrain, mountain borders, player, shop+totem, forêt initiale, 4 gates, pet)
 - **`Tree.cs`** : multi-chop → StartFell → fall-physics → BecomeLandedLog → split landed log → WoodItem drops. Branche IsGate → SceneStarter.OnGateBroken pour ring expansion. Auto-respawn par kind (Sapling 30s..Veteran 5min..Mythic +10min)
 - **`AxeController.cs`** : Idle → WindUp → Recovery state machine, hit-stop, FOV punch, applique GameState.SpeedMultiplier sur PlayerController.WalkSpeed, AerialView toggle pour top-down screenshot
-- **`GameState.cs`** : Wood + AxeTier (0..6) + Speed/Luck/Power tiers (0..5) + PetTier (0..5) + Spirits + GatesBroken + TotalWoodEarned persistence (FileSystem.Data/progress_{steamId}.json — per-user clé en MP)
+- **`GameState.cs`** : wallets Wood/Finewood/CoreWood + backpack, AxeTier (0..6), Speed/Luck/Power tiers (0..5), PetTier (0..5), Spirits + TotalWoodEarned persistence (FileSystem.Data/progress.json — local profile actuel)
 - **`ShopStation.cs`** : stations Tools / Sell / Upgrades / Prestige, inputs contextualisés, sell backpack → wallet
 - **`WoodItem.cs`** : items bois pickables, magnet de proximité, backpack
 - **`WoodHud.cs`** : wood pulse + axe tier badge avec nom (Hands→Chainsaw) + 7 pips + 6-line shop menu + replant line + teleport hint
 - **`AutoPlay.cs`** : autonomous full-loop driver (chop → shop → upgrade → repeat) + LookBack one-shot
-- **`SelfTest.cs`** : Init → Approach → Swing → Verify(Wood>0), wait-on-condition. GameState.Save short-circuits when active (no clobber)
+- **`SelfTest.cs`** : phase contract dérivé par `tools/selftest.ps1` depuis l'enum `Phase`; couvre swing réel, spawn distribution, stump/respawn, split, pickup/sell, cascade, too-hard, stats, prestige. GameState.Save short-circuits when active (no clobber)
 - **`TerrainHeightmap.cs`** : Sandbox.Terrain procédural + materials/ground.vmat tinted green
 - **`MapBorders.cs`** : ring de cubes tagged "border" warm earth tones
 - **`ChipBurst.cs`** : chips/leaves/splinters custom-physics (pas de Rigidbody — perf killer)
