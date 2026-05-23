@@ -158,13 +158,11 @@ public static class Tunables
 	// last hit damage × m_lastChainDamageMultiplier (=2) + pushForce ×1.2.
 	// Reset si timeSinceLastAttack > window OR chain at max. Pattern Attack.cs
 	// lignes 395-410 + 1094-1098.
-	// Note : Valheim utilise 0.2s window mais avec swing cycle ~0.3s. Nous on
-	// a SwingWindUpDuration 0.55 + Recovery 0.4 = ~0.95s par swing donc 0.2s
-	// rendrait le combo INACTIVABLE. 1.2s adapte la timing à notre cycle :
-	// click ~0.25s après recovery end = combo chained. Mécanique identique,
-	// constante ajustée. Mécanique = m_attackChainLevels + last×2.
+	// We keep Valheim's 0.2s constant, measured from recovery-ready time in
+	// AxeController so deliberate chained clicks work without stretching the
+	// authored Attack window.
 	public const int ChopComboMaxLevels = 3;
-	public const float ChopComboWindow = 1.2f;
+	public const float ChopComboWindow = 0.2f;
 	public const float ChopComboFinalDamageMul = 2.0f;
 	public const float ChopComboFinalPushMul = 1.2f;
 	public const float SwingMoveSpeedFactor = 0.20f;
@@ -243,10 +241,11 @@ public static class Tunables
 	// kind, modulé par luck + mythic à runtime).
 	public static readonly int[] LogChopHP                  = { 6, 3, 16, 6 };
 	public static readonly int[] TreeKindLandedDropCount    = { 4, 1, 9, 2 };
-	public static readonly int[] TreeKindSplitLogCount      = { 2, 0, 3, 0 };
+	public static readonly int[] TreeKindSplitLogCount      = { 2, 0, 2, 0 };
 	public static readonly int[] TreeKindSplitLogHP         = { 6, 0, 14, 0 };
-	public static readonly float[] TreeKindLogLengthMul     = { 0.34f, 0.42f, 0.30f, 0.34f };
+	public static readonly float[] TreeKindLogLengthMul     = { 0.78f, 0.82f, 0.72f, 0.76f };
 	public static readonly float[] TreeKindLogWidthMul      = { 0.58f, 0.64f, 0.52f, 0.55f };
+	public static readonly float[] TreeKindLogColliderWidthMul = { 0.94f, 0.90f, 0.96f, 0.92f };
 	public const float WoodItemPickupRange = 0.3f * UnitsPerMeter;
 	public const float WoodItemMagnetRange = 2f * UnitsPerMeter;
 	public const float WoodItemMagnetSpeed = 15f * UnitsPerMeter;
@@ -305,6 +304,8 @@ public static class Tunables
 		new( -0.10f * UnitsPerMeter, 0.06f * UnitsPerMeter, 7.16f * UnitsPerMeter ), // Veteran -> Oak1 log_spawnp
 		new( 0f, 0f, 4.20f * UnitsPerMeter ), // Brittle -> FirTree log_spawnp
 	};
+	public const float TreeLogSpawnGroundClearance = 6f;
+	public const float TreeLogSpawnMaxBottomClearance = 14f;
 	public static readonly float[] TreeKindBaseDropYOffset =
 	{
 		ValheimTreeBaseDropYOffsetHigh,
@@ -318,13 +319,25 @@ public static class Tunables
 	public const float ValheimTreeLogLinearDamping = 0.1f;
 	public const float ValheimTreeLogAngularDamping = 0.2f;
 	public const float LogGroundSkin = 5f;
+	public static readonly float[] TreeKindSplitLogLengthFrac = { 0.45f, 0f, 0.48f, 0f };
+	public static readonly float[] TreeKindSplitLogWidthFrac = { 0.62f, 0f, 0.64f, 0f };
+	public static readonly float[][] TreeKindSubLogPointFrac =
+	{
+		new float[] { -0.34f, 0.34f },
+		Array.Empty<float>(),
+		new float[] { -0.32f, 0.32f },
+		Array.Empty<float>(),
+	};
+	public const float SplitLogLengthFrac = 0.45f;
+	public const float SplitLogMaxParentLengthFrac = 0.50f;
+	public const float SplitLogWidthFrac = 0.62f;
 	public const float SplitLogAxisSpawnFrac = 0.34f;
 	public const float SplitLogSideSpawnMin = 18f;
 	public const float SplitLogSideSpawnMul = 0.75f;
 	public const float ValheimTreeLogMaxDepenetrationVelocity = 1f * UnitsPerMeter;
 	public const float SplitLogMaxSpawnValidationSpeed = 2f * UnitsPerMeter;
 	public const float SplitLogSpawnPoseSettleDuration = 1.0f;
-	public const float SplitLogMaxSpawnUpDot = 0.32f;
+	public const float SplitLogMaxSpawnUpDot = 0.80f;
 
 	// Per-kind multipliers. Launch physics stays Valheim-exact; variation
 	// belongs to audio and break thresholds, not scripted fall torque.
@@ -356,9 +369,6 @@ public static class Tunables
 	public const float TreeAngularDampLanded = ValheimTreeLogAngularDamping;
 	public const float TreeLinearDampLanded = ValheimTreeLogLinearDamping;
 	public const float TreeLogSleepThreshold = 0.05f;
-	public const float TreeLandedManualSleepDelay = 3.0f;
-	public const float TreeLandedManualSleepSpeed = 5.0f;
-	public const float TreeLandedManualSleepAngularSpeed = 0.18f;
 	public const float TreeLandedPostImpactLinearMul = 1.0f;
 	public const float TreeLandedPostImpactAngularMul = 1.0f;
 	public const float TreeLandedMaxSpeed = 160f;
@@ -366,15 +376,6 @@ public static class Tunables
 	public const float TreeLandedMaxVerticalSpeed = 44f;
 	public const float TreeGroundedLandingClearance = 14f;
 	public const int LogGroundProbeCount = 7;
-	public const float TreeGroundContactMemory = 0.45f;
-	public const float TreeGroundContactHorizontalDrag = 0.965f;
-	public const float TreeGroundContactAngularDrag = 0.970f;
-	public const float TreeGroundContactStickyHorizontalDrag = 0.90f;
-	public const float TreeGroundContactStickyAngularDrag = 0.92f;
-	public const float TreeGroundContactMaxUpSpeed = 5f;
-	public const float TreeGroundRollMinSpeed = 12f;
-	public const float TreeGroundRollCoupling = 0.16f;
-	public const float TreeGroundRollMaxAngularSpeed = 1.2f;
 	public const float TreePlayerBumpHorizontalMul = 0.18f;
 	public const float TreePlayerBumpAngularMul = 0.45f;
 	public const float TreePlayerBumpMaxUpSpeed = 2f;
@@ -407,6 +408,8 @@ public static class Tunables
 	// damageToSelf=false. Payload is chop=30 + blunt=50; tree/log modifiers
 	// make blunt immune, so effective damage is chop=30 -> /10 = 3.
 	public const int ValheimImpactToolTier = 2;
+	public const int ImpactChopDamage = 3;
+	public const int ImpactBluntDamage = 5;
 	public const float ValheimImpactMinVelocity = 1f * UnitsPerMeter;
 	public const float ValheimImpactMaxVelocity = 5f * UnitsPerMeter;
 	public const float ImpactMinSpeed = ValheimImpactMinVelocity;
@@ -414,7 +417,7 @@ public static class Tunables
 	public const float ImpactSoftMinSpeed = ValheimImpactMinVelocity;
 	public const float ImpactHardScale = 0.35f;
 	public const float ImpactViolentScale = 0.62f;
-	public const int ImpactBaseDamage = 3;
+	public const int ImpactBaseDamage = ImpactChopDamage;
 	public const float CascadeSweepInterval = ImpactInterval;
 	public const float CascadeSweepMinSpeed = ImpactMinSpeed;
 	public const float CascadeSweepRadius = 46f;
@@ -441,8 +444,8 @@ public static class Tunables
 	// turns the swing from a toggle into a gesture ; the hit-stop conveys weight.
 	// Cadence bumped 2026-05-21 to ~1s/chop (was ~0.63s) — matches the more
 	// pondered Valheim axe rhythm observed in Thomas's gameplay capture.
-	public const float SwingWindUpDuration = 0.55f;
-	public const float SwingRecoveryDuration = 0.40f;
+	public const float SwingWindUpDuration = 0.42f;
+	public const float SwingRecoveryDuration = 0.24f;
 	// Valheim Attack.m_freezeFrameDuration = 0.15s. Frame-counted so the
 	// duration isn't itself scaled by the freeze.
 	public const float HitstopTimeScale = 0f;

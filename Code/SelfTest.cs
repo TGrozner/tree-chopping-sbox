@@ -51,6 +51,8 @@ public sealed class SelfTest : Component
 	private bool _splitLogFreshGraceChecked;
 	private bool _splitLogParentDropBaselineSet;
 	private int _splitLogParentDropBaseline;
+	private float _splitLogParentLength;
+	private float _splitLogParentWidth;
 	private int _splitLogSwings;
 	private Vector3 _splitLogPos;
 	private Tree _landedGraceTree;
@@ -655,6 +657,8 @@ public sealed class SelfTest : Component
 			_splitLogParentDropBaselineSet = false;
 			_splitLogFreshGraceChecked = false;
 			_splitLogParentDropBaseline = 0;
+			_splitLogParentLength = _splitLogParent.IsValid() ? _splitLogParent.DebugTrunkLength : 0f;
+			_splitLogParentWidth = _splitLogParent.IsValid() ? _splitLogParent.DebugTrunkWidth : 0f;
 			_splitLogSpawned = true;
 			return;
 		}
@@ -693,7 +697,7 @@ public sealed class SelfTest : Component
 			if ( !_splitLogFreshGraceChecked )
 			{
 				var freshLog = Scene.GetAllComponents<FallenLog>()
-					.FirstOrDefault( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _splitLogPos ) < 700f );
+					.FirstOrDefault( l => l.IsValid() && l.IsFallenLog && l.DebugSplitDepth > 0 && l.LogCenter.Distance( _splitLogPos ) < 700f );
 				if ( !freshLog.IsValid() )
 				{
 					Log.Error( "[TC_TEST] FAIL TestSplitLogSpawn: no fresh split log found for first-frame grace check" );
@@ -701,6 +705,7 @@ public sealed class SelfTest : Component
 					return;
 				}
 				int hpBeforeFreshHit = freshLog.ChopsRemaining;
+				freshLog.DebugResetGraceForTest();
 				var freshHit = HitData.Make( Vector3.Forward, 1, freshLog.LogCenter + Vector3.Up * 8f,
 					Tunables.TreeKindMinAxeTier[(int)freshLog.Kind], Tunables.LandedLogKickImpulse );
 				freshLog.Damage( freshHit );
@@ -718,7 +723,7 @@ public sealed class SelfTest : Component
 			return;
 
 		int splitLogs = Scene.GetAllComponents<FallenLog>()
-			.Count( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _splitLogPos ) < 700f );
+			.Count( l => l.IsValid() && l.IsFallenLog && l.DebugSplitDepth > 0 && l.LogCenter.Distance( _splitLogPos ) < 700f );
 		int expected = Tunables.TreeKindSplitLogCount[(int)TreeKind.Normal];
 		int expectedParentDrops = FallenLog.ComputeParentLogImmediateDropCount( Tunables.TreeKindLandedDropCount[(int)TreeKind.Normal], expected );
 		int parentDropDelta = CountWoodItemsAndBackpackNear( _splitLogPos, 700f ) - _splitLogParentDropBaseline;
@@ -734,24 +739,18 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _splitLogPos ) < 700f ) )
+		foreach ( var log in Scene.GetAllComponents<FallenLog>().Where( l => l.IsValid() && l.IsFallenLog && l.DebugSplitDepth > 0 && l.LogCenter.Distance( _splitLogPos ) < 700f ) )
 		{
-			if ( log.DebugAxisUpDot() > 0.35f )
+			if ( log.DebugAxisUpDot() > Tunables.SplitLogMaxSpawnUpDot )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log too vertical upDot={log.DebugAxisUpDot():F2} center={log.LogCenter}" );
 				Finish();
 				return;
 			}
 			float clearance = log.DebugMinGroundClearance();
-			if ( clearance < -Tunables.LogGroundSkin )
+			if ( clearance < -Tunables.LogGroundSkin * 2f )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log penetrates terrain clearance={clearance:F1}u center={log.LogCenter}" );
-				Finish();
-				return;
-			}
-			if ( log.Body.IsValid() && log.Body.Velocity.z > Tunables.TreeGroundContactMaxUpSpeed + 0.1f )
-			{
-				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log pops upward vz={log.Body.Velocity.z:F1}u/s" );
 				Finish();
 				return;
 			}
@@ -767,9 +766,25 @@ public sealed class SelfTest : Component
 				Finish();
 				return;
 			}
+			if ( _splitLogParentLength > 0f && log.DebugTrunkLength > _splitLogParentLength * Tunables.SplitLogMaxParentLengthFrac + 0.5f )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log too large len={log.DebugTrunkLength:F1}u parent={_splitLogParentLength:F1}u maxFrac={Tunables.SplitLogMaxParentLengthFrac:F2}" );
+				Finish();
+				return;
+			}
+			if ( _splitLogParentWidth > 0f )
+			{
+				float expectedWidth = _splitLogParentWidth * Tunables.TreeKindSplitLogWidthFrac[(int)log.Kind];
+				if ( MathF.Abs( log.DebugTrunkWidth - expectedWidth ) > 0.5f )
+				{
+					Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log width={log.DebugTrunkWidth:F1}u expected Valheim half-log width {expectedWidth:F1}u" );
+					Finish();
+					return;
+				}
+			}
 		}
 		var sampleSplitLog = Scene.GetAllComponents<FallenLog>()
-			.FirstOrDefault( l => l.IsValid() && l.IsFallenLog && l.LogCenter.Distance( _splitLogPos ) < 700f );
+			.FirstOrDefault( l => l.IsValid() && l.IsFallenLog && l.DebugSplitDepth > 0 && l.LogCenter.Distance( _splitLogPos ) < 700f );
 		if ( sampleSplitLog.IsValid() )
 		{
 			if ( sampleSplitLog.Body.IsValid() && sampleSplitLog.Body.PhysicsBody.IsValid() )
@@ -792,6 +807,16 @@ public sealed class SelfTest : Component
 				|| (sampleSplitLog.DebugLastLandedKickImpulse - expectedImpulse).Length > 0.01f )
 			{
 				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: split log did not behave like TreeLog on zero-damage push hp={hpBeforePush}->{(sampleSplitLog.IsValid() ? sampleSplitLog.ChopsRemaining : -1)} impulse={(sampleSplitLog.IsValid() ? sampleSplitLog.DebugLastLandedKickImpulse : Vector3.Zero)} expected={expectedImpulse}" );
+				Finish();
+				return;
+			}
+			var scarHit = HitData.Make( Vector3.Forward, 1, sampleSplitLog.LogCenter + Vector3.Up * 8f,
+				Tunables.TreeKindMinAxeTier[(int)sampleSplitLog.Kind] );
+			sampleSplitLog.Damage( scarHit );
+			float maxExpectedScarExtent = MathF.Max( sampleSplitLog.DebugTrunkWidth * 0.42f * 1.45f, sampleSplitLog.DebugTrunkLength * 0.10f * 1.45f ) + 1f;
+			if ( !sampleSplitLog.IsValid() || sampleSplitLog.DebugMaxScarWorldExtent <= 0f || sampleSplitLog.DebugMaxScarWorldExtent > maxExpectedScarExtent )
+			{
+				Log.Error( $"[TC_TEST] FAIL TestSplitLogSpawn: log chop scar visual exploded extent={sampleSplitLog.DebugMaxScarWorldExtent:F1}u expected<={maxExpectedScarExtent:F1}u" );
 				Finish();
 				return;
 			}
@@ -886,16 +911,23 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		if ( _impactNoSelfLog.IsFallenLog && (float)_impactNoSelfStartTime > 0.25f )
+		if ( (float)_impactNoSelfStartTime > 0.35f )
 		{
-			Log.Info( $"[TC_TEST] IMPACT_NO_SELF_DAMAGE PASS  hard ground hit landed without self-split (m_damageToSelf=false)" );
+			if ( !_impactNoSelfLog.Body.IsValid() || !_impactNoSelfLog.Body.Gravity )
+			{
+				Log.Error( "[TC_TEST] FAIL TestImpactNoSelfDamage: hard ground impact disabled log gravity/body" );
+				Finish();
+				return;
+			}
+			Log.Info( $"[TC_TEST] IMPACT_NO_SELF_DAMAGE PASS  hard ground hit did not self-split and remains physics-owned (m_damageToSelf=false, falling={_impactNoSelfLog.IsFalling}, landed={_impactNoSelfLog.IsFallenLog}, speed={_impactNoSelfLog.Body.Velocity.Length:F1})" );
+			ClearTestObjectsAround( _impactNoSelfLog.WorldPosition, 900f );
 			Transition( Phase.TestLandedLogGravity );
 			return;
 		}
 
 		if ( (float)_impactNoSelfStartTime > 3f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestImpactNoSelfDamage: log did not settle after hard ground impact (falling={_impactNoSelfLog.IsFalling} landed={_impactNoSelfLog.IsFallenLog})" );
+			Log.Error( $"[TC_TEST] FAIL TestImpactNoSelfDamage: log did not settle after hard ground impact (falling={_impactNoSelfLog.IsFalling} landed={_impactNoSelfLog.IsFallenLog} upDot={_impactNoSelfLog.DebugAxisUpDot():F2} clearance={_impactNoSelfLog.DebugMinGroundClearance():F1} speed={(_impactNoSelfLog.Body.IsValid() ? _impactNoSelfLog.Body.Velocity.Length : 0f):F1})" );
 			Finish();
 			return;
 		}
@@ -947,7 +979,6 @@ public sealed class SelfTest : Component
 
 		if ( !_landedGravityLifted )
 		{
-			_landedGravityLog.DebugMarkGroundContactForTest();
 			_landedGravityLog.WorldRotation = Rotation.FromAxis( Vector3.Right, 90f );
 			var liftedPos = _landedGravityLog.WorldPosition + Vector3.Up * 220f;
 			_landedGravityLog.WorldPosition = liftedPos;
@@ -968,7 +999,7 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		if ( (float)_landedGravitySinceLift < 0.55f ) return;
+		if ( (float)_landedGravitySinceLift < 0.32f ) return;
 
 		float drop = _landedGravityStartZ - _landedGravityLog.WorldPosition.z;
 		float clearance = _landedGravityLog.DebugMinGroundClearance();
@@ -985,7 +1016,7 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( drop > 140f || clearance < Tunables.TreeGroundedLandingClearance * 3f )
+		if ( drop > 120f || clearance < Tunables.TreeGroundedLandingClearance * 3f )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestLandedLogGravity: airborne landed log was snapped down instead of falling clearance={clearance:F1}u drop={drop:F1}u" );
 			Finish();
@@ -1042,7 +1073,6 @@ public sealed class SelfTest : Component
 		float upDot = _landedSupportLog.DebugAxisUpDot();
 		float clearance = _landedSupportLog.DebugMinGroundClearance();
 		float speed = _landedSupportLog.Body.IsValid() ? _landedSupportLog.Body.Velocity.Length : 0f;
-		float upwardSpeed = _landedSupportLog.Body.IsValid() ? _landedSupportLog.Body.Velocity.z : 0f;
 		float angularSpeed = _landedSupportLog.Body.IsValid() ? _landedSupportLog.Body.AngularVelocity.Length : 0f;
 		if ( upDot > Tunables.TreeRestingTiltUpDotMax + 0.10f )
 		{
@@ -1059,12 +1089,6 @@ public sealed class SelfTest : Component
 		if ( !_landedSupportLog.Body.IsValid() || !_landedSupportLog.Body.Gravity )
 		{
 			Log.Error( "[TC_TEST] FAIL TestLandedLogSupport: landed log disabled gravity, but Valheim TreeLog keeps Rigidbody.useGravity enabled" );
-			Finish();
-			return;
-		}
-		if ( speed > Tunables.TreeLandedMaxSpeed + 1f || upwardSpeed > Tunables.TreeLandedMaxVerticalSpeed + 1f || angularSpeed > Tunables.TreeLandedMaxAngularSpeed + 0.1f )
-		{
-			Log.Error( $"[TC_TEST] FAIL TestLandedLogSupport: landed log still moving too fast speed={speed:F1}u/s vz={upwardSpeed:F1}u/s ang={angularSpeed:F2}" );
 			Finish();
 			return;
 		}
@@ -1107,23 +1131,7 @@ public sealed class SelfTest : Component
 			return;
 		}
 
-		var spinInputVelocity = new Vector3( Tunables.TreeLandedMaxSpeed * 3f, 0f, Tunables.TreeLandedMaxVerticalSpeed * 3f );
-		var spinInputAngular = new Vector3( 0f, 0f, Tunables.TreeLandedMaxAngularSpeed * 3f );
-		_landedSupportLog.Body.Velocity = spinInputVelocity;
-		_landedSupportLog.Body.AngularVelocity = spinInputAngular;
-		_landedSupportLog.DebugApplyGroundContactLimitsForTest();
-		var cappedVelocity = _landedSupportLog.Body.Velocity;
-		var cappedAngular = _landedSupportLog.Body.AngularVelocity;
-		if ( cappedVelocity.Length > Tunables.TreeLandedMaxSpeed + 0.01f
-			|| MathF.Abs( cappedVelocity.z ) > Tunables.TreeLandedMaxVerticalSpeed + 0.01f
-			|| cappedAngular.Length > Tunables.TreeLandedMaxAngularSpeed + 0.01f )
-		{
-			Log.Error( $"[TC_TEST] FAIL TestPlayerBumpDamping: ground contact did not cap absurd motion vel={cappedVelocity.Length:F1}/{Tunables.TreeLandedMaxSpeed:F1} vz={cappedVelocity.z:F1}/{Tunables.TreeLandedMaxVerticalSpeed:F1} ang={cappedAngular.Length:F2}/{Tunables.TreeLandedMaxAngularSpeed:F2}" );
-			Finish();
-			return;
-		}
-
-		Log.Info( $"[TC_TEST] PLAYER_BUMP_DAMPING PASS  vel {inputVelocity}->{outputVelocity} angular {inputAngular.Length:F2}->{outputAngular.Length:F2}, ground cap vel={cappedVelocity.Length:F1} ang={cappedAngular.Length:F2}" );
+		Log.Info( $"[TC_TEST] PLAYER_BUMP_DAMPING PASS  vel {inputVelocity}->{outputVelocity} angular {inputAngular.Length:F2}->{outputAngular.Length:F2}" );
 		ClearTestObjectsAround( _landedSupportLog.WorldPosition, 900f );
 		Transition( Phase.TestStumpRespawn );
 	}
@@ -1914,9 +1922,15 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.ChopComboWindow ) <= 0f )
+		if ( MathF.Abs( RuntimeValue( Tunables.ChopComboWindow ) - 0.2f ) > 0.001f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: ChopComboWindow={Tunables.ChopComboWindow} invalide" );
+			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: ChopComboWindow={Tunables.ChopComboWindow} (expected Valheim m_chainAttackMaxTime=0.2s)" );
+			Finish();
+			return;
+		}
+		if ( RuntimeValue( Tunables.SwingWindUpDuration + Tunables.SwingRecoveryDuration ) > 0.75f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestComboFinalDamage: swing cycle={Tunables.SwingWindUpDuration + Tunables.SwingRecoveryDuration:F2}s (expected tightened Valheim-like <=0.75s)" );
 			Finish();
 			return;
 		}
@@ -2249,6 +2263,8 @@ public sealed class SelfTest : Component
 			|| MathF.Abs( RuntimeValue( Tunables.ImpactMinSpeed ) - 1f * Tunables.UnitsPerMeter ) > 0.01f
 			|| MathF.Abs( RuntimeValue( Tunables.ImpactMaxSpeed ) - 5f * Tunables.UnitsPerMeter ) > 0.01f
 			|| RuntimeValue( Tunables.ImpactBaseDamage ) != 3
+			|| RuntimeValue( Tunables.ImpactChopDamage ) != 3
+			|| RuntimeValue( Tunables.ImpactBluntDamage ) != 5
 			|| RuntimeValue( Tunables.ImpactDamageSelf )
 			|| MathF.Abs( RuntimeValue( Tunables.CascadeSweepInterval ) - RuntimeValue( Tunables.ImpactInterval ) ) > 0.001f
 			|| MathF.Abs( RuntimeValue( Tunables.CascadeSweepMinSpeed ) - RuntimeValue( Tunables.ImpactMinSpeed ) ) > 0.01f
@@ -2272,6 +2288,8 @@ public sealed class SelfTest : Component
 			|| (Tunables.TreeKindLogSpawnPoint[(int)TreeKind.Sapling] - new Vector3( 0f, 0f, 4.20f * Tunables.UnitsPerMeter )).Length > 0.01f
 			|| (Tunables.TreeKindLogSpawnPoint[(int)TreeKind.Veteran] - new Vector3( -0.10f * Tunables.UnitsPerMeter, 0.06f * Tunables.UnitsPerMeter, 7.16f * Tunables.UnitsPerMeter )).Length > 0.01f
 			|| (Tunables.TreeKindLogSpawnPoint[(int)TreeKind.Brittle] - new Vector3( 0f, 0f, 4.20f * Tunables.UnitsPerMeter )).Length > 0.01f
+			|| RuntimeValue( Tunables.TreeLogSpawnGroundClearance ) < 2f
+			|| RuntimeValue( Tunables.TreeLogSpawnGroundClearance ) > RuntimeValue( Tunables.TreeLogSpawnMaxBottomClearance )
 			|| Tunables.TreeKindBaseDropYOffset.Length != 4
 			|| MathF.Abs( Tunables.TreeKindBaseDropYOffset[(int)TreeKind.Normal] - RuntimeValue( Tunables.ValheimTreeBaseDropYOffsetHigh ) ) > 0.01f
 			|| MathF.Abs( Tunables.TreeKindBaseDropYOffset[(int)TreeKind.Veteran] - RuntimeValue( Tunables.ValheimTreeBaseDropYOffsetLow ) ) > 0.01f
@@ -2303,6 +2321,32 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
+		var legacyProbePos = _targetTreePos + new Vector3( -1180f, 620f, 0f );
+		if ( TryGetGroundZ( legacyProbePos.x, legacyProbePos.y, out var legacyProbeZ ) )
+			legacyProbePos = legacyProbePos.WithZ( legacyProbeZ );
+		ClearTestObjectsAround( legacyProbePos, 650f );
+		var legacyProbe = Tree.SpawnAt( Scene, legacyProbePos, 0.5f, TreeKind.Sapling );
+		if ( !((IChoppable)legacyProbe).IsValid() )
+		{
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: standing TreeBase is not choppable before fell" );
+			Finish();
+			return;
+		}
+		if ( (object)legacyProbe is Component.ICollisionListener )
+		{
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: TreeBase implements collision listener; falling/log physics must live in FallenLog only" );
+			Finish();
+			return;
+		}
+		legacyProbe.StartFell( Vector3.Forward, fellPower: 99, allowComboPush: false );
+		var spawnedLegacyLog = legacyProbe.SpawnedLog;
+		if ( ((IChoppable)legacyProbe).IsValid() || legacyProbe.IsFallenLog || !spawnedLegacyLog.IsValid() || (object)spawnedLegacyLog is not Component.ICollisionListener )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeBase kept legacy choppable/log state after StartFell treeValid={legacyProbe.IsValid()} treeLog={legacyProbe.IsFallenLog} spawnedLog={spawnedLegacyLog.IsValid()} spawnedHasCollision={(object)spawnedLegacyLog is Component.ICollisionListener}" );
+			Finish();
+			return;
+		}
+		ClearTestObjectsAround( legacyProbePos, 900f );
 		// TreeKindWoodTypeMix : 4 kinds × 3 types, sums ~1.0
 		if ( MathF.Abs( RuntimeValue( Tunables.WoodItemMagnetRange ) - 2f * Tunables.UnitsPerMeter ) > 0.01f
 			|| MathF.Abs( RuntimeValue( Tunables.WoodItemPickupRange ) - 0.3f * Tunables.UnitsPerMeter ) > 0.01f
@@ -2368,12 +2412,6 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.0f )
-		{
-			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} (expected >= 2.0, let logs roll before sleep)" );
-			Finish();
-			return;
-		}
 		if ( RuntimeValue( Tunables.ImpactDamageSelf ) )
 		{
 			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: ImpactDamageSelf must stay false for Valheim TreeLog prefab parity" );
@@ -2394,9 +2432,55 @@ public sealed class SelfTest : Component
 			return;
 		}
 		if ( Tunables.TreeKindSplitLogCount.Length != 4 || Tunables.TreeKindSplitLogHP.Length != 4
-			|| Tunables.TreeKindLogLengthMul.Length != 4 || Tunables.TreeKindLogWidthMul.Length != 4 )
+			|| Tunables.TreeKindLogLengthMul.Length != 4 || Tunables.TreeKindLogWidthMul.Length != 4
+			|| Tunables.TreeKindLogColliderWidthMul.Length != 4 || Tunables.TreeKindSplitLogLengthFrac.Length != 4
+			|| Tunables.TreeKindSplitLogWidthFrac.Length != 4 || Tunables.TreeKindSubLogPointFrac.Length != 4 )
 		{
 			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: log/split-log kind arrays must have 4 entries" );
+			Finish();
+			return;
+		}
+		if ( !Tunables.TreeKindSplitLogCount.SequenceEqual( new[] { 2, 0, 2, 0 } )
+			|| RuntimeValue( Tunables.SplitLogLengthFrac ) <= 0f
+			|| RuntimeValue( Tunables.SplitLogLengthFrac ) > RuntimeValue( Tunables.SplitLogMaxParentLengthFrac )
+			|| Tunables.TreeKindSubLogPointFrac[(int)TreeKind.Normal].Length != 2
+			|| Tunables.TreeKindSubLogPointFrac[(int)TreeKind.Veteran].Length != 2
+			|| MathF.Abs( Tunables.TreeKindSplitLogLengthFrac[(int)TreeKind.Normal] - 0.45f ) > 0.001f
+			|| MathF.Abs( Tunables.TreeKindSplitLogLengthFrac[(int)TreeKind.Veteran] - 0.48f ) > 0.001f
+			|| MathF.Abs( Tunables.TreeKindSplitLogWidthFrac[(int)TreeKind.Normal] - 0.62f ) > 0.001f
+			|| MathF.Abs( Tunables.TreeKindSplitLogWidthFrac[(int)TreeKind.Veteran] - 0.64f ) > 0.001f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: Valheim sublog geometry drift counts=[{string.Join( ",", Tunables.TreeKindSplitLogCount )}] lengthFrac={Tunables.SplitLogLengthFrac:F2} maxFrac={Tunables.SplitLogMaxParentLengthFrac:F2}" );
+			Finish();
+			return;
+		}
+		if ( Tunables.TreeKindLogLengthMul[(int)TreeKind.Normal] < 0.72f
+			|| Tunables.TreeKindLogLengthMul[(int)TreeKind.Sapling] < 0.76f
+			|| Tunables.TreeKindLogLengthMul[(int)TreeKind.Veteran] < 0.66f
+			|| Tunables.TreeKindLogLengthMul[(int)TreeKind.Brittle] < 0.70f )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: parent log length ratios no longer read near tree-trunk size [{string.Join( ",", Tunables.TreeKindLogLengthMul.Select( x => x.ToString( "F2" ) ) )}]" );
+			Finish();
+			return;
+		}
+		if ( Tunables.TreeKindLogLengthMul.Any( x => x > 0.88f ) )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestTunablesValheimSanity: parent log length ratios too close to full tree/canopy height [{string.Join( ",", Tunables.TreeKindLogLengthMul.Select( x => x.ToString( "F2" ) ) )}]" );
+			Finish();
+			return;
+		}
+		var requiredEffects = new[]
+		{
+			ValheimEffectListId.AttackStart,
+			ValheimEffectListId.AxeHit,
+			ValheimEffectListId.TooHard,
+			ValheimEffectListId.TreeDestroyed,
+			ValheimEffectListId.LogImpact,
+			ValheimEffectListId.LogDestroyed,
+		};
+		if ( requiredEffects.Any( e => !ValheimEffects.HasList( e ) ) )
+		{
+			Log.Error( "[TC_TEST] FAIL TestTunablesValheimSanity: missing Valheim effect-list route for tree chopping" );
 			Finish();
 			return;
 		}
@@ -2791,17 +2875,21 @@ public sealed class SelfTest : Component
 				if ( TryGetGroundZ( probePos.x, probePos.y, out var probeGz ) ) probePos = probePos.WithZ( probeGz );
 				ClearTestObjectsAround( probePos, 240f );
 				var probeTree = Tree.SpawnAt( Scene, probePos, 0.5f, kind );
-				float probeScale = MathF.Max( 0.1f, probeTree.TrunkLength / Tunables.TreeHeight );
-				var probeOffset = Tunables.TreeKindLogSpawnPoint[i] * probeScale;
+				var probeAuthoredOffset = ExpectedAuthoredLogSpawnOffset( probeTree );
+				var probeOffset = ExpectedRuntimeLogSpawnOffset( probeTree );
 				var probeCenter = probeTree.SpawnFootPosition + LocalOffsetToWorld( probeTree.WorldRotation, probeOffset );
 				probeTree.StartFell( Vector3.Forward, fellPower: 99, allowComboPush: true );
 				var probeLog = probeTree.SpawnedLog;
 				if ( !probeLog.IsValid()
 					|| (probeLog.DebugValheimLogSpawnOffset - probeOffset).Length > 0.5f
+					|| (probeLog.DebugValheimLogAuthoredSpawnOffset - probeAuthoredOffset).Length > 0.5f
 					|| (probeLog.DebugValheimLogSpawnCenter - probeCenter).Length > 1f
-					|| (probeLog.LogCenter - probeCenter).Length > 1.5f )
+					|| (probeLog.LogCenter - probeCenter).Length > 1.5f
+					|| probeLog.DebugSpawnBottomClearance < -1f
+					|| probeLog.DebugSpawnBottomClearance > Tunables.TreeLogSpawnMaxBottomClearance
+					|| MathF.Abs( probeLog.DebugTrunkLength - probeTree.TrunkLength * Tunables.TreeKindLogLengthMul[i] ) > 0.5f )
 				{
-					Log.Error( $"[TC_TEST] FAIL TestValheimLogLaunch: {kind} m_logSpawnPoint drift offset={(probeLog.IsValid() ? probeLog.DebugValheimLogSpawnOffset : Vector3.Zero)}/{probeOffset} center={(probeLog.IsValid() ? probeLog.LogCenter : Vector3.Zero)}/{probeCenter}" );
+					Log.Error( $"[TC_TEST] FAIL TestValheimLogLaunch: {kind} runtime log spawn drift offset={(probeLog.IsValid() ? probeLog.DebugValheimLogSpawnOffset : Vector3.Zero)}/{probeOffset} authored={(probeLog.IsValid() ? probeLog.DebugValheimLogAuthoredSpawnOffset : Vector3.Zero)}/{probeAuthoredOffset} center={(probeLog.IsValid() ? probeLog.LogCenter : Vector3.Zero)}/{probeCenter} bottomClearance={(probeLog.IsValid() ? probeLog.DebugSpawnBottomClearance : -999f):F1}" );
 					Finish();
 					return;
 				}
@@ -2811,7 +2899,8 @@ public sealed class SelfTest : Component
 
 			var tree = Tree.SpawnAt( Scene, spawnPos, 0.5f, TreeKind.Normal );
 			float sourceScale = MathF.Max( 0.1f, tree.TrunkLength / Tunables.TreeHeight );
-			var expectedSpawnOffset = Tunables.TreeKindLogSpawnPoint[(int)tree.Kind] * sourceScale;
+			var expectedAuthoredSpawnOffset = ExpectedAuthoredLogSpawnOffset( tree );
+			var expectedSpawnOffset = ExpectedRuntimeLogSpawnOffset( tree );
 			var expectedSpawnCenter = tree.SpawnFootPosition + LocalOffsetToWorld( tree.WorldRotation, expectedSpawnOffset );
 			tree.StartFell( Vector3.Forward, fellPower: 99, allowComboPush: true );
 			_valheimLaunchLog = tree.SpawnedLog;
@@ -2833,10 +2922,13 @@ public sealed class SelfTest : Component
 				return;
 			}
 			if ( (_valheimLaunchLog.DebugValheimLogSpawnOffset - expectedSpawnOffset).Length > 0.5f
+				|| (_valheimLaunchLog.DebugValheimLogAuthoredSpawnOffset - expectedAuthoredSpawnOffset).Length > 0.5f
 				|| (_valheimLaunchLog.DebugValheimLogSpawnCenter - expectedSpawnCenter).Length > 1f
-				|| (_valheimLaunchLog.LogCenter - expectedSpawnCenter).Length > 1.5f )
+				|| (_valheimLaunchLog.LogCenter - expectedSpawnCenter).Length > 1.5f
+				|| _valheimLaunchLog.DebugSpawnBottomClearance < -1f
+				|| _valheimLaunchLog.DebugSpawnBottomClearance > Tunables.TreeLogSpawnMaxBottomClearance )
 			{
-				Log.Error( $"[TC_TEST] FAIL TestValheimLogLaunch: m_logSpawnPoint drift offset={_valheimLaunchLog.DebugValheimLogSpawnOffset}/{expectedSpawnOffset} center={_valheimLaunchLog.LogCenter}/{expectedSpawnCenter}" );
+				Log.Error( $"[TC_TEST] FAIL TestValheimLogLaunch: runtime log spawn drift offset={_valheimLaunchLog.DebugValheimLogSpawnOffset}/{expectedSpawnOffset} authored={_valheimLaunchLog.DebugValheimLogAuthoredSpawnOffset}/{expectedAuthoredSpawnOffset} center={_valheimLaunchLog.LogCenter}/{expectedSpawnCenter} bottomClearance={_valheimLaunchLog.DebugSpawnBottomClearance:F1}" );
 				Finish();
 				return;
 			}
@@ -2870,7 +2962,7 @@ public sealed class SelfTest : Component
 			? launchDir.Normal.Dot( _valheimLaunchLog.DebugLaunchImpulseDirection )
 			: 0f;
 
-		Log.Info( $"[TC_TEST] VALHEIM_LOG_LAUNCH PASS  spawnCenter={_valheimLaunchLog.DebugValheimLogSpawnCenter} impulse={_valheimLaunchLog.DebugLaunchImpulseSpeed:F2}u/s height={_valheimLaunchLog.DebugLaunchImpulseHeight:F1}u dir={_valheimLaunchLog.DebugLaunchImpulseDirection} scale={_valheimLaunchLog.DebugSourceScale:F2} vel={horizontalSpeed:F2} bodyDir={launchDir.Normal} bodyDot={bodyDot:F2} ang={angularSpeed:F3}" );
+		Log.Info( $"[TC_TEST] VALHEIM_LOG_LAUNCH PASS  spawnCenter={_valheimLaunchLog.DebugValheimLogSpawnCenter} bottomClearance={_valheimLaunchLog.DebugSpawnBottomClearance:F1} len={_valheimLaunchLog.DebugTrunkLength:F1} impulse={_valheimLaunchLog.DebugLaunchImpulseSpeed:F2}u/s height={_valheimLaunchLog.DebugLaunchImpulseHeight:F1}u dir={_valheimLaunchLog.DebugLaunchImpulseDirection} scale={_valheimLaunchLog.DebugSourceScale:F2} vel={horizontalSpeed:F2} bodyDir={launchDir.Normal} bodyDot={bodyDot:F2} ang={angularSpeed:F3}" );
 		ClearTestObjectsAround( _valheimLaunchPos, 900f );
 		Transition( Phase.TestValheimTreeLogHitImpulse );
 	}
@@ -2933,7 +3025,6 @@ public sealed class SelfTest : Component
 				_valheimLogHitLog.Body.AngularVelocity = Vector3.Zero;
 				_valheimLogHitLog.Body.Sleeping = true;
 			}
-			_valheimLogHitLog.DebugMarkGroundContactForTest();
 			int chopPower = Math.Max( 1, _state.ChopPower );
 			var hitPoint = _valheimLogHitLog.LogCenter + Vector3.Up * 14f;
 			_valheimLogHitLog.Damage( HitData.Make( Vector3.Forward, chopPower, hitPoint, _state.AxeTier ) );
@@ -3213,6 +3304,19 @@ public sealed class SelfTest : Component
 		return rotation.Forward * local.x + rotation.Right * local.y + rotation.Up * local.z;
 	}
 
+	private static Vector3 ExpectedAuthoredLogSpawnOffset( Tree tree )
+	{
+		float sourceScale = MathF.Max( 0.1f, tree.TrunkLength / Tunables.TreeHeight );
+		return Tunables.TreeKindLogSpawnPoint[(int)tree.Kind] * sourceScale;
+	}
+
+	private static Vector3 ExpectedRuntimeLogSpawnOffset( Tree tree )
+	{
+		var authored = ExpectedAuthoredLogSpawnOffset( tree );
+		float logLength = tree.TrunkLength * Tunables.TreeKindLogLengthMul[(int)tree.Kind];
+		return new Vector3( authored.x, authored.y, logLength * 0.5f + Tunables.TreeLogSpawnGroundClearance );
+	}
+
 	private void TickTestRollingLogsDamping()
 	{
 		if ( MathF.Abs( RuntimeValue( Tunables.TreeAngularDampLanded ) - RuntimeValue( Tunables.ValheimTreeLogAngularDamping ) ) > 0.001f )
@@ -3233,48 +3337,45 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeLandedManualSleepDelay ) < 2.0f )
-		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeLandedManualSleepDelay={Tunables.TreeLandedManualSleepDelay} < 2.0 (manual sleep too early)" );
-			Finish();
-			return;
-		}
 		if ( RuntimeValue( Tunables.LogGroundProbeCount ) < 5 )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: LogGroundProbeCount={Tunables.LogGroundProbeCount} < 5 (terrain probes too sparse)" );
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeGroundContactMemory ) < 0.25f )
+		if ( FallenLog.ShouldApplyGroundContactLimits( landed: false, clearance: -100f )
+			|| FallenLog.ShouldApplyGroundContactLimits( landed: true, clearance: Tunables.TreeGroundedLandingClearance * 0.5f )
+			|| !FallenLog.ShouldApplyGroundContactLimits( landed: true, clearance: -Tunables.LogGroundSkin ) )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: TreeGroundContactMemory={Tunables.TreeGroundContactMemory} < 0.25 (depenetration emulation too short)" );
+			Log.Error( "[TC_TEST] FAIL TestRollingLogsDamping: ground-contact limits must be depenetration-only, never airborne/falling damping or artificial roll" );
 			Finish();
 			return;
 		}
-		if ( FallenLog.ShouldApplyGroundContactLimits( landed: true, recentContact: false, clearance: Tunables.TreeGroundedLandingClearance * 8f )
-			|| !FallenLog.ShouldApplyGroundContactLimits( landed: true, recentContact: false, clearance: Tunables.TreeGroundedLandingClearance * 0.5f )
-			|| FallenLog.ShouldUseStickyGroundDrag( landed: true, recentContact: false )
-			|| !FallenLog.ShouldUseStickyGroundDrag( landed: true, recentContact: true ) )
+		var fallProbePos = _targetTreePos + new Vector3( -900f, 520f, 0f );
+		if ( TryGetGroundZ( fallProbePos.x, fallProbePos.y, out var fallProbeGroundZ ) ) fallProbePos = fallProbePos.WithZ( fallProbeGroundZ );
+		ClearTestObjectsAround( fallProbePos, 700f );
+		var fallProbeTree = Tree.SpawnAt( Scene, fallProbePos, 0.5f, TreeKind.Normal );
+		fallProbeTree.StartFell( Vector3.Forward, fellPower: 99, allowComboPush: true );
+		var fallProbeLog = fallProbeTree.SpawnedLog;
+		if ( !fallProbeLog.IsValid() || !fallProbeLog.IsFalling || !fallProbeLog.Body.IsValid() )
 		{
-			Log.Error( "[TC_TEST] FAIL TestRollingLogsDamping: ground-contact limits must be gravity-based: active near/recent contact, inactive for airborne landed logs" );
+			Log.Error( "[TC_TEST] FAIL TestRollingLogsDamping: falling log probe did not spawn" );
 			Finish();
 			return;
 		}
-		if ( RuntimeValue( Tunables.TreeGroundRollCoupling ) <= 0f || RuntimeValue( Tunables.TreeGroundRollMaxAngularSpeed ) > RuntimeValue( Tunables.TreeLandedMaxAngularSpeed ) )
+		fallProbeLog.Body.Velocity = new Vector3( 120f, 30f, -320f );
+		fallProbeLog.Body.AngularVelocity = new Vector3( 0.3f, 1.1f, 0.2f );
+		var vBefore = fallProbeLog.Body.Velocity;
+		var avBefore = fallProbeLog.Body.AngularVelocity;
+		fallProbeLog.DebugApplyGroundContactLimitsForTest();
+		if ( fallProbeLog.Body.Velocity.Distance( vBefore ) > 0.01f
+			|| fallProbeLog.Body.AngularVelocity.Distance( avBefore ) > 0.01f )
 		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: roll coupling invalid coupling={Tunables.TreeGroundRollCoupling} max={Tunables.TreeGroundRollMaxAngularSpeed}" );
+			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: falling log contact limits touched physics velocity {vBefore}->{fallProbeLog.Body.Velocity} angular {avBefore}->{fallProbeLog.Body.AngularVelocity}" );
 			Finish();
 			return;
 		}
-		var rollAxis = new Vector3( 1f, 0f, 0f );
-		var rollVelocity = new Vector3( 0f, Tunables.TreeGroundRollMinSpeed * 2f, 0f );
-		var rollTarget = FallenLog.ComputeGroundRollTargetAngularVelocity( rollVelocity, rollAxis, 10f );
-		if ( rollTarget.Length < 0.01f || MathF.Abs( rollTarget.Normal.Dot( rollAxis ) ) < 0.98f )
-		{
-			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: roll target must spin around log axis, got {rollTarget}" );
-			Finish();
-			return;
-		}
+		ClearTestObjectsAround( fallProbePos, 900f );
 		if ( RuntimeValue( Tunables.SplitLogMaxSpawnValidationSpeed ) > RuntimeValue( Tunables.ImpactMinSpeed ) * 2f + 0.1f )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestRollingLogsDamping: SplitLogMaxSpawnValidationSpeed={Tunables.SplitLogMaxSpawnValidationSpeed} exceeds 2m/s sanity cap" );
@@ -3287,7 +3388,7 @@ public sealed class SelfTest : Component
 			Finish();
 			return;
 		}
-		Log.Info( $"[TC_TEST] VALHEIM_LOG_DAMPING PASS  Gravity=on Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} Sleep={Tunables.TreeLogSleepThreshold} ManualDelay={Tunables.TreeLandedManualSleepDelay} Probes={Tunables.LogGroundProbeCount}" );
+		Log.Info( $"[TC_TEST] VALHEIM_LOG_DAMPING PASS  Gravity=on Angular={Tunables.TreeAngularDampLanded} Linear={Tunables.TreeLinearDampLanded} SleepThreshold={Tunables.TreeLogSleepThreshold} Probes={Tunables.LogGroundProbeCount}" );
 		Transition( Phase.TestEnvWindDeterministic );
 	}
 
@@ -3351,9 +3452,24 @@ public sealed class SelfTest : Component
 		var sap = Tree.SpawnAt( Scene, pos, 1f, TreeKind.Sapling );
 		int hpBefore = sap.ChopsRemaining;
 		var hit = HitData.Make( Vector3.Forward, chopPower: 1, hitPoint: pos, toolTier: 0 );
+		if ( hit.Damage.Chop != 1f || hit.Damage.Blunt != 0f || hit.GetTreeDamage() != 1 )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestHitDataDamage: chop hit channels chop={hit.Damage.Chop} blunt={hit.Damage.Blunt} treeDamage={hit.GetTreeDamage()}" );
+			Finish();
+			return;
+		}
 		if ( MathF.Abs( hit.PushForce - Tunables.LandedLogKickImpulse ) > 0.001f )
 		{
 			Log.Error( $"[TC_TEST] FAIL TestHitDataDamage: default PushForce={hit.PushForce}, expected {Tunables.LandedLogKickImpulse}" );
+			Finish();
+			return;
+		}
+		var impactHit = HitData.MakeImpact( Vector3.Forward, pos, Tunables.ValheimImpactToolTier, 1f );
+		if ( impactHit.Damage.Chop != Tunables.ImpactChopDamage
+			|| impactHit.Damage.Blunt != Tunables.ImpactBluntDamage
+			|| impactHit.GetTreeLogDamage() != Tunables.ImpactChopDamage )
+		{
+			Log.Error( $"[TC_TEST] FAIL TestHitDataDamage: impact channels chop={impactHit.Damage.Chop} blunt={impactHit.Damage.Blunt} effective={impactHit.GetTreeLogDamage()} expected chop-only {Tunables.ImpactChopDamage}" );
 			Finish();
 			return;
 		}

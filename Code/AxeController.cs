@@ -24,6 +24,7 @@ public sealed class AxeController : Component
 	// [Property, ReadOnly] pour HUD pip indicator + selftest visibility.
 	[Property, ReadOnly] public int ChainLevel { get; private set; }
 	private TimeSince _timeSinceLastSwing = 999f;
+	private TimeSince _timeSinceRecoveryReady = 999f;
 	private TimeSince _viewImpactStart = 999f;
 	private float _viewImpactStrength;
 
@@ -208,7 +209,8 @@ public sealed class AxeController : Component
 
 		// Combo chain Valheim Attack.cs lignes 401-403 : si gap > 0.2s ou chain
 		// déjà au max, reset à 0. Sinon increment au level suivant.
-		if ( (float)_timeSinceLastSwing > Tunables.ChopComboWindow
+		float comboGap = MathF.Min( (float)_timeSinceLastSwing, (float)_timeSinceRecoveryReady );
+		if ( comboGap > Tunables.ChopComboWindow
 			|| ChainLevel >= Tunables.ChopComboMaxLevels - 1 )
 		{
 			ChainLevel = 0;
@@ -227,11 +229,7 @@ public sealed class AxeController : Component
 		// chop dans le vide on a quand même des wood chips"). Chips only fire
 		// on actual impact, via ApplyImpactFeedback.
 		TriggerAttackAnim();
-		// Keep the axe whoosh lower than the impact. High-pitched swings read
-		// toy-like; Valheim's axe audio is broad and weighty.
-		float swingPitchMul = 1f + 0.06f * ChainLevel;
-		Sfx.PlayLocal( "sounds/swing.sound",
-			volume: 0.92f, pitchMin: 1.08f * swingPitchMul, pitchMax: 1.28f * swingPitchMul );
+		ValheimEffects.AttackStart( ChainLevel );
 	}
 
 	private void TickWindUp()
@@ -273,7 +271,7 @@ public sealed class AxeController : Component
 			{
 				chipTint = treeHit.TrunkTint;
 				chopPitchMul = Tunables.TreeKindChopPitchMul[(int)treeHit.Kind];
-				isLogHit = treeHit.IsFallenLog;
+				isLogHit = false;
 				willBreakTree = !tooHard && treeHit.ChopsRemaining <= chopPower;
 				damageFrac = !tooHard
 					? (chopPower / MathF.Max( 1f, treeHit.ChopsRemaining )).Clamp( 0.2f, 1.5f )
@@ -312,7 +310,11 @@ public sealed class AxeController : Component
 	{
 		_phaseTime += Time.Delta;
 		float speedMul = GameState.Get( Scene )?.SwingSpeedMultiplier ?? 1f;
-		if ( _phaseTime >= Tunables.SwingRecoveryDuration * speedMul ) _phase = SwingPhase.Idle;
+		if ( _phaseTime >= Tunables.SwingRecoveryDuration * speedMul )
+		{
+			_phase = SwingPhase.Idle;
+			_timeSinceRecoveryReady = 0f;
+		}
 	}
 
 	private void ApplyImpactFeedback( Vector3 contactPoint, Vector3 forward, Color? chipTint = null, float chopPitchMul = 1f, bool willBreakTree = false, float damageFrac = 1f, bool isLogHit = false )
@@ -328,7 +330,7 @@ public sealed class AxeController : Component
 			: (int)(Tunables.ChipBurstCount * MathX.Lerp( 0.85f, 1.25f, (damageFeel - 0.35f) / 1.15f ));
 		if ( willBreakTree ) chipCount = Math.Max( chipCount, (int)(Tunables.ChipBurstCount * 1.35f) );
 		var chipDir = isLogHit ? (forward.WithZ( 0f ) + Vector3.Up * 0.18f).Normal : forward;
-		ChipBurst.Spawn( Scene, contactPoint, chipDir, isLogHit ? (int)(chipCount * 1.15f) : chipCount, chipTint );
+		if ( isLogHit ) chipCount = (int)(chipCount * 1.15f);
 		Scene.TimeScale = Tunables.HitstopTimeScale;
 		_hitstopFramesLeft = heavyHit ? Tunables.HitstopFrames + 2 : Tunables.HitstopFrames;
 		// Valheim split hitEffect/destroyedEffect: every valid chop gets a
@@ -339,15 +341,7 @@ public sealed class AxeController : Component
 		float kindPitch = pitchShift * chopPitchMul;
 		float logPitch = isLogHit ? 0.82f : 1f;
 		float hitVol = (isLogHit ? 1.35f : 1.22f) * vol;
-		float biteVol = (isLogHit ? 0.58f : 0.48f) * vol;
-		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: hitVol, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
-		Sfx.PlayLocal( "sounds/chop_wood.sound", volume: biteVol, pitchMin: 0.95f * kindPitch * logPitch, pitchMax: 1.18f * kindPitch * logPitch );
-		Sfx.Play( "sounds/axe_hit_wood.sound", contactPoint, volume: hitVol * 0.24f, pitchMin: 0.88f * kindPitch * logPitch, pitchMax: 1.02f * kindPitch * logPitch );
-		if ( heavyHit )
-		{
-			Sfx.PlayLocal( "sounds/log_break.sound", volume: 0.16f * vol, pitchMin: 1.18f * kindPitch, pitchMax: 1.34f * kindPitch );
-			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.12f * vol, pitchMin: 1.18f * kindPitch, pitchMax: 1.34f * kindPitch );
-		}
+		ValheimEffects.AxeHit( Scene, contactPoint, chipDir, chipTint, chipCount, kindPitch, logPitch, hitVol, heavyHit );
 		// Held-axe impact punch consumed by PlayerAxeView. This does not move
 		// the camera; Thomas asked to remove camera zoom/shake, not weapon bite.
 		AddViewImpactKick( heavyHit ? 1.35f : 0.85f );
@@ -355,12 +349,9 @@ public sealed class AxeController : Component
 
 	private void ApplyTooHardFeedback( Vector3 contactPoint, Vector3 forward )
 	{
-		ChipBurst.Spawn( Scene, contactPoint, forward, Tunables.ChipBurstCount / 2, new Color( 0.55f, 0.50f, 0.42f, 1f ) );
 		Scene.TimeScale = Tunables.HitstopTimeScale;
 		_hitstopFramesLeft = 1;
-		Sfx.PlayLocal( "sounds/axe_too_weak.sound", volume: 0.72f, pitchMin: 0.75f, pitchMax: 0.95f );
-		Sfx.PlayLocal( "sounds/axe_hit_wood.sound", volume: 0.34f, pitchMin: 0.55f, pitchMax: 0.70f );
-		Sfx.Play( "sounds/axe_too_weak.sound", contactPoint, volume: 0.22f, pitchMin: 0.75f, pitchMax: 0.95f );
+		ValheimEffects.TooHard( Scene, contactPoint, forward );
 		AddViewImpactKick( 0.45f );
 	}
 
@@ -496,7 +487,7 @@ public sealed class AxeController : Component
 	// reticle within melee range. Re-evaluated at ~20Hz by TickAimPreview,
 	// so reading this from WoodHud each frame is cheap (no extra trace).
 	public bool HasAimTarget => _previewTarget is not null && _previewTarget.IsValid();
-	public bool AimTargetIsLog => _previewTarget is FallenLog || (_previewTarget is Tree tree && tree.IsFallenLog);
+	public bool AimTargetIsLog => _previewTarget is FallenLog;
 	public bool AimTargetTooHard
 	{
 		get
@@ -528,7 +519,6 @@ public sealed class AxeController : Component
 				return $"CHOP LOG · {log.ChopsRemaining}";
 			}
 			if ( _previewTarget is not Tree tree ) return "";
-			if ( tree.IsFallenLog ) return $"CHOP LOG · {tree.ChopsRemaining}";
 			if ( AimTargetTooHard )
 			{
 				int neededTier = Tunables.TreeKindMinAxeTier[(int)tree.Kind];

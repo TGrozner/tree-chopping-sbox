@@ -2,11 +2,10 @@ namespace TreeChopping;
 
 public enum TreeKind { Normal, Sapling, Veteran, Brittle }
 
-// Mow-the-lawn style tree : multiple chops required (per kind), falls
-// physically when HP drops to 0, becomes a landed log, then splits into
-// WoodItems. Falling trunks use Valheim-style ImpactEffect damage to wake or
-// split other trees/logs while standing trees stay kinematic until felled.
-public sealed class Tree : Component, IChoppable, Component.ICollisionListener
+// Mow-the-lawn style TreeBase: multiple chops required, then it swaps to a
+// physical FallenLog prefab equivalent. Standing trees stay kinematic until
+// felled; all log physics lives in FallenLog.
+public sealed class Tree : Component, IChoppable
 {
 	[Property] public Rigidbody Body { get; set; }
 	[Property] public int ChopsRemaining { get; set; } = 3;
@@ -36,47 +35,14 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	public Vector3 GetChopPointFrom( Vector3 origin )
 	{
 		float halfWidth = MathF.Max( _trunkWidth * 0.5f, Tunables.TreeRadius * 0.25f );
-		if ( !_landed )
-		{
-			var fromTree = (origin - WorldPosition).WithZ( 0f );
-			if ( fromTree.LengthSquared < 0.001f ) fromTree = -Vector3.Forward;
-			float z = origin.z.Clamp( WorldPosition.z + 20f, WorldPosition.z + _trunkLen * 0.75f );
-			return WorldPosition.WithZ( z ) + fromTree.Normal * halfWidth;
-		}
-
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
-		axis = axis.Normal;
-		var a = WorldPosition + axis * (_trunkLen * 0.08f);
-		var b = WorldPosition + axis * (_trunkLen * 0.92f);
-		var ab = b - a;
-		float t = ab.LengthSquared > 0.001f
-			? (origin - a).Dot( ab ) / ab.LengthSquared
-			: 0f;
-		var closest = a + ab * t.Clamp( 0f, 1f );
-		var radial = origin - closest;
-		if ( radial.LengthSquared < 0.001f ) radial = Vector3.Up.Cross( axis );
-		if ( radial.LengthSquared < 0.001f ) radial = Vector3.Right;
-		return closest + radial.Normal * halfWidth;
+		var fromTree = (origin - WorldPosition).WithZ( 0f );
+		if ( fromTree.LengthSquared < 0.001f ) fromTree = -Vector3.Forward;
+		float z = origin.z.Clamp( WorldPosition.z + 20f, WorldPosition.z + _trunkLen * 0.75f );
+		return WorldPosition.WithZ( z ) + fromTree.Normal * halfWidth;
 	}
 
 	private bool _chopped;
-	private bool _landed;
-	private float _slowTipElapsed;
 	private Vector3 _fellDir;
-	private TimeSince _timeSinceLanded;
-	// Velocity captured at the end of each FixedUpdate so OnCollisionStart can
-	// read "speed going into the impact" without depending on the Collision
-	// struct's Contact field (struct shape varies across s&box SDK versions).
-	private Vector3 _preCollisionVelocity;
-	private TimeSince _timeSinceGroundContact = 999f;
-	// Valheim feel : trees pleuvent des feuilles continuously while falling.
-	// Throttled Ã  80ms entre bursts, count scaled by angular velocity (faster
-	// rotation = plus de feuilles arrachÃ©es).
-	private TimeSince _timeSinceLastLeafShed = 999f;
-	// Whoosh SFX pendant la chute â€” fire ONCE par fell quand tilt past 45Â°.
-	// Reset au StartFell pour le prochain cycle.
-	private bool _whooshFired;
 	private FallenLog _spawnedLog;
 	private GameObject _primaryCanopy;
 	private GameObject _rootStump;
@@ -86,7 +52,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	private Color _canopyTint;
 	private float _ambientPhase;
 	private bool _highlighted;
-	private bool _landingSnapApplied;
 	private Vector3 _spawnFootPos;
 	private float _biomeDifficulty;
 	// Cached at spawn so landed-log splitting preserves the original tree
@@ -108,8 +73,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	internal float DebugShakeElapsed => (float)_shakeStart;
 	// Valheim tree-log ImpactEffect.m_interval (0.25s) — cooldown entre 2 impacts cascade
 	// successifs. Ã‰vite spam quand un log roule sur un voisin et re-fire OnCollisionStart.
-	private TimeSince _timeSinceLastImpactDamage = 999f;
-	private TimeSince _timeSinceLastCascadeSweep = 999f;
 
 	public static Tree SpawnAt( Scene scene, Vector3 footPosition, float biomeDifficulty = 0.5f, TreeKind? forceKind = null )
 	{
@@ -351,16 +314,15 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		_primaryCanopy = null;
 	}
 
-	public bool IsFalling => _chopped && !_landed;
+	public bool IsFalling => _chopped && _spawnedLog.IsValid() && _spawnedLog.IsFalling;
 	public bool IsStanding => !_chopped;
-	public bool IsFallenLog => _landed && !_logSplit;
+	public bool IsFallenLog => false;
 
 	// Valid swing target = standing tree OR landed log waiting to be split.
 	// Mid-fall trees are skipped (Chop short-circuits) â€” no in-air chops.
-	bool IChoppable.IsValid() => (IsStanding || IsFallenLog) && this.IsValid();
+	bool IChoppable.IsValid() => IsStanding && this.IsValid();
 	bool IChoppable.AcceptsTool( ToolKind tool ) => tool == ToolKind.Axe;
 
-	private bool _logSplit;
 
 	public void SetAimHighlight( bool on )
 	{
@@ -405,7 +367,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	// Damage and push stay separate like Valheim m_damage vs m_pushForce.
 	public void Damage( HitData hit )
 	{
-		Chop( hit.Direction, hit.ChopPower, hit.HitPoint, hit.ToolTier, hit.PushForce );
+		Chop( hit.Direction, hit.GetTreeDamage(), hit.HitPoint, hit.ToolTier, hit.PushForce );
 	}
 
 	public void Chop( Vector3 direction, int chopPower, Vector3 hitPoint )
@@ -417,12 +379,11 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 	{
 		// Mid-fall : no chops accepted (tree is in physics flight). Split-
 		// destroyed trees also short-circuit (handled by GameObject destroy).
-		if ( IsFalling || _logSplit ) return;
-		if ( _landed && (float)_timeSinceLanded < Tunables.WoodLogChopGrace ) return;
+		if ( !IsStanding ) return;
 
 		// Valheim gates both TreeBase and TreeLog with m_minToolTier. The
 		// normal path spawns FallenLog, but this fallback stays aligned too.
-		if ( !_landed || IsFallenLog )
+		if ( IsStanding )
 		{
 			var gs = GameState.Get( Scene );
 			int axeTier = toolTierOverride ?? (gs.IsValid() ? gs.AxeTier : 0);
@@ -447,12 +408,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			}
 		}
 
-		if ( chopPower <= 0 )
-		{
-			if ( _landed )
-				ApplyLandedKick( direction, hitPoint, pushForceOverride ?? Tunables.LandedLogKickImpulse );
-			return;
-		}
+		if ( chopPower <= 0 ) return;
 
 		ChopsRemaining -= chopPower;
 		PulseHitFlash( ChopsRemaining <= 0 );
@@ -466,7 +422,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		{
 			var popupPos = hitPoint.LengthSquared > 0.01f
 				? hitPoint
-				: WorldPosition + Vector3.Up * (_landed ? 20f : Tunables.TreeHeight * 0.4f);
+				: WorldPosition + Vector3.Up * (Tunables.TreeHeight * 0.4f);
 			hud2.ShowDamageText( chopPower.ToString(), popupPos, WoodHud.DamageTextNormal );
 			// Valheim Skills.RaiseSkill level-up notification (DamageText.Bonus
 			// orange popup au point d'impact). Cosmetic only â€” pas d'effet
@@ -478,17 +434,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 					WoodHud.DamageTextBonus, isBonus: true );
 			}
 		}
-		if ( _landed )
-		{
-			ApplyLandedKick( direction, hitPoint, pushForceOverride ?? Tunables.LandedLogKickImpulse );
-			SpawnLandedChopScar( hitPoint, direction, chopPower, ChopsRemaining <= 0 );
-		}
-		else
-		{
-			DarkenTrunkOnce();
-			SpawnChopNotch( hitPoint, direction, chopPower, ChopsRemaining <= 0 );
-			KickWobble( direction );
-		}
+		DarkenTrunkOnce();
+		SpawnChopNotch( hitPoint, direction, chopPower, ChopsRemaining <= 0 );
+		KickWobble( direction );
 
 		if ( ChopsRemaining > 0 )
 		{
@@ -496,12 +444,8 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		}
 
 		// HP=0 reached â€” branch on phase.
-		if ( !_landed )
-		{
-			EmitBreakYield( direction, hitPoint );
-			StartFell( direction, chopPower );
-		}
-		else SplitIntoLogs();
+		EmitBreakYield( direction, hitPoint );
+		StartFell( direction, chopPower );
 	}
 
 	// Small dark cube stuck on the trunk's side at chop height â€” accumulates
@@ -572,36 +516,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		}
 	}
 
-	private void SpawnLandedChopScar( Vector3 hitPoint, Vector3 direction, int chopPower, bool finalHit )
-	{
-		if ( !_trunkLowerMr.IsValid() ) return;
-		var trunkGO = _trunkLowerMr.GameObject;
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
-		axis = axis.Normal;
-		var basePoint = WorldPosition + axis * (_trunkLen * 0.08f);
-		var along = hitPoint.LengthSquared > 0.01f
-			? ((hitPoint - basePoint).Dot( axis ) / MathF.Max( _trunkLen, 1f )).Clamp( 0.08f, 0.92f )
-			: 0.5f;
-		var scar = Scene.CreateObject();
-		scar.Name = finalHit ? "LogSplitScar" : "LogChopScar";
-		scar.SetParent( trunkGO );
-		scar.LocalPosition = new Vector3( Game.Random.Float( -0.18f, 0.18f ), 0.54f, MathX.Lerp( -0.42f, 0.42f, along ) );
-		float bite = MathX.Lerp( 1f, 1.45f, MathF.Min( chopPower, 6f ) / 6f );
-		if ( finalHit ) bite *= 1.3f;
-		scar.LocalScale = new Vector3( 0.42f * bite, 0.055f, 0.10f * bite );
-		scar.LocalRotation = Rotation.FromYaw( Game.Random.Float( -16f, 16f ) );
-		Mat.AddTintedCube( scar, finalHit ? new Color( 0.04f, 0.02f, 0.01f, 1f ) : new Color( 0.10f, 0.05f, 0.02f, 1f ) );
-
-		var fresh = Scene.CreateObject();
-		fresh.Name = finalHit ? "LogFreshSplitFace" : "LogFreshChopFace";
-		fresh.SetParent( trunkGO );
-		fresh.LocalPosition = scar.LocalPosition + new Vector3( 0f, 0.035f, 0.01f );
-		fresh.LocalScale = new Vector3( 0.32f * bite, 0.045f, 0.075f * bite );
-		fresh.LocalRotation = scar.LocalRotation * Rotation.FromYaw( Game.Random.Float( -8f, 8f ) );
-		Mat.AddTintedCube( fresh, Color.Lerp( _trunkTint, Tunables.ChipSplinterTint, finalHit ? 0.75f : 0.48f ) );
-	}
-
 	private void EmitBreakYield( Vector3 direction, Vector3 hitPoint )
 	{
 		var point = hitPoint.LengthSquared > 0.01f
@@ -610,10 +524,7 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		var dir = direction.WithZ( 0f );
 		if ( dir.LengthSquared < 0.001f ) dir = _fellDir.LengthSquared > 0.001f ? _fellDir : Vector3.Forward;
 		dir = dir.Normal;
-		ChipBurst.Spawn( Scene, point, dir, Tunables.ChipBurstCount + Tunables.ChipBurstCount / 2, _trunkTint );
-		ChipBurst.SpawnLeaves( Scene, point + Vector3.Up * 12f, dir, 10, new Color( 0.52f, 0.40f, 0.28f, 1f ) );
-		Sfx.Play( "sounds/log_break.sound", point,
-			volume: 0.28f, pitchMin: 0.92f * Tunables.TreeKindGroanPitchMul[(int)Kind], pitchMax: 1.10f * Tunables.TreeKindGroanPitchMul[(int)Kind] );
+		ValheimEffects.TreeBreakYield( Scene, point, dir, _trunkTint, Kind );
 		if ( _trunkUpperMr.IsValid() )
 		{
 			var upper = _trunkUpperMr.GameObject;
@@ -656,8 +567,8 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 
 	private void UpdateTrunkVisuals()
 	{
-		SetRendererTint( _trunkLowerMr, 1.00f, _landed ? 0.35f : 0.20f );
-		SetRendererTint( _trunkUpperMr, 1.08f, _landed ? 0.28f : 0.16f );
+		SetRendererTint( _trunkLowerMr, 1.00f, 0.20f );
+		SetRendererTint( _trunkUpperMr, 1.08f, 0.16f );
 		SetRendererTint( _rootMr, 0.78f, 0.14f );
 	}
 
@@ -699,20 +610,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		return 1f;
 	}
 
-	private void ApplyLandedKick( Vector3 chopDirection, Vector3 hitPoint, float pushForce )
-	{
-		if ( !Body.IsValid() || !Body.PhysicsBody.IsValid() ) return;
-		var flat = chopDirection.WithZ( 0f );
-		if ( flat.LengthSquared < 0.001f ) flat = Vector3.Forward;
-		flat = flat.Normal;
-		// Valheim Destructible.RPC_Damage applique l'impulse Ã  `hit.m_point` :
-		// le tronc rebondit autour de l'endroit oÃ¹ l'axe le touche. Si pas de
-		// hit point disponible (DebugSwing, fallback) â†’ ancre fixe au-dessus.
-		var applyPoint = hitPoint.LengthSquared > 0.01f
-			? hitPoint
-			: LogCenter + Vector3.Up * 8f;
-		Body.PhysicsBody.ApplyImpulseAt( applyPoint, flat * pushForce * Tunables.ValheimTreeLogHitPushMul );
-	}
 
 	// Valheim TreeBase.ShakeAnimation (RPC_Shake) â€” coroutine lignes 194-209.
 	// Two-axis buzz vibrato : Sin(t*40Hz) * (1-t)Â³ * 1.5Â° en pitch, Cos(t*36Hz)
@@ -768,8 +665,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		_chopped = true;
 		_fellDir = direction.WithZ( 0f ).Normal;
 		if ( _fellDir.LengthSquared < 0.001f ) _fellDir = Vector3.Forward;
-		_slowTipElapsed = 0f;
-
 		if ( _baseRotCached ) WorldRotation = _baseRotation;
 		_shakeStart = 999f; // kill any in-progress buzz
 
@@ -777,11 +672,9 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		// par le tier min requis pour ce kind. Lifetime stat, survit prestige.
 		int felledTier = Tunables.TreeKindMinAxeTier[(int)Kind];
 		GameState.Get( Scene )?.IncrementTreeFelledByTier( felledTier );
-		_whooshFired = false; // armÃ© pour ce cycle de fell
-
 		// Le _rootStump rotatif (parented au tree) va tomber avec lui â€” on le
 		// destroy, et on spawn Ã  sa place une TreeStump indÃ©pendante au foot
-		// pos qui survit au GameObject.Destroy du tree (cf. SplitIntoLogs).
+		// pos qui survit au GameObject.Destroy du tree et au split du FallenLog.
 		if ( _rootStump.IsValid() )
 		{
 			_rootStump.Destroy();
@@ -793,22 +686,19 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 		if ( !_spawnedLog.IsValid() )
 		{
 			Log.Error( "[Tree] FallenLog.SpawnFromTree failed; refusing legacy Tree-as-log fallback to preserve Valheim TreeBase->TreeLog parity." );
+			GameObject?.Destroy();
 			return;
 		}
 
 		if ( _primaryCanopy.IsValid() )
 		{
 			var canopyPos = _primaryCanopy.WorldPosition;
-			ChipBurst.SpawnLeaves( Scene, canopyPos, _fellDir, 52, _canopyTint );
-			ChipBurst.SpawnLeaves( Scene, canopyPos, Vector3.Up, 34, _canopyTint );
-			ChipBurst.SpawnLeaves( Scene, canopyPos, -_fellDir, 24, _canopyTint );
+			ValheimEffects.TreeDestroyed( Scene, canopyPos, _fellDir, _canopyTint );
 		}
 		DestroyCanopyVisuals();
 		// Per-kind groan : sapling = aigu et net, veteran = profond et lent,
 		// brittle = crack sec. Multiplie autour du range Normal {0.48, 0.62}.
-		float pitchMul = Tunables.TreeKindGroanPitchMul[(int)Kind];
-		Sfx.Play( "sounds/tree_groan.sound", WorldPosition + Vector3.Up * 40f,
-			volume: 0.52f, pitchMin: 0.55f * pitchMul, pitchMax: 0.72f * pitchMul );
+		ValheimEffects.TreeGroan( WorldPosition + Vector3.Up * 40f, Kind );
 
 		// Mythic = Valheim DamageText.Bonus popup (orange +50% size, 3s lifetime).
 		// Le joueur voit "MYTHIC!" floating au-dessus de l'arbre rare dorÃ©.
@@ -849,422 +739,39 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			GameObject?.Destroy();
 	}
 
-	protected override void OnFixedUpdate()
-	{
-		if ( _chopped && !_landed ) TickFall();
-		else if ( _landed ) TickLandedDecay();
-		// Sampled AFTER tick logic â€” gives us the velocity the body had during
-		// the most recent physics step, which is what we want when a collision
-		// resolves on the next step. Reading post-impact Body.Velocity is wrong
-		// because the integrator has already cancelled the contact-normal speed.
-		if ( Body.IsValid() ) _preCollisionVelocity = Body.Velocity;
-	}
-
-	void Component.ICollisionListener.OnCollisionStart( Collision other )
-	{
-		if ( _logSplit ) return;
-		// Standing trees (kinematic) reÃ§oivent l'event collision MAIS leur
-		// _preCollisionVelocity = 0 (kinematic ne bouge pas), donc impactSpeed
-		// est 0 et l'early-return MinSpeed kicke. Le damage cascade vient de
-		// l'autre tronc qui tombe (lui IS chopped, IS falling), qui nous
-		// appelle ApplyImpactDamage via SON OnCollisionStart.
-		if ( !_chopped ) return;
-
-		var otherGo = other.Other.GameObject;
-		float upDotNow = WorldRotation.Up.Dot( Vector3.Up );
-		if ( otherGo.IsValid() && otherGo.Tags.Has( "ground" ) && (_landed || upDotNow < Tunables.TreeRestingTiltUpDotMax) )
-		{
-			_timeSinceGroundContact = 0f;
-			ApplyGroundContactLimits();
-		}
-
-		// Valheim ImpactEffect.m_interval cooldown â€” Ã©vite spam damage si log
-		// reste en contact avec un voisin (rolling/bouncing fire multiple
-		// OnCollisionStart events). Le cooldown démarre dès qu'un hit effect est accepté.
-		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
-
-		var contactPoint = EstimateImpactPoint( null );
-		var impactVelocity = GetImpactVelocityAt( contactPoint );
-		float impactSpeed = impactVelocity.Length;
-		if ( impactSpeed < Tunables.ImpactSoftMinSpeed ) return;
-
-		// Valheim feel : cascade impact crÃ©e un thud + dust burst au point de
-		// collision. Sans ce feedback, le tronc qui crash dans un voisin paraissait
-		// silencieux. Volume + leaf count scalÃ©s par impactSpeed (= dommage).
-		float impactScale = ValheimImpact.ScaleFromSpeed( impactSpeed );
-		float softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed)
-			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-
-		// Valheim ImpactEffect.OnCollisionEnter formula verbatim :
-		//   damageFactor = LerpStep(minVelocity, maxVelocity, magnitude)
-		//   damage = m_damages Ã— damageFactor
-		int damage = ValheimImpact.DamageFromSpeed( impactSpeed );
-		bool acceptedImpact = false;
-
-		// Cascade â€” damage l'autre tronc s'il est un Tree (Valheim TreeLog
-		// crash dans TreeBase voisin = damage standing tree HP, peut le fell).
-		Tree neighbor = null;
-		if ( otherGo.IsValid() )
-		{
-			neighbor = otherGo.Components.Get<Tree>()
-				?? otherGo.Components.Get<Tree>( FindMode.InAncestors );
-		}
-		if ( neighbor.IsValid() )
-		{
-			contactPoint = EstimateImpactPoint( neighbor );
-			var cascadeVelocity = GetImpactVelocityAt( contactPoint ) - neighbor.GetImpactVelocityAt( contactPoint );
-			float relativeImpactSpeed = cascadeVelocity.Length;
-			impactSpeed = relativeImpactSpeed;
-			impactScale = ValheimImpact.ScaleFromSpeed( impactSpeed );
-			softScale = ((impactSpeed - Tunables.ImpactSoftMinSpeed)
-				/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-			EmitLogImpactFeedback( contactPoint, softScale, impactScale );
-			acceptedImpact = true;
-			damage = ValheimImpact.DamageFromSpeed( impactSpeed );
-			if ( neighbor != this )
-			{
-				var dirOther = cascadeVelocity.WithZ( 0f );
-				if ( dirOther.LengthSquared < 0.01f )
-					dirOther = (neighbor.WorldPosition - WorldPosition).WithZ( 0f );
-				if ( dirOther.LengthSquared > 0.01f )
-				{
-					if ( damage > 0 ) neighbor.ApplyImpactDamage( damage, dirOther.Normal );
-					else neighbor.ReactToSoftImpact( dirOther.Normal, contactPoint );
-				}
-			}
-		}
-		else
-		{
-			EmitLogImpactFeedback( contactPoint, softScale, impactScale );
-			acceptedImpact = true;
-		}
-		if ( acceptedImpact ) _timeSinceLastImpactDamage = 0f;
-
-		// Valheim TreeLog prefab has m_damageToSelf=false. Keep this gated for
-		// non-tree prefabs, but tree logs should not self-split on ground impact.
-		if ( Tunables.ImpactDamageSelf && damage > 0 )
-		{
-			float splitSpeed = _landed
-				? Tunables.WoodLogBreakImpactSpeed
-				: Tunables.TreeSplitImpactSpeed * Tunables.TreeKindSplitImpactMul[(int)Kind];
-			if ( impactSpeed >= splitSpeed || (!_landed && impactScale >= Tunables.ImpactViolentScale) )
-			{
-				var selfDir = impactVelocity.WithZ( 0f );
-				if ( selfDir.LengthSquared < 0.01f ) selfDir = Vector3.Forward;
-				ApplyImpactDamage( damage, selfDir.Normal );
-				_timeSinceLastImpactDamage = 0f;
-			}
-		}
-	}
-
-	private Vector3 EstimateImpactPoint( Tree neighbor )
-	{
-		if ( neighbor.IsValid() ) return (LogCenter + neighbor.LogCenter) * 0.5f;
-		return LogCenter + Vector3.Up * 8f;
-	}
-
 	internal Vector3 GetImpactVelocityAt( Vector3 point )
 	{
-		if ( !Body.IsValid() ) return _preCollisionVelocity;
-		var pointVelocity = Body.GetVelocityAtPoint( point );
-		return pointVelocity.LengthSquared > _preCollisionVelocity.LengthSquared
-			? pointVelocity
-			: _preCollisionVelocity;
-	}
-
-	private void EmitLogImpactFeedback( Vector3 contactPoint, float softScale, float damageScale )
-	{
-		bool violent = damageScale >= Tunables.ImpactViolentScale;
-		bool hard = damageScale >= Tunables.ImpactHardScale;
-		float vol = hard ? 0.70f + damageScale * 0.45f : 0.32f + softScale * 0.35f;
-		Sfx.Play( hard ? "sounds/log_break.sound" : "sounds/axe_hit_wood.sound", contactPoint,
-			volume: vol,
-			pitchMin: violent ? 0.50f : (hard ? 0.62f : 0.72f),
-			pitchMax: violent ? 0.68f : (hard ? 0.84f : 0.95f) );
-		int dustCount = hard ? 8 + (int)(damageScale * 18f) : 2 + (int)(softScale * 5f);
-		var dustTint = hard
-			? new Color( 0.62f, 0.48f, 0.35f, 1f )
-			: new Color( 0.48f, 0.42f, 0.34f, 1f );
-		ChipBurst.SpawnLeaves( Scene, contactPoint, Vector3.Up, dustCount, dustTint );
-		if ( violent )
-		{
-			var sideDir = _preCollisionVelocity.WithZ( 0f );
-			if ( sideDir.LengthSquared > 0.01f )
-				ChipBurst.SpawnLeaves( Scene, contactPoint, sideDir.Normal, dustCount / 2, _trunkTint );
-		}
-	}
-
-	private void ReactToSoftImpact( Vector3 dir, Vector3 contactPoint )
-	{
-		if ( _logSplit ) return;
-		if ( !_chopped )
-		{
-			KickWobble( dir );
-			return;
-		}
-		if ( _landed ) ApplyLandedKick( dir, contactPoint, Tunables.LandedLogKickImpulse );
+		if ( !Body.IsValid() ) return Vector3.Zero;
+		return Body.GetVelocityAtPoint( point );
 	}
 
 	internal void ReactToSoftImpactFromLog( Vector3 dir, Vector3 contactPoint )
 	{
-		ReactToSoftImpact( dir, contactPoint );
+		if ( !IsStanding ) return;
+		KickWobble( dir );
 	}
 
-	private void SweepNearbyCascadeTargets()
-	{
-		if ( (float)_timeSinceLastCascadeSweep < Tunables.CascadeSweepInterval ) return;
-		if ( (float)_timeSinceLastImpactDamage < Tunables.ImpactInterval ) return;
-		if ( !Body.IsValid() ) return;
-
-		float motionSpeed = Body.Velocity.Length + Body.AngularVelocity.Length * MathF.Max( _trunkLen, Tunables.TreeHeight ) * 0.20f;
-		if ( motionSpeed < Tunables.CascadeSweepMinSpeed ) return;
-
-		_timeSinceLastCascadeSweep = 0f;
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
-		axis = axis.Normal;
-		var a = WorldPosition + axis * (_trunkLen * 0.10f);
-		var b = WorldPosition + axis * (_trunkLen * 0.92f);
-		Tree best = null;
-		Vector3 bestPoint = default;
-		float bestDist = float.MaxValue;
-
-		foreach ( var other in Scene.GetAllComponents<Tree>() )
-		{
-			if ( !other.IsValid() || other == this || other._logSplit ) continue;
-			if ( other.IsStanding )
-			{
-				ConsiderCascadeProbe( other.WorldPosition + Vector3.Up * MathF.Max( other._trunkWidth * 1.4f, other._trunkLen * 0.12f ), other );
-				ConsiderCascadeProbe( other.WorldPosition + Vector3.Up * (other._trunkLen * 0.35f), other );
-			}
-			else if ( other.IsFallenLog )
-			{
-				ConsiderCascadeProbe( other.LogCenter, other );
-			}
-		}
-
-		if ( !best.IsValid() ) return;
-
-		_timeSinceLastImpactDamage = 0f;
-		float impactScale = ValheimImpact.ScaleFromSpeed( motionSpeed );
-		float softScale = ((motionSpeed - Tunables.ImpactSoftMinSpeed)
-			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-		var contactPoint = (bestPoint + best.LogCenter) * 0.5f;
-		EmitLogImpactFeedback( contactPoint, softScale, impactScale );
-
-		var dir = Body.Velocity.WithZ( 0f );
-		if ( dir.LengthSquared < 0.01f ) dir = (best.WorldPosition - WorldPosition).WithZ( 0f );
-		if ( dir.LengthSquared < 0.01f ) dir = _fellDir;
-		if ( dir.LengthSquared < 0.01f ) dir = Vector3.Forward;
-
-		int damage = ValheimImpact.DamageFromSpeed( motionSpeed, Tunables.CascadeSweepDamageMul );
-		if ( damage > 0 ) best.ApplyImpactDamage( damage, dir.Normal );
-		else best.ReactToSoftImpact( dir.Normal, contactPoint );
-
-		void ConsiderCascadeProbe( Vector3 probe, Tree other )
-		{
-			var p = ClosestPointOnSegment( a, b, probe );
-			float dist = (probe - p).Length;
-			float reach = (_trunkWidth + other._trunkWidth) * 0.55f + Tunables.CascadeSweepRadius;
-			if ( dist > reach || dist >= bestDist ) return;
-			best = other;
-			bestPoint = p;
-			bestDist = dist;
-		}
-	}
-
-	private static Vector3 ClosestPointOnSegment( Vector3 a, Vector3 b, Vector3 p )
-	{
-		var ab = b - a;
-		float lenSq = ab.LengthSquared;
-		if ( lenSq < 0.001f ) return a;
-		float t = (p - a).Dot( ab ) / lenSq;
-		return a + ab * t.Clamp( 0f, 1f );
-	}
-
-
-	void Component.ICollisionListener.OnCollisionUpdate( Collision other ) { }
-	void Component.ICollisionListener.OnCollisionStop( CollisionStop other ) { }
-
-	// Damage entrypoint pour impact physique (cascade + self-damage). Mirror du
-	// TreeBase.RPC_Damage / TreeLog.RPC_Damage Valheim path sans les RPC/ZDO
-	// singleplayer. HP=0 dÃ©clenche la state transition :
-	//   standing â†’ StartFell (cascade domino)
-	//   falling  â†’ BecomeLandedLog + SplitIntoLogs (auto-split sur crash dur)
-	//   landed   â†’ SplitIntoLogs (chop de finition par impact)
 	public void ApplyImpactDamage( int damage, Vector3 dir, int toolTier = Tunables.ValheimImpactToolTier )
 	{
-		if ( _logSplit ) return;
-		if ( damage <= 0 ) return;
-		if ( _landed && (float)_timeSinceLanded < Tunables.WoodLogChopGrace ) return;
+		if ( !IsStanding || damage <= 0 ) return;
 		if ( toolTier < Tunables.TreeKindMinAxeTier[(int)Kind] ) return;
 
 		ChopsRemaining -= damage;
-		// Valheim TreeBase.RPC_Damage : Shake() fire Ã  chaque hit qui pÃ©nÃ¨tre,
-		// que ce soit chop OU ImpactEffect collision. Cascade damage doit aussi
-		// faire visible le tronc qui prend (sinon le hit invisible visuellement).
 		if ( ChopsRemaining > 0 )
 		{
-			if ( !_chopped ) KickWobble( dir );
+			KickWobble( dir );
 			return;
 		}
 
-		if ( !_chopped )
-		{
-			StartFell( dir, damage, allowComboPush: false );
-		}
-		else if ( _landed )
-		{
-			SplitIntoLogs();
-		}
-		else
-		{
-			BecomeLandedLog();
-			SplitIntoLogs();
-		}
+		StartFell( dir, damage, allowComboPush: false );
 	}
 
 	protected override void OnUpdate()
 	{
-		if ( !_chopped ) TickWobble();
+		if ( IsStanding ) TickWobble();
 		TickHitFlash();
 	}
 
-	private void TickFall()
-	{
-		if ( !Body.IsValid() ) return;
-		_slowTipElapsed += Time.Delta;
-		var upDot = WorldRotation.Up.Dot( Vector3.Up );
-		SweepNearbyCascadeTargets();
-
-		// Whoosh SFX une fois quand le tree passe past ~45Â° tilt. Match Valheim
-		// trees qui ont un whoosh audible en plein air pendant la chute. Pitch
-		// scaled par kind (Sapling = high whip, Veteran = low rumble whoosh).
-		if ( !_whooshFired && upDot < Tunables.TreeWhooshUpDotThreshold )
-		{
-			_whooshFired = true;
-			float pitchMul = Tunables.TreeKindChopPitchMul[(int)Kind];
-			Sfx.Play( "sounds/tree_fall_whoosh.sound", WorldPosition + Vector3.Up * 100f,
-				volume: 0.55f, pitchMin: 0.55f * pitchMul, pitchMax: 0.75f * pitchMul );
-		}
-
-		// Valheim feel : continuous leaf shed pendant la chute. Throttled Ã  80ms,
-		// count scale par angular velocity. Plus le tronc rotate vite, plus de
-		// feuilles arrachÃ©es. Couleur _canopyTint (per-kind tint prÃ©servÃ©).
-		// SFX : leaves_rustle (CC0 pack rustle01..10) added 2026-05-22 â€” Valheim
-		// Hit_Leaves equivalent qu'on n'avait pas en sound.
-		if ( _primaryCanopy.IsValid() && (float)_timeSinceLastLeafShed > 0.14f )
-		{
-			float angVel = Body.AngularVelocity.Length;
-			// Threshold 0.2 (was 0.5) car Veteran starts at 0.385 (omega 0.55 Ã—
-			// kindMul 0.7) â€” 0.5 ratait Veteran complÃ¨tement. Sapling=0.77,
-			// Brittle=0.69, Normal=0.55. Tous au-dessus 0.2.
-			if ( angVel > 0.2f )
-			{
-				// Scale count par angVel mais avec min de 2 (toujours visible une fois passÃ© le threshold).
-				int count = (int)MathF.Max( 2f, MathF.Min( 6f, angVel * 5f ) );
-				if ( count > 0 )
-				{
-					var shedDir = _fellDir + Vector3.Up * 0.3f;
-					ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, shedDir.Normal, count, _canopyTint );
-					// Random rustle SFX trÃ¨s discret (vol scale par count) â€” too loud serait
-					// gÃªnant car fired ~12Ã—/s pendant la chute.
-					float rustleVol = (count / 6f).Clamp( 0.025f, 0.065f );
-					Sfx.Play( "sounds/leaves_rustle.sound", _primaryCanopy.WorldPosition,
-						volume: rustleVol, pitchMin: 0.85f, pitchMax: 1.15f );
-				}
-				_timeSinceLastLeafShed = 0f;
-			}
-		}
-
-		bool restingOnSomething =
-			_slowTipElapsed > Tunables.TreeRestingLandingDelay
-			&& upDot < Tunables.TreeRestingTiltUpDotMax
-			&& Body.Velocity.Length < Tunables.TreeRestingLandingSpeed
-			&& Body.AngularVelocity.Length < Tunables.TreeRestingLandingAngularSpeed;
-
-		// Land naturally once tilted past the threshold, or once it has clearly
-		// come to rest against ground/terrain/another trunk. Valheim's TreeLog
-		// is already a physical log after spawn; our single-object transition
-		// needs this contact-rest escape hatch so large trunks don't hang in a
-		// "falling but stopped" limbo until timeout.
-		bool fallenEnough = upDot < Tunables.TreeFallenUpDotMax;
-		float groundClearance = DebugMinGroundClearance();
-		bool nearGround = groundClearance < Tunables.TreeGroundedLandingClearance;
-		bool groundSupported = upDot < Tunables.TreeRestingTiltUpDotMax && nearGround;
-		if ( groundSupported )
-		{
-			_timeSinceGroundContact = 0f;
-			ApplyGroundContactLimits();
-		}
-		if ( (fallenEnough && groundSupported) || (restingOnSomething && groundSupported) || (_slowTipElapsed > Tunables.TreeFallbackLandingDelay && groundSupported) )
-			BecomeLandedLog();
-	}
-
-	private void BecomeLandedLog()
-	{
-		_landed = true;
-		_timeSinceLanded = 0f;
-
-		float landingSpeed = Body.IsValid() ? Body.Velocity.Length : 0f;
-		if ( Body.IsValid() )
-		{
-			Body.Gravity = true;
-			Body.AngularDamping = Tunables.TreeAngularDampLanded;
-			Body.LinearDamping = Tunables.TreeLinearDampLanded;
-			Body.SleepThreshold = Tunables.TreeLogSleepThreshold;
-			Body.AngularVelocity *= Tunables.TreeLandedPostImpactAngularMul;
-			Body.Velocity *= Tunables.TreeLandedPostImpactLinearMul;
-		}
-		float impactScale = ValheimImpact.ScaleFromSpeed( landingSpeed );
-		float softScale = ((landingSpeed - Tunables.ImpactSoftMinSpeed)
-			/ (Tunables.ImpactMaxSpeed - Tunables.ImpactSoftMinSpeed)).Clamp( 0f, 1f );
-		EmitLogImpactFeedback( LogCenter, softScale, impactScale );
-		if ( impactScale >= Tunables.ImpactHardScale )
-		{
-			var dustTint = new Color( 0.62f, 0.48f, 0.35f, 1f );
-			int dustCount = (int)(10 + impactScale * 16f);
-			ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 8f, Vector3.Up,       dustCount, dustTint );
-			ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Right,    dustCount / 2, dustTint );
-			ChipBurst.SpawnLeaves( Scene, WorldPosition + Vector3.Up * 4f, Vector3.Left,     dustCount / 2, dustTint );
-			SnapTrunkOnImpact( impactScale );
-		}
-
-		// Phase F : DON'T credit wood here anymore. Reset ChopsRemaining
-		// to the kind's log HP â€” the player has to actively chop the landed
-		// log to split it directly into pickup items.
-		ChopsRemaining = Tunables.LogChopHP[(int)Kind];
-	}
-
-	private void SnapTrunkOnImpact( float speedFrac )
-	{
-		if ( _landingSnapApplied ) return;
-		_landingSnapApplied = true;
-
-		float snap = MathX.Lerp( 5f, 14f, (speedFrac - 0.4f).Clamp( 0f, 0.9f ) / 0.9f );
-		var side = Vector3.Cross( Vector3.Up, _fellDir.WithZ( 0f ) );
-		if ( side.LengthSquared < 0.001f ) side = Vector3.Right;
-		side = side.Normal;
-
-		if ( _trunkUpperMr.IsValid() )
-		{
-			var upper = _trunkUpperMr.GameObject;
-			upper.LocalRotation *= Rotation.FromAxis( side, snap );
-			upper.LocalPosition += side * Game.Random.Float( 2f, 6f );
-		}
-		if ( _primaryCanopy.IsValid() )
-		{
-			_primaryCanopy.LocalRotation *= Rotation.FromAxis( side, snap * 0.65f );
-			_primaryCanopy.LocalPosition += side * Game.Random.Float( 4f, 10f );
-		}
-	}
-
-	// Valheim TreeLog.Destroy : Ã  HP=0 du landed log, drop directement les
-	// items via DropTable, ou via smaller landed logs. Items distribuÃ©s le
-	// long de l'axe du tronc avec offset random (m_spawnDistance).
-	// Pick a WoodType from a probability mix [Wood, Finewood, CoreWood].
-	// Mix probs must sum to ~1.0. Valheim DropTable weighted random pattern
-	// simplifiÃ© Ã  3 types. Internal pour permettre TestWoodTypeDistribution.
 	internal static WoodType PickWoodType( float[] mix )
 	{
 		float roll = Game.Random.Float( 0f, 1f );
@@ -1275,169 +782,6 @@ public sealed class Tree : Component, IChoppable, Component.ICollisionListener
 			if ( roll <= acc ) return (WoodType)i;
 		}
 		return WoodType.Wood;
-	}
-
-	private void SplitIntoLogs()
-	{
-		if ( _logSplit ) return;
-		_logSplit = true;
-
-		int kindIdx = (int)Kind;
-		int totalItems = Tunables.TreeKindLandedDropCount[kindIdx];
-		if ( IsMythic ) totalItems += 2;
-		var gs = GameState.Get( Scene );
-		bool luckTriggered = false;
-		if ( gs.IsValid() && gs.LuckChance > 0f && Game.Random.Float() < gs.LuckChance )
-		{
-			totalItems += Math.Max( 1, totalItems / 2 );
-			luckTriggered = true;
-		}
-
-		float trunkH = _trunkLen > 0f ? _trunkLen : Tunables.TreeHeight;
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
-		axis = axis.Normal;
-		var trunkCenter = LogCenter;
-		float spread = Tunables.ValheimTreeLogSpawnDistance;
-
-		// Spawn items along the trunk axis avec offset random (TreeLog.Destroy
-		// pattern : position = transform.position + transform.up Ã— Random(-d, d)
-		// + Vector3.up Ã— 0.3 Ã— i). AdaptÃ© Ã  nos unitÃ©s. Item scale = WorldScale
-		// du tree (Valheim TreeBase.SpawnLog : log/drops adoptent l'Ã©chelle parent).
-		// Type Valheim 1:1 : Beech-equivalent (Normal/Sapling) â†’ Wood pur ;
-		// Oak-equivalent (Veteran) â†’ Wood + Finewood mix ; Pine-equivalent
-		// (Brittle) â†’ Wood + CoreWood mix. Per-item roll dans TreeKindWoodTypeMix.
-		float itemScaleMul = WorldScale.x;
-		var mix = Tunables.TreeKindWoodTypeMix[kindIdx];
-		for ( int i = 0; i < totalItems; i++ )
-		{
-			float off = Game.Random.Float( -spread, spread );
-			var pos = trunkCenter + axis * off + Vector3.Up * (Tunables.ValheimTreeBaseDropYStep * i);
-			WoodType type = PickWoodType( mix );
-			WoodItem.SpawnValheimDropAt( Scene, pos, itemScaleMul, type );
-			if ( i < 8 )
-			{
-				ChipBurst.Spawn( Scene, pos, -axis, 2, _trunkTint );
-			}
-		}
-
-		Sfx.Play( "sounds/log_break.sound", WorldPosition,
-			volume: 1.0f, pitchMin: 0.62f, pitchMax: 0.82f );
-		if ( _primaryCanopy.IsValid() )
-			ChipBurst.SpawnLeaves( Scene, _primaryCanopy.WorldPosition, Vector3.Up, 18, _canopyTint );
-
-		// Luck-triggered extra drop â†’ Bonus popup au centre du log (Valheim
-		// pattern : DamageText.Bonus est utilisÃ© pour les skill-bonus yields
-		// dans Pickable.Interact).
-		if ( luckTriggered )
-		{
-			var luckHud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
-			if ( luckHud.IsValid() )
-				luckHud.ShowDamageText( "LUCKY!", trunkCenter, WoodHud.DamageTextBonus, isBonus: true );
-		}
-
-		GameObject?.Destroy();
-	}
-
-	private void TickLandedDecay()
-	{
-		if ( !Body.IsValid() ) return;
-		ApplyGroundContactLimits();
-		if ( _timeSinceLanded < Tunables.TreeLandedManualSleepDelay ) return;
-		Body.Sleeping = Body.Velocity.LengthSquared < Tunables.TreeLandedManualSleepSpeed * Tunables.TreeLandedManualSleepSpeed
-			&& Body.AngularVelocity.LengthSquared < Tunables.TreeLandedManualSleepAngularSpeed * Tunables.TreeLandedManualSleepAngularSpeed;
-
-		// Respawn maintenant gÃ©rÃ© par TreeStump (spawnÃ©e au StartFell, survit
-		// au split). Le tronc landed lui-mÃªme despawn juste aprÃ¨s le delay si
-		// le joueur l'a laissÃ© pourrir â€” la nouvelle tree est dÃ©jÃ  venue
-		// repousser sur la souche.
-		float despawnDelay = Tunables.TreeKindRespawnDelay[(int)Kind];
-		if ( IsMythic ) despawnDelay += Tunables.MythicRespawnExtra;
-		if ( (float)_timeSinceLanded > despawnDelay )
-		{
-			GameObject.Destroy();
-		}
-	}
-
-	private void StabilizeLandedMotion()
-	{
-		if ( !Body.IsValid() ) return;
-		var v = Body.Velocity;
-		if ( v.Length > Tunables.TreeLandedMaxSpeed )
-			v = v.Normal * Tunables.TreeLandedMaxSpeed;
-		v = v.WithZ( v.z.Clamp( -Tunables.TreeLandedMaxVerticalSpeed, Tunables.TreeLandedMaxVerticalSpeed ) );
-		Body.Velocity = v;
-
-		var av = Body.AngularVelocity;
-		if ( av.Length > Tunables.TreeLandedMaxAngularSpeed )
-			av = av.Normal * Tunables.TreeLandedMaxAngularSpeed;
-		Body.AngularVelocity = av;
-	}
-
-	private float DebugMinGroundClearance()
-	{
-		if ( Scene is null ) return 9999f;
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
-		axis = axis.Normal;
-		float radius = MathF.Max( _trunkWidth * 0.5f, 1f );
-		float length = MathF.Max( _trunkLen, radius * 2f + 1f );
-		float clearance = 9999f;
-		int count = Math.Max( 3, Tunables.LogGroundProbeCount );
-		for ( int i = 0; i < count; i++ )
-		{
-			float offset = LogProbeOffset( i, count, radius, length );
-			AccumulateGroundClearance( WorldPosition + axis * offset, radius, ref clearance );
-		}
-		return clearance;
-	}
-
-	private void ApplyGroundContactLimits()
-	{
-		if ( !Body.IsValid() ) return;
-		float clearance = DebugMinGroundClearance();
-		bool recentContact = (float)_timeSinceGroundContact < Tunables.TreeGroundContactMemory;
-		if ( !FallenLog.ShouldApplyGroundContactLimits( _landed, recentContact, clearance ) ) return;
-		var axis = WorldRotation.Up;
-		if ( axis.LengthSquared < 0.001f ) axis = Vector3.Up;
-		axis = axis.Normal;
-		float radius = MathF.Max( _trunkWidth * 0.5f, 1f );
-
-		var v = Body.Velocity;
-		if ( v.z > Tunables.TreeGroundContactMaxUpSpeed )
-			v = v.WithZ( Tunables.TreeGroundContactMaxUpSpeed );
-		bool sticky = FallenLog.ShouldUseStickyGroundDrag( _landed, recentContact );
-		float drag = sticky ? Tunables.TreeGroundContactStickyHorizontalDrag : Tunables.TreeGroundContactHorizontalDrag;
-		var flat = v.WithZ( 0f ) * drag;
-		Body.Velocity = flat + Vector3.Up * v.z;
-		Body.AngularVelocity *= sticky ? Tunables.TreeGroundContactStickyAngularDrag : Tunables.TreeGroundContactAngularDrag;
-		ApplyGroundRollCoupling( flat, axis, radius );
-	}
-
-	private void ApplyGroundRollCoupling( Vector3 flatVelocity, Vector3 axis, float radius )
-	{
-		var target = FallenLog.ComputeGroundRollTargetAngularVelocity( flatVelocity, axis, radius );
-		if ( target.LengthSquared < 0.001f ) return;
-		float c = Tunables.TreeGroundRollCoupling.Clamp( 0f, 1f );
-		Body.AngularVelocity = Body.AngularVelocity * (1f - c) + target * c;
-	}
-
-	private static float LogProbeOffset( int index, int count, float radius, float length )
-	{
-		float start = radius;
-		float end = MathF.Max( radius + 1f, length - radius );
-		float t = count <= 1 ? 0.5f : index / (float)(count - 1);
-		return MathX.Lerp( start, end, t );
-	}
-
-	private void AccumulateGroundClearance( Vector3 point, float radius, ref float clearance )
-	{
-		var hit = Scene.Trace.Ray( point + Vector3.Up * 140f, point - Vector3.Up * 260f )
-			.WithAnyTags( "ground" )
-			.Run();
-		if ( !hit.Hit ) return;
-		float wantedZ = hit.EndPosition.z + radius + Tunables.LogGroundSkin;
-		clearance = MathF.Min( clearance, point.z - wantedZ );
 	}
 }
 

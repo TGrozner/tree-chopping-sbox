@@ -17,8 +17,7 @@ internal static class ValheimImpact
 	public static int DamageFromSpeed( float speed, float damageMul = 1f )
 	{
 		if ( speed < Tunables.ImpactMinSpeed ) return 0;
-		float scaledDamage = Tunables.ImpactBaseDamage * ScaleFromSpeed( speed ) * damageMul;
-		if ( scaledDamage <= 0f ) return 0;
-		return Math.Max( 1, (int)MathF.Ceiling( scaledDamage ) );
+		var hit = HitData.MakeImpact( Vector3.Forward, default, Tunables.ValheimImpactToolTier, ScaleFromSpeed( speed ), damageMul );
+		return hit.GetTreeLogDamage();
 	}
 }
