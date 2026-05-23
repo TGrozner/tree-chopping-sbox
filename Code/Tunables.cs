@@ -6,6 +6,7 @@ public static class Tunables
 	// must scale WorldScale = wantedSize / CubeBase, and BoxCollider.Scale =
 	// (CubeBase, CubeBase, CubeBase).
 	public const float CubeBase = 50f;
+	public const float UnitsPerMeter = 39.37f;
 
 	// Player / player.
 	public const float PlayerEyeHeight = 56f;
@@ -54,13 +55,11 @@ public static class Tunables
 	public const int MythicSpawnRatio = 120;
 	public const float MythicScaleMul = 1.3f;
 
-	// Axe tier ladder. Each upgrade reduces ChopsRemaining drop per swing
-	// (ChopPower) and bumps the wood reward. Costs grow ×3.5 then ×3 so
-	// T1 is reachable in a handful of saplings but T6 takes Veteran wood.
-	// Tier names (HUD/lore): Hands, Stone Axe, Bronze, Iron, Steel,
-	// Lumberjack, Chainsaw.
+	// Axe tier ladder, compressed from Valheim axe chop damage by /10:
+	// Stone=20, Bronze=40, Iron=50, BlackMetal=60, Berserkr=80.
+	// T0 Hands and T6 Chainsaw are our prototype endpoints around that scale.
 	public const int MaxAxeTier = 6;
-	public static readonly int[] AxeTierChopPower = {    1,   2,    3,    5,    8,   12,   20 };
+	public static readonly int[] AxeTierChopPower = {    1,   2,    4,    5,    6,    8,   10 };
 	// Valheim 1:1 recipes — each axe tier requires multi-resource cost. Index
 	// 0=Wood, 1=Finewood, 2=CoreWood. Stone/Bronze pure Wood, Iron+ requires
 	// Finewood (Birch/Oak-tier resources), Steel+ requires CoreWood (Pine-tier).
@@ -109,6 +108,7 @@ public static class Tunables
 	// passe sous ce threshold (= tree tilt past ~45°). Match Valheim trees qui
 	// font un "whoosh" audible en plein air. cos(45°) = ~0.707.
 	public const float TreeWhooshUpDotThreshold = 0.707f;
+	public const float SfxMasterVolume = 0.85f;
 
 	// Per-kind chop SFX pitch multipliers — Sapling = high pitched crackle
 	// (light/thin wood), Veteran = deep thunk (dense/old wood), Brittle = dry
@@ -116,10 +116,8 @@ public static class Tunables
 	// range. Indices match TreeKind enum (Normal/Sapling/Veteran/Brittle).
 	public static readonly float[] TreeKindChopPitchMul = { 1.00f, 1.25f, 0.75f, 1.10f };
 
-	// ImpactEffect.m_interval Valheim — cooldown entre deux damage cascades sur
-	// le même tronc. Évite spam quand un log bounce/roule contre un voisin et
-	// re-fire OnCollisionStart répétément. Valheim default = 0.5s.
-	public const float ImpactInterval = 0.5f;
+	// ImpactEffect.m_interval on Valheim tree-log prefabs.
+	public const float ImpactInterval = 0.25f;
 
 	// Multi-wood types Valheim 1:1 — Beech/Birch drops "Wood" + chance "Finewood",
 	// Oak drops "Wood" + "Finewood", Pine (Black Forest) drops "Wood" + "Core Wood".
@@ -169,7 +167,7 @@ public static class Tunables
 	public const float ChopComboWindow = 1.2f;
 	public const float ChopComboFinalDamageMul = 2.0f;
 	public const float ChopComboFinalPushMul = 1.2f;
-	public const float SwingMoveSpeedFactor = 0.42f;
+	public const float SwingMoveSpeedFactor = 0.20f;
 
 	// Per-tool sub-stats (phase C) : level inside the Tools station to extend
 	// the current axe's reach + speed up the swing recovery. These ladders
@@ -216,9 +214,9 @@ public static class Tunables
 	public static readonly int[] TreeKindWoodReward = { 3, 1, 8, 2 };
 	public static readonly int MythicWoodBonus = 12;
 
-	// Per-kind chops required at T0. Sapling bumped 1->2 so even the easiest
-	// tree takes 2 hands swings : starter tool should feel weak.
-	public static readonly int[] TreeKindChopsBase = { 4, 2, 12, 3 };
+	// Standing tree HP, compressed from Valheim TreeBase health by /10.
+	// Normal=Beech80, Veteran=Oak200, Brittle=Pine120; Sapling is starter-scale.
+	public static readonly int[] TreeKindChopsBase = { 8, 4, 20, 12 };
 
 	// Per-kind minimum AxeTier required to chop. Lower tiers just bounce off
 	// (no ChopsRemaining decrement, HUD hint). Drives the "buy a better axe
@@ -239,25 +237,27 @@ public static class Tunables
 	// Valheim TreeBase -> TreeLog. Standing tree -> falls -> landed log
 	// (chopable) -> smaller landed logs or items.
 
-	// LogChopHP = HP du landed log avant split-logs/items.
+	// LogChopHP = HP du landed log avant split-logs/items. Compressed /10 from
+	// Valheim TreeLog health: Beech/Fir/Pine=60, Oak=160, Oak half=140.
 	// TreeKindLandedDropCount = nombre d'items lâchés au split (= total wood
 	// kind, modulé par luck + mythic à runtime).
-	public static readonly int[] LogChopHP                  = { 2, 1, 3, 1 };
+	public static readonly int[] LogChopHP                  = { 6, 3, 16, 6 };
 	public static readonly int[] TreeKindLandedDropCount    = { 4, 1, 9, 2 };
 	public static readonly int[] TreeKindSplitLogCount      = { 2, 0, 3, 0 };
-	public static readonly int[] TreeKindSplitLogHP         = { 1, 0, 2, 0 };
+	public static readonly int[] TreeKindSplitLogHP         = { 6, 0, 14, 0 };
 	public static readonly float[] TreeKindLogLengthMul     = { 0.34f, 0.42f, 0.30f, 0.34f };
 	public static readonly float[] TreeKindLogWidthMul      = { 0.58f, 0.64f, 0.52f, 0.55f };
-	public const float WoodItemPickupRange = 30f;
-	// Pickup kept slightly tighter than Valheim's 2m (~80u) so wood reads as a
-	// nearby cleanup action instead of long-range vacuum; speed is bumped so
-	// the final snap is still satisfying.
-	public const float WoodItemMagnetRange = 65f;
-	public const float WoodItemMagnetSpeed = 820f;
+	public const float WoodItemPickupRange = 0.3f * UnitsPerMeter;
+	public const float WoodItemMagnetRange = 2f * UnitsPerMeter;
+	public const float WoodItemMagnetSpeed = 15f * UnitsPerMeter;
 	// Grace post-spawn avant que le magnet engage — Valheim ItemDrop.CanPickup
 	// reject auto-pickup si `Time.time - m_spawnTime < 0.5`. Laisse le burst
 	// se voir avant que le snap commence.
 	public const float WoodItemMagnetGrace = 0.5f;
+	public const float WoodItemFullRejectCooldown = 0.35f;
+	public const float WoodItemFullRejectDistance = 0.65f * UnitsPerMeter;
+	public const float WoodItemFullRejectSpeed = 1.4f * UnitsPerMeter;
+	public const float WoodItemFullRejectUpSpeed = 0.35f * UnitsPerMeter;
 	public const float WoodItemDespawnDelay = 60f;
 	public const float WoodItemHintRange = 140f;
 	public static readonly Color WoodLogTint = new( 0.55f, 0.38f, 0.22f, 1f );
@@ -280,44 +280,56 @@ public static class Tunables
 		new( 0.62f, 0.46f, 0.20f, 1f ), // autumn ochre
 	};
 
-	// Fell physics. Slow-tip ramp = early seconds of the topple, scaled torque
-	// going from very-small to 42% of max so the fall has a gentle, sustained
-	// build-up (Valheim feel). 2026-05-21 : initial 5%→2%, duration 0.32→0.7s
-	// after scrapping the scripted creak pause (the visual-then-physics
-	// handoff created a velocity discontinuity — physics-only is smoother).
-	public const float FellTorque = 98000f;
-	public const float FellPush = 2400f;
-	public const float SlowTipInitialFrac = 0.02f;
-	public const float SlowTipRampFrac = 0.52f;
-	public const float SlowTipDuration = 1.05f;
-	// Initial angular velocity injectée au StartFell pour casser l'équilibre
-	// instable (COM pile au-dessus du pivot). Sans ça, l'arbre reste droit
-	// jusqu'à ce que le perso le pousse — la gravité gravity-torque est nulle
-	// exactement à theta=0. A small tilt seed starts the motion, then the high
-	// trunk impulse + continuous TickFall torque take over. Mass-independent (omega
-	// constant) pour que saplings et veterans démarrent au même rythme.
-	public const float InitialFellOmega = 0.18f;
-	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, trunkTop).
-	public const float InitialFellTopImpulseSpeed = 3.5f;
+	// Fell physics. Valheim TreeBase.SpawnLog spawns a physical TreeLog,
+	// resets its inertia tensor, then applies one off-center impulse. No
+	// continuous torque ramp and no explicit angular velocity seed.
+	public const float FellTorque = 0f;
+	public const float FellPush = 0f;
+	public const float SlowTipInitialFrac = 0f;
+	public const float SlowTipRampFrac = 0f;
+	public const float SlowTipDuration = 0f;
+	public const float InitialFellOmega = 0f;
+	// Valheim TreeBase.SpawnLog : AddForceAtPosition(hitDir * 0.2 * mass, pos + up * 4m * scale.y).
+	public const float ValheimSpawnLogImpulseMetersPerSecond = 0.2f;
+	public const float ValheimSpawnLogImpulseHeightMeters = 4f;
+	public const float InitialFellTopImpulseSpeed = ValheimSpawnLogImpulseMetersPerSecond * UnitsPerMeter;
+	public const float ValheimSpawnLogImpulseHeight = ValheimSpawnLogImpulseHeightMeters * UnitsPerMeter;
+	public const float ValheimTreeBaseDropRadius = 0.5f * UnitsPerMeter;
+	public const float ValheimTreeBaseDropYOffsetLow = 0.5f * UnitsPerMeter;
+	public const float ValheimTreeBaseDropYOffsetHigh = 4f * UnitsPerMeter;
+	public const float ValheimTreeBaseDropYStep = 0.3f * UnitsPerMeter;
+	public static readonly Vector3[] TreeKindLogSpawnPoint =
+	{
+		new( 0f, 0f, 9.20f * UnitsPerMeter ), // Normal -> Beech1 log_spawnp
+		new( 0f, 0f, 4.20f * UnitsPerMeter ), // Sapling -> FirTree log_spawnp
+		new( -0.10f * UnitsPerMeter, 0.06f * UnitsPerMeter, 7.16f * UnitsPerMeter ), // Veteran -> Oak1 log_spawnp
+		new( 0f, 0f, 4.20f * UnitsPerMeter ), // Brittle -> FirTree log_spawnp
+	};
+	public static readonly float[] TreeKindBaseDropYOffset =
+	{
+		ValheimTreeBaseDropYOffsetHigh,
+		ValheimTreeBaseDropYOffsetLow,
+		ValheimTreeBaseDropYOffsetLow,
+		ValheimTreeBaseDropYOffsetHigh,
+	};
+	public const float ValheimTreeLogSpawnDistance = 2f * UnitsPerMeter;
+	public const float ValheimTreeLogFullMass = 100f;
+	public const float ValheimTreeLogHalfMass = 50f;
+	public const float ValheimTreeLogLinearDamping = 0.1f;
+	public const float ValheimTreeLogAngularDamping = 0.2f;
 	public const float LogGroundSkin = 5f;
 	public const float SplitLogAxisSpawnFrac = 0.34f;
 	public const float SplitLogSideSpawnMin = 18f;
 	public const float SplitLogSideSpawnMul = 0.75f;
-	public const float SplitLogMaxSettledSpeed = 35f;
+	public const float ValheimTreeLogMaxDepenetrationVelocity = 1f * UnitsPerMeter;
+	public const float SplitLogMaxSpawnValidationSpeed = 2f * UnitsPerMeter;
 	public const float SplitLogSpawnPoseSettleDuration = 1.0f;
 	public const float SplitLogMaxSpawnUpDot = 0.32f;
 
-	// Per-kind multipliers pour différencier le feel à la chute. Index match
-	// TreeKind enum {Normal, Sapling, Veteran, Brittle}.
-	//   InitialFellOmega : Sapling=quick snap, Veteran=slow ominous start,
-	//                      Brittle=fast jagged collapse.
-	//   GroanPitch : Sapling=high (small/thin crack), Veteran=deep groan,
-	//                Brittle=sharp dry snap.
-	//   SplitImpactSpeed : multiplie le seuil — Brittle bas (s'ouvre sur
-	//                      n'importe quel impact ground), Veteran haut
-	//                      (faut un vrai impact pour split).
-	public static readonly float[] TreeKindInitialFellOmegaMul = { 1.0f, 1.4f, 0.7f, 1.25f };
-	public static readonly float[] TreeKindFellTorqueMul       = { 1.0f, 1.35f, 0.82f, 1.45f };
+	// Per-kind multipliers. Launch physics stays Valheim-exact; variation
+	// belongs to audio and break thresholds, not scripted fall torque.
+	public static readonly float[] TreeKindInitialFellOmegaMul = { 1.0f, 1.0f, 1.0f, 1.0f };
+	public static readonly float[] TreeKindFellTorqueMul       = { 1.0f, 1.0f, 1.0f, 1.0f };
 	public static readonly float[] TreeKindGroanPitchMul       = { 1.0f, 1.30f, 0.65f, 1.35f };
 	public static readonly float[] TreeKindSplitImpactMul      = { 1.0f, 1.0f, 1.0f, 0.45f };
 	// Bonus items droppés instantanément au StartFell (Valheim TreeBase.RPC_Damage
@@ -339,14 +351,16 @@ public static class Tunables
 	// après un split. Distinct de WoodLogPhysicsBreakGrace qui gate uniquement
 	// les triggers physics OnCollisionStart.
 	public const float WoodLogChopGrace = 0.2f;
-	public const float TreeAngularDampLanded = 0.75f;
-	public const float TreeLinearDampLanded = 0.45f;
+	// Also gates cascade impact damage on fresh logs; Valheim's Damage()
+	// early-return applies to every damage source while m_firstFrame is true.
+	public const float TreeAngularDampLanded = ValheimTreeLogAngularDamping;
+	public const float TreeLinearDampLanded = ValheimTreeLogLinearDamping;
 	public const float TreeLogSleepThreshold = 0.05f;
 	public const float TreeLandedManualSleepDelay = 3.0f;
 	public const float TreeLandedManualSleepSpeed = 5.0f;
 	public const float TreeLandedManualSleepAngularSpeed = 0.18f;
-	public const float TreeLandedPostImpactLinearMul = 0.65f;
-	public const float TreeLandedPostImpactAngularMul = 0.70f;
+	public const float TreeLandedPostImpactLinearMul = 1.0f;
+	public const float TreeLandedPostImpactAngularMul = 1.0f;
 	public const float TreeLandedMaxSpeed = 160f;
 	public const float TreeLandedMaxAngularSpeed = 2.8f;
 	public const float TreeLandedMaxVerticalSpeed = 44f;
@@ -358,6 +372,9 @@ public static class Tunables
 	public const float TreeGroundContactStickyHorizontalDrag = 0.90f;
 	public const float TreeGroundContactStickyAngularDrag = 0.92f;
 	public const float TreeGroundContactMaxUpSpeed = 5f;
+	public const float TreeGroundRollMinSpeed = 12f;
+	public const float TreeGroundRollCoupling = 0.16f;
+	public const float TreeGroundRollMaxAngularSpeed = 1.2f;
 	public const float TreePlayerBumpHorizontalMul = 0.18f;
 	public const float TreePlayerBumpAngularMul = 0.45f;
 	public const float TreePlayerBumpMaxUpSpeed = 2f;
@@ -370,47 +387,40 @@ public static class Tunables
 	public const float TreeRestingLandingSpeed = 90f;
 	public const float TreeRestingLandingAngularSpeed = 0.22f;
 
-	// Swing range : axe-arm reach. 130u ≈ 3.3m — generous melee, slightly past
-	// realistic arm length but close enough that the player has to be at the
-	// tree to chop it (Valheim is ~2.5m / 100u, we add margin for the trunk
-	// thickness eating ~30u between trunk-surface and trunk-center which is
-	// what ChooseSwingTarget measures to). Was 350u — way too generous, "you
-	// could chop a tree from across the plaza" reported 2026-05-21.
-	public const float SwingRange = 130f;
-	public const float SwingConeDot = 0.30f;
+	// Valheim Attack defaults : m_attackRange=1.5m and m_attackAngle=90°.
+	// Range is measured to the surface hit point, not trunk center.
+	public const float SwingAttackHeight = 0.6f * UnitsPerMeter;
+	public const float SwingRange = 1.5f * UnitsPerMeter;
+	public const float SwingConeDot = 0.70710678f;
 	public const float SwingAimSweepRadius = 14f;
 
-	// Per-hit nudge on landed trunks. Kept low so logs feel heavy and do not
-	// spin like light props when the player keeps chopping.
-	public const float LandedLogKickImpulse = 6f;
-	public const float LandedLogKickTorque = 24f;
-	public const float LandedLogHitPointTorqueMul = 0.10f;
-	public const float LogDropAxisSpreadFrac = 0.42f;
-	// Valheim TreeLog.Destroy uses m_spawnDistance=2m along the log up-axis,
-	// not a full-log shower. Cap the spread so drops stay readable near the
-	// trunk instead of flying hundreds of units down the slope.
-	public const float LogDropAxisSpreadMax = 82f;
+	// Valheim TreeLog.RPC_Damage : AddForceAtPosition(hit.m_dir * hit.m_pushForce * 2f, hit.m_point).
+	public const float LandedLogKickImpulse = 3f;
+	public const float ValheimTreeLogHitPushMul = 2f;
+	public const float LandedLogKickTorque = 0f;
+	public const float LandedLogHitPointTorqueMul = 0f;
+	// Valheim TreeLog.Destroy uses m_spawnDistance=2m along the log up-axis.
+	public const float LogDropAxisSpreadMax = ValheimTreeLogSpawnDistance;
 	public const float LogDropSideSpread = 26f;
 
-	// Valheim ImpactEffect pattern : `damage = m_damages × LerpStep(min, max, speed)`.
-	// Tree.OnCollisionStart calcule un damage scalé par la vitesse, l'applique au
-	// tronc qui tombe (m_damageToSelf) + au voisin hit s'il est un Tree (cascade).
-	// HP=0 sur self → SplitIntoLogs (auto-split sur impact violent).
-	// HP=0 sur other → StartFell (cascade domino) ou SplitIntoLogs si landed.
-	// Min/Max in u/s sbox : équivalent Valheim m_minVelocity~3m/s, m_maxVelocity~15m/s.
-	public const float ImpactMinSpeed = 250f;
-	public const float ImpactMaxSpeed = 1500f;
-	public const float ImpactSoftMinSpeed = 90f;
+	// Valheim tree-log ImpactEffect prefab values: min=1m/s, max=5m/s,
+	// damageToSelf=false. Payload is chop=30 + blunt=50; tree/log modifiers
+	// make blunt immune, so effective damage is chop=30 -> /10 = 3.
+	public const int ValheimImpactToolTier = 2;
+	public const float ValheimImpactMinVelocity = 1f * UnitsPerMeter;
+	public const float ValheimImpactMaxVelocity = 5f * UnitsPerMeter;
+	public const float ImpactMinSpeed = ValheimImpactMinVelocity;
+	public const float ImpactMaxSpeed = ValheimImpactMaxVelocity;
+	public const float ImpactSoftMinSpeed = ValheimImpactMinVelocity;
 	public const float ImpactHardScale = 0.35f;
 	public const float ImpactViolentScale = 0.62f;
-	public const int ImpactBaseDamage = 6;
-	public const float CascadeSweepInterval = 0.18f;
-	public const float CascadeSweepMinSpeed = 90f;
+	public const int ImpactBaseDamage = 3;
+	public const float CascadeSweepInterval = ImpactInterval;
+	public const float CascadeSweepMinSpeed = ImpactMinSpeed;
 	public const float CascadeSweepRadius = 46f;
-	public const float CascadeSweepDamageMul = 0.85f;
-	// Le falling tree subit-il aussi le damage (m_damageToSelf) ?
-	// True = TreeLog crash sur sol = peut s'auto-split sur impact violent.
-	public const bool ImpactDamageSelf = true;
+	public const float CascadeSweepDamageMul = 1.0f;
+	// A log can damage another tree/log, but hitting the ground does not damage itself.
+	public static readonly bool ImpactDamageSelf = false;
 	// Legacy : on garde TreeSplitImpactSpeed × TreeKindSplitImpactMul comme
 	// fallback boolean (en plus du damage scalé) pour les kinds Brittle qui
 	// doivent split à seuil bas même si damage incrémental est lent.
@@ -426,8 +436,8 @@ public static class Tunables
 
 
 
-	// Swing feel : click → WindUp (anticipation) → Impact (Chop + chips + cam
-	// punch + hit-stop) → Recovery (input locked) → Idle. The wind-up is what
+	// Swing feel : click → WindUp (anticipation) → Impact (Chop + chips +
+	// held-axe punch + hit-stop) → Recovery (input locked) → Idle. The wind-up is what
 	// turns the swing from a toggle into a gesture ; the hit-stop conveys weight.
 	// Cadence bumped 2026-05-21 to ~1s/chop (was ~0.63s) — matches the more
 	// pondered Valheim axe rhythm observed in Thomas's gameplay capture.

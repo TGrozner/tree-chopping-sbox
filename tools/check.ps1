@@ -1,7 +1,9 @@
 param(
 	[string]$ProjectDir = "C:\dev\tree-chopping-sbox",
 	[int]$Seeds = 1,
+	[int]$MaxParallel = 2,
 	[int]$TimeoutSeconds = 75,
+	[int]$MinPassMarkers = 52,
 	[switch]$SkipSelftest
 )
 
@@ -32,8 +34,8 @@ if ( -not (Test-Path $selftest) ) {
 	exit 2
 }
 
-Write-Host "[check] selftest seeds=$Seeds timeout=${TimeoutSeconds}s" -ForegroundColor Cyan
-& $selftest -Seeds $Seeds -TimeoutSeconds $TimeoutSeconds
+Write-Host "[check] selftest seeds=$Seeds maxParallel=$MaxParallel timeout=${TimeoutSeconds}s minPassMarkers=$MinPassMarkers" -ForegroundColor Cyan
+& $selftest -Seeds $Seeds -MaxParallel $MaxParallel -TimeoutSeconds $TimeoutSeconds -MinPassMarkers $MinPassMarkers
 if ( $LASTEXITCODE -ne 0 ) {
 	Write-Error "[check] selftest failed"
 	exit $LASTEXITCODE

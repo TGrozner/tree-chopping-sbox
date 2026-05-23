@@ -11,7 +11,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 2. **Headless est le loop par défaut, pas l'éditeur :**
    - `dotnet build C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj` pour valider les types.
    - `sbox-server.exe +game <sbproj> +maxplayers 1` pour le lifecycle + physique (pas de rendu, pas d'input client). `Log.Info` → stdout.
-   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/deposit, cascade, too-hard, stats, prestige. **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
+   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/deposit, cascade, too-hard, stats, prestige. `-Seeds N` tourne en batches parallèles de 2 et retry uniquement la race connue de compile sbox locale (`SceneStarter` missing après compile NRE). **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
    - `sbox.exe` ne marche PAS sur projets locaux (traite le sbproj comme un cloud package et 404). Seuls `sbox-dev.exe` (éditeur) et `sbox-server.exe` (headless) gèrent du dev non shippé.
 
 3. **`System.Environment.*` est sur le deny-list de la whitelist du compiler s&box.** `GetEnvironmentVariable`, `GetCommandLineArgs`, etc. font échouer la compile avec `"is not allowed when whitelist is enabled"`. Pour les flags de lancement → `[ConVar("name")]`, set via `sbox-server.exe ... +name value`.
@@ -26,13 +26,15 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 
 8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le player les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` flippe la valeur à `true` quand `ChopsRemaining` tombe à 0 (multi-chop). Les voisins debout restent donc kinematic, et la cascade Valheim passe par `Tree.OnCollisionStart` + `ApplyImpactDamage` : vitesse d'impact → damage → shake/fell/split. Garde le kinematic-standing, ne reviens pas à une propagation physique pure.
 
-9. **Un test qui prend un raccourci passe pendant que le chemin réel est cassé.** Le premier SelfTest appelait `Tree.Chop()` direct et a caché 2 bugs prod (`GetAllComponents<Component>` retournant 0, `Tree.IChoppable.IsValid` excluant les landed logs). Chaque phase de selftest DOIT exercer au moins un code path joueur réel — `AxeController.DebugSwing → ChooseSwingTarget → Chop`, pas `Chop()` direct. **Corollaire TDD : quand tu ajoutes un nouveau pipeline runtime, écris d'abord la phase de selftest qui DOIT échouer sans ton impl, puis ajoute l'impl. Si la phase passe avant que tu codes l'impl, elle ne teste rien.**
+9. **Tree physics = Valheim first, tests mandatory.** Pour arbres/logs/sublogs, ne tune pas une physique maison tant qu'un comportement Valheim existe dans `_valheim-decompile`. Copier d'abord le pattern décompilé (`TreeBase.SpawnLog`, `TreeLog.RPC_Damage`, `ImpactEffect`, `HitData`), puis adapter seulement l'unité/shape s&box nécessaire. Toute divergence volontaire doit être nommée dans un test anti-régression ou dans `_valheim-decompile/TREE-PIPELINE.md`.
 
-10. **Conventions Source 2.** Z is up (pas Y). Unités = inches (`Tunables.UnitsPerMeter = 39.37`). `Vector3.Forward = +X`. Spawn de cubes via `WorldScale = wantedSize / Tunables.CubeBase` parce que `Model.Cube` est le dev cube natif 50u. Quaternions = (x, y, z, w).
+10. **Un test qui prend un raccourci passe pendant que le chemin réel est cassé.** Le premier SelfTest appelait `Tree.Chop()` direct et a caché 2 bugs prod (`GetAllComponents<Component>` retournant 0, `Tree.IChoppable.IsValid` excluant les landed logs). Chaque phase de selftest DOIT exercer au moins un code path joueur réel — `AxeController.DebugSwing → ChooseSwingTarget → Chop`, pas `Chop()` direct. **Corollaire TDD : quand tu ajoutes un nouveau pipeline runtime, écris d'abord la phase de selftest qui DOIT échouer sans ton impl, puis ajoute l'impl. Si la phase passe avant que tu codes l'impl, elle ne teste rien.**
 
-11. **Style de code de ce repo.** Tabs + `if ( foo )` (espaces dans les parens). Default à zéro commentaires : un commentaire ne se justifie que quand le *why* est non-évident (contrainte cachée, incident passé, invariant subtil). Pas de wrappers "legacy", pas de stubs pour des besoins hypothétiques. Trois lignes similaires battent une abstraction prématurée. FR OK dans les commits + logs + AGENTS.md ; XML / docs sbox-facing restent EN.
+11. **Conventions Source 2.** Z is up (pas Y). Unités = inches (`Tunables.UnitsPerMeter = 39.37`). `Vector3.Forward = +X`. Spawn de cubes via `WorldScale = wantedSize / Tunables.CubeBase` parce que `Model.Cube` est le dev cube natif 50u. Quaternions = (x, y, z, w).
 
-12. **Agents parallèles éditent parfois les mêmes fichiers.** Re-read avant Edit si tu as `"File has been modified"`, re-applique minimalement. Pas de commit sans `"commit ça"` explicite — l'utilisateur fait ses propres petits commits `phase2X:`.
+12. **Style de code de ce repo.** Tabs + `if ( foo )` (espaces dans les parens). Default à zéro commentaires : un commentaire ne se justifie que quand le *why* est non-évident (contrainte cachée, incident passé, invariant subtil). Pas de wrappers "legacy", pas de stubs pour des besoins hypothétiques. Trois lignes similaires battent une abstraction prématurée. FR OK dans les commits + logs + AGENTS.md ; XML / docs sbox-facing restent EN.
+
+13. **Agents parallèles éditent parfois les mêmes fichiers.** Re-read avant Edit si tu as `"File has been modified"`, re-applique minimalement. Pas de commit sans `"commit ça"` explicite — l'utilisateur fait ses propres petits commits `phase2X:`.
 
 Workflow type pour un changement runtime :
 1. `dotnet build` → types OK.
@@ -43,7 +45,7 @@ Workflow type pour un changement runtime :
 - Source canonique pour Codex : `AGENTS.md` + `Code/AGENTS.md`.
 - `CLAUDE.md`, `Code/CLAUDE.md` et `.claude/settings.json` restent en compat legacy. Ne pas les supprimer sans demande explicite.
 - `.codex/hooks.json` est configuré, mais les sessions Codex doivent quand même lancer explicitement `tools\check.ps1` après les changements runtime critiques tant que l'auto-hook n'a pas été observé dans la session.
-- Commande réflexe : `tools\check.ps1` = `dotnet build` puis `tools\selftest.ps1 -Seeds 1 -TimeoutSeconds 75`.
+- Commande réflexe : `tools\check.ps1` = `dotnet build` puis `tools\selftest.ps1 -Seeds 1 -MaxParallel 2 -TimeoutSeconds 75`. Pour fuzz plus large sans race compile sbox : `tools\check.ps1 -Seeds 4 -MaxParallel 2 -TimeoutSeconds 120`.
 
 **Harness automation (`.codex/hooks.json`)** :
 - **PostToolUse hook** lance `dotnet build Code/tree_chopping.csproj` après chaque Edit/Write/MultiEdit sur `Code/**/*.cs`. Échec → exit 2 + stderr remonté ici comme blocking message. Étape 1 du workflow appliquée automatiquement.
@@ -52,6 +54,16 @@ Workflow type pour un changement runtime :
 - Scripts : `tools/hooks/post-edit-build.ps1` et `tools/hooks/stop-selftest.ps1` — modifie-les si la couverture ne te convient pas.
 
 User = Thomas : FR, 10 ans Godot, deux mois s&box. Préfère terse, pas de hand-holding, pas de résumé trailing. Confirmer avant destructive ops (`git reset`, force-push, mass-delete). Quand tu as plusieurs streams search/edit qui ne touchent pas les mêmes fichiers, fan-out en Agent calls parallèles — c'est le default qu'il a demandé. Sur un bug runtime non-trivial (cascade qui ne chaîne pas, timing physique foireux, race conditions OnAwake/OnStart), tu peux écrire "ultrathink" ou "think harder" dans ton prompt à toi-même au moment de planifier — c'est une trigger phrase Anthropic qui bumpe le reasoning budget sans cérémonie `/effort`.
+
+## Process Codex — continuity + anti-drift
+
+Inspiré des retours AGENTS.md partagés par d'autres users Codex : continuité compacte, fail-fast, progressive disclosure. Application locale :
+
+- **Au début d'une reprise substantielle** (autonomie longue, retour après compaction, bug complexe, changement de direction), lis `.agent/CONTINUITY.md` après `AGENTS.md` / `Code/AGENTS.md`. Si le fichier manque, crée-le au format court ci-dessous.
+- **Mets `.agent/CONTINUITY.md` à jour seulement sur delta durable** : objectif/success criteria, décision de design, état Done/Now/Next, incident récurrent, receipt utile (`commit`, capture, log, selftest). Pas de transcript, pas de raw logs, pas de journal intime.
+- **Borne le ledger** : `Snapshot` ≤ 12 lignes, `Receipts` ≤ 12 entrées récentes, vieux bruit compressé en milestone avec pointeur. Si c'est trop long, il ne sera plus lu.
+- **Fail fast > fallback silencieux** : n'ajoute pas de fallback qui masque une casse runtime, un asset manquant, une API incertaine ou un comportement physique foireux. Si un fallback est nécessaire pour stabiliser, il doit être visible (`Log.Warning`, selftest, commentaire court ou TODO daté) et relié à une preuve.
+- **Progressive disclosure** : garde `AGENTS.md` pour les invariants et liens. Les détails vivants vont dans `Code/AGENTS.md`, `tools/session-prompt.md`, `_valheim-decompile/*.md`, `.agent/CONTINUITY.md`, captures/logs. Ne colle pas de gros dumps dans les instructions racine.
 
 ## TL;DR — comment bosser sans l'éditeur
 
@@ -125,7 +137,7 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 
 `Phase` + `Elapsed` + `WoodAtFinish` + `SwingsFired` exposed en `[Property, ReadOnly]` pour polling via bridge. `GameState.Save` skip quand FilmStrip est actif → la save user n'est jamais nukée par le `ResetForTest`.
 
-**Chemin recommandé (validé 2026-05-22)** : `tools\capture-feel.ps1 -TargetKind Normal -AudioLog` pilote le bridge, capture des frames, génère `feel.mp4`, `contact-sheet.jpg`, `events.log`, puis permet de lire les PNG/contact sheet directement. Utilise ça en priorité pour les passes Valheim-feel ; le loop MCP manuel reste le fallback si le script casse.
+**Chemin recommandé (validé 2026-05-22)** : `tools\capture-feel.ps1 -TargetKind Normal -AudioLog` pilote le bridge, capture des frames, génère `feel.mp4`, `contact-sheet.jpg`, `events.log`, puis permet de lire les PNG/contact sheet directement. Utilise ça en priorité pour les passes Valheim-feel ; le loop MCP manuel reste le fallback si le script casse. Pour une régression visuelle multi-scenarios, `tools\feel-suite.ps1 -AudioLog` enchaîne Sapling/Normal/Veteran/Brittle et échoue si une capture ne finit pas en Pickup/Done ou si `misses>0`.
 
 **Côté orchestrateur manuel (Codex dans une session avec sbox-dev ouvert)** — procédure standard :
 1. `mcp__sbox__get_bridge_status` → `connected:true`
@@ -363,12 +375,13 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 - Hit point pour kicks landed log (Destructible.RPC_Damage `hit.m_dir × hit.m_pushForce` at `hit.m_point`)
 - Tier-scaled push force (`hit.m_pushForce ∝ ChopPower`)
 - DamageText popup : couleurs Valheim verbatim (`Normal=white`, `TooHard=pale red 0.8/0.7/0.7`, `Bonus=orange 1/0.63/0.24`), distance cull 30m, font size split à 10m, random offset 20u, cubic alpha decay `1-pow(t,3)`, 1.5s standard / 3s bonus, cap 200.
+- TreeBase bonus drop placement : `Random.insideUnitCircle * 0.5m`, per-prefab `m_spawnYOffset` mapped by kind (Beech/Fir-like 4m, Birch/Oak/Pine-like 0.5m), `m_spawnYStep=0.3m`.
 - Bonus DamageText sur Mythic fell + Luck-triggered drops (Valheim pattern : Pickable.Interact fire Bonus sur skill-driven bonus yield)
 - Grow animation au respawn (TreeBase.GrowAnimation scale 0→1 sur 0.3s)
 - Per-kind impact/groan/initial-omega multipliers (Brittle = low split threshold, Veteran = slow start)
-- EnhancedCcd (≈ maxDepenetrationVelocity = 1f)
+- `Rigidbody.maxDepenetrationVelocity=1f` emulated where s&box exposes no direct equivalent; do not confuse it with a general log speed cap.
 - Auto-pickup magnet (Player.AutoPickup) : 80u range = 2m, grace 0.5s post-spawn (c_AutoPickupDelay)
-- **Cascade domino + physics auto-split via ImpactEffect pattern** : `Tree.OnCollisionStart` calcule damage scalé `LerpStep(min, max, speed) × baseDamage`. Damage self (m_damageToSelf) + other Tree (cascade). HP=0 → StartFell ou SplitIntoLogs. Calibration : ImpactMinSpeed=250, ImpactMaxSpeed=1500, ImpactBaseDamage=6.
+- **Cascade domino via ImpactEffect pattern** : `Tree.OnCollisionStart` calcule damage scalé `LerpStep(min, max, speed) × baseDamage` sur les autres `Tree`/`FallenLog`. Les prefabs Valheim TreeLog ont `m_damageToSelf=false`, donc un tronc ne doit pas se splitter juste en frappant le sol. Calibration extraite : ImpactMinSpeed=1m/s, ImpactMaxSpeed=5m/s, ImpactInterval=0.25s, ImpactToolTier=2, Rigidbody mass full/half=100/50, drag/angularDrag=0.1/0.2.
 
 **Déviations RETIRÉES** (don't put them back without explicit Thomas go) :
 - Cascade momentum-based (mass × velocity / mass ratio) — remplacé par damage scaling Valheim
@@ -379,12 +392,11 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 - Auto-pickup ON par défaut (Valheim toggle) — Cookie-Clicker arcade UX
 - Respawn delay en seconds (30-300s) vs Valheim minutes — locked-arena cadence
 - Skill system tier-based shop (vs Valheim continuous 0-100 RaiseSkill) — different design
-- KickWobble 9° single-axis (vs Valheim 1.5° dual-axis 40Hz buzz) — style choice, lit mieux avec cubes
 
 **Outils d'audit** :
 - `ilspycmd -t <Class> <dll>` pour décompiler une classe ciblée. Cache en `$env:TEMP\valheim_*.cs`. Décompile globale : `ilspycmd -p -o /tmp/valheim_full <dll>` (603 fichiers).
 - `mcp__sbox__trigger_hotload` pour pousser nos changes dans sbox-dev ouvert.
-- `tools/selftest.ps1` : phases tests verrouillent les comportements clés. ~11s wall, 10+ phases.
+- `tools/check.ps1` : build + selftest, expose `-Seeds`, `-MaxParallel`, `-TimeoutSeconds`, `-MinPassMarkers` (default 52). `-Seeds 4 -MaxParallel 2` prend ~60s et couvre 52 PASS markers par seed.
 
 **Déviations restantes (assumées)** :
 - Pipeline TreeBase destroy + spawn TreeLog désormais aligné : `Tree` standing détruit après spawn `FallenLog`, qui porte le chop/impact landed.
@@ -395,7 +407,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 **Outils d'audit** :
 - `ilspycmd -t <Class> <dll>` pour décompiler une classe ciblée. Cache en `$env:TEMP\valheim_*.cs`.
 - `mcp__sbox__trigger_hotload` pour pousser nos changes dans sbox-dev ouvert.
-- `tools/selftest.ps1` : phase contract dérivé de `Code/SelfTest.cs`, ~40 PASS markers sur le pipeline chop/economy/Valheim-feel. ~13-15s wall.
+- `tools/selftest.ps1` : phase contract dérivé de `Code/SelfTest.cs`, 52 PASS markers sur le pipeline chop/economy/Valheim-feel. `-Seeds 2 -MaxParallel 2` ~30s, `-Seeds 4 -MaxParallel 2` ~60s.
 
 **Drift restant dans CE document** : certains détails HUD/shop peuvent encore évoluer vite. Si tu touches au hub/shop, relis `ShopStation.cs`, `WoodHud.cs` et `GameState.cs` avant d'éditer la doc.
 

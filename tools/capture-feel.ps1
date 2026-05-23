@@ -3,7 +3,7 @@ param(
 	[string]$OutputRoot = "C:\dev\tree-chopping-sbox\_captures",
 	[string]$SboxLog = "C:\Program Files (x86)\Steam\steamapps\common\sbox\logs\sbox-dev.log",
 	[string]$ScreenshotDir = "C:\Program Files (x86)\Steam\steamapps\common\sbox\screenshots",
-	[int]$DurationSeconds = 8,
+	[int]$DurationSeconds = 20,
 	[int]$FrameIntervalMs = 350,
 	[int]$VideoFps = 8,
 	[int]$SheetColumns = 6,
@@ -29,11 +29,31 @@ function Resolve-Tool {
 
 function New-CaptureDir {
 	param( [string]$Root )
-	$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+	New-Item -ItemType Directory -Path $Root -Force | Out-Null
+	$stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
 	$dir = Join-Path $Root $stamp
-	New-Item -ItemType Directory -Path $dir -Force | Out-Null
+	$attempt = 0
+	while ( Test-Path $dir ) {
+		$attempt++
+		$dir = Join-Path $Root ( "$stamp-$attempt" )
+	}
+	New-Item -ItemType Directory -Path $dir -ErrorAction Stop | Out-Null
 	New-Item -ItemType Directory -Path (Join-Path $dir "frames") -Force | Out-Null
 	return $dir
+}
+
+function Enter-CaptureLock {
+	$mutex = [System.Threading.Mutex]::new( $false, "Global\tree_chopping_capture_feel" )
+	try {
+		$locked = $mutex.WaitOne( 0 )
+	} catch [System.Threading.AbandonedMutexException] {
+		$locked = $true
+	}
+	if ( -not $locked ) {
+		$mutex.Dispose()
+		throw "capture-feel already running; run captures sequentially because they control the same sbox-dev Play session"
+	}
+	return $mutex
 }
 
 function Read-SharedLines {
@@ -186,6 +206,8 @@ if ( $DryRun ) {
 	exit 0
 }
 
+$captureMutex = Enter-CaptureLock
+
 Invoke-Bridge "get_bridge_status" | Out-Null
 
 if ( -not $NoRestart ) {
@@ -282,3 +304,7 @@ if ( $ffprobe ) {
 Write-Host "[capture-feel] video:   $video" -ForegroundColor Green
 Write-Host "[capture-feel] sheet:   $sheet" -ForegroundColor Green
 Write-Host "[capture-feel] events:  $events" -ForegroundColor Green
+if ( $captureMutex ) {
+	$captureMutex.ReleaseMutex()
+	$captureMutex.Dispose()
+}

@@ -19,7 +19,8 @@ public sealed class AxeController : Component
 	private IChoppable _previewTarget;
 	// Combo chain Valheim Attack.m_attackChainLevels — chain reset à 0 si gap
 	// > ChopComboWindow ou level atteint max. Level final = chop damage ×
-	// ChopComboFinalDamageMul + push × ChopComboFinalPushMul. Expose en
+	// ChopComboFinalDamageMul + HitData.PushForce × ChopComboFinalPushMul.
+	// PushForce stays separate from ChopPower like Valheim. Expose en
 	// [Property, ReadOnly] pour HUD pip indicator + selftest visibility.
 	[Property, ReadOnly] public int ChainLevel { get; private set; }
 	private TimeSince _timeSinceLastSwing = 999f;
@@ -238,7 +239,7 @@ public sealed class AxeController : Component
 		_phaseTime += Time.Delta;
 		if ( _phaseTime < Tunables.SwingWindUpDuration ) return;
 
-		var origin = WorldPosition + Vector3.Up * Tunables.PlayerEyeHeight;
+		var origin = MeleeAttackOrigin();
 		var forward = _pendingForward.LengthSquared > 0.001f ? _pendingForward : EyeForwardFlat();
 		var hit = PickCameraAimTarget( out var impactPoint )
 			?? ChooseSwingTarget( origin, forward, out impactPoint );
@@ -257,6 +258,7 @@ public sealed class AxeController : Component
 			int chopPower = isFinalHit
 				? Math.Max( 1, (int)MathF.Ceiling( basePower * Tunables.ChopComboFinalDamageMul ) )
 				: basePower;
+			float pushForce = Tunables.LandedLogKickImpulse * Tree.ComputeLandedKickPowerScale( basePower, chopPower );
 			bool tooHard = IsTooHardTreeHit( hit );
 			// Pass tree tint pour que les chips reflètent la couleur du bois
 			// frappé (Valheim chips wood-type colored). Pitch SFX par kind :
@@ -287,19 +289,19 @@ public sealed class AxeController : Component
 			}
 			if ( tooHard )
 			{
-				hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier ) );
+				hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier, pushForce ) );
 				ApplyTooHardFeedback( impactPoint, hitDir );
 			}
 			else
 			{
 				ApplyImpactFeedback( impactPoint, hitDir, chipTint, chopPitchMul, willBreakTree, damageFrac, isLogHit );
-				hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier ) );
+				hit.Damage( HitData.Make( hitDir, chopPower, impactPoint, toolTier, pushForce ) );
 			}
 		}
 		else
 		{
-			Sfx.PlayLocal( "sounds/swing.sound",
-				volume: 0.72f, pitchMin: 1.16f, pitchMax: 1.38f );
+			// The whoosh is fired at wind-up start; misses should not replay the
+			// same local swing layer at impact time.
 		}
 
 		_phase = SwingPhase.Recovery;
@@ -346,9 +348,8 @@ public sealed class AxeController : Component
 			Sfx.PlayLocal( "sounds/log_break.sound", volume: 0.16f * vol, pitchMin: 1.18f * kindPitch, pitchMax: 1.34f * kindPitch );
 			Sfx.Play( "sounds/log_break.sound", contactPoint, volume: 0.12f * vol, pitchMin: 1.18f * kindPitch, pitchMax: 1.34f * kindPitch );
 		}
-		// Positional camera shake — kept very subtle after the Phase D revert.
-		// Was 1.6 + power×0.2 (up to 3.2u) → felt "shake de fou" ; halved.
-		// Final hit boost le shake aussi.
+		// Held-axe impact punch consumed by PlayerAxeView. This does not move
+		// the camera; Thomas asked to remove camera zoom/shake, not weapon bite.
 		AddViewImpactKick( heavyHit ? 1.35f : 0.85f );
 	}
 
@@ -387,7 +388,7 @@ public sealed class AxeController : Component
 	// minus the [TC_TEST] log spam (~4 lines/sec at autoplay cadence).
 	public IChoppable DebugSwing()
 	{
-		var origin = WorldPosition + Vector3.Up * Tunables.PlayerEyeHeight;
+		var origin = MeleeAttackOrigin();
 		var forward = EyeForwardFlat();
 		var hit = ChooseSwingTarget( origin, forward, out var impactPoint );
 		if ( hit is null ) return null;
@@ -401,7 +402,7 @@ public sealed class AxeController : Component
 
 	public IChoppable DebugSwingVerbose()
 	{
-		var origin = WorldPosition + Vector3.Up * Tunables.PlayerEyeHeight;
+		var origin = MeleeAttackOrigin();
 		var forward = EyeForwardFlat();
 		Log.Info( $"[TC_TEST] DebugSwingVerbose origin={origin} forward={forward}" );
 
@@ -413,11 +414,12 @@ public sealed class AxeController : Component
 			considered++;
 			if ( !c.IsValid() ) { droppedValid++; continue; }
 			if ( !c.AcceptsTool( ToolKind.Axe ) ) { droppedTool++; continue; }
-			var to = GetAimCenter( c ) - origin;
+			var candidateHitPoint = GetFallbackHitPoint( c, origin );
+			var to = candidateHitPoint - origin;
 			to.z = 0f;
 			var dist = to.Length;
 			if ( dist > SwingRangeNow() ) { droppedRange++; continue; }
-			var dot = forward.Dot( to.Normal );
+			var dot = dist > 0.001f ? forward.Dot( to.Normal ) : 1f;
 			if ( dot < Tunables.SwingConeDot ) { droppedCone++; continue; }
 			var score = dot - dist * 0.005f;
 			if ( score > bestScore ) { bestScore = score; best = c; }
@@ -436,6 +438,8 @@ public sealed class AxeController : Component
 	// Effective swing range — base × per-tool Range sub-stat multiplier.
 	private float SwingRangeNow() => Tunables.SwingRange * (GameState.Get( Scene )?.SwingRangeMultiplier ?? 1f);
 
+	private Vector3 MeleeAttackOrigin() => WorldPosition + Vector3.Up * Tunables.SwingAttackHeight;
+
 	private IChoppable ChooseSwingTarget( Vector3 origin, Vector3 forward, out Vector3 hitPoint )
 	{
 		hitPoint = default;
@@ -445,16 +449,21 @@ public sealed class AxeController : Component
 		foreach ( var c in Scene.GetAllComponents<IChoppable>() )
 		{
 			if ( !c.IsValid() || !c.AcceptsTool( ToolKind.Axe ) ) continue;
-			var to = GetAimCenter( c ) - origin;
+			var candidateHitPoint = GetFallbackHitPoint( c, origin );
+			var to = candidateHitPoint - origin;
 			to.z = 0f;
 			var dist = to.Length;
 			if ( dist > range ) continue;
-			var dot = forward.Dot( to.Normal );
+			var dot = dist > 0.001f ? forward.Dot( to.Normal ) : 1f;
 			if ( dot < Tunables.SwingConeDot ) continue;
 			var score = dot - dist * 0.005f;
-			if ( score > bestScore ) { bestScore = score; best = c; }
+			if ( score > bestScore )
+			{
+				bestScore = score;
+				best = c;
+				hitPoint = candidateHitPoint;
+			}
 		}
-		if ( best is not null ) hitPoint = GetFallbackHitPoint( best, origin );
 		return best;
 	}
 
@@ -462,12 +471,6 @@ public sealed class AxeController : Component
 	{
 		if ( target is Tree tree ) return tree.GetChopPointFrom( origin );
 		if ( target is FallenLog log ) return log.GetChopPointFrom( origin );
-		return target.WorldPosition;
-	}
-
-	private static Vector3 GetAimCenter( IChoppable target )
-	{
-		if ( target is FallenLog log ) return log.LogCenter;
 		return target.WorldPosition;
 	}
 
@@ -542,7 +545,7 @@ public sealed class AxeController : Component
 	{
 		hitPos = default;
 		if ( !Camera.IsValid() ) return null;
-		var origin = WorldPosition + Vector3.Up * Tunables.PlayerEyeHeight;
+		var origin = MeleeAttackOrigin();
 		var ray = Camera.ScreenNormalToRay( new Vector3( 0.5f, 0.5f, 0f ) );
 		float sweepLen = 2000f;
 		var end = ray.Position + ray.Forward * sweepLen;

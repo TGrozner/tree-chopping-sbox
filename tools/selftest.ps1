@@ -1,13 +1,13 @@
-# Headless self-test runner — parallèle par défaut.
+# Headless self-test runner - parallel by default.
 #
 # Spawns sbox-server.exe per seed with +tc_selftest 1. Chaque process redirect
 # stdout/stderr en fichier. Poll periodically pour DONE marker.
 #
 # Validations par iteration :
-#   1. Phase contract — chaque phase emit [TC_TEST] PHASE_OK <name>.
-#   2. FAIL markers — toute ligne [TC_TEST] *FAIL* ou [TC_INV] FAIL.
-#   3. Exception watchdog — Exception/FATAL/Unhandled hors allowlist.
-#   4. PASS count — au moins 1 marker [TC_TEST] *PASS*.
+#   1. Phase contract - chaque phase emit [TC_TEST] PHASE_OK <name>.
+#   2. FAIL markers - toute ligne [TC_TEST] *FAIL* ou [TC_INV] FAIL.
+#   3. Exception watchdog - Exception/FATAL/Unhandled hors allowlist.
+#   4. PASS count - at least $MinPassMarkers markers [TC_TEST] *PASS*.
 
 [CmdletBinding()]
 param(
@@ -15,6 +15,8 @@ param(
     [string]$Project = "C:\dev\tree-chopping-sbox\tree_chopping.sbproj",
     [int]   $TimeoutSeconds = 75,
     [int]   $Seeds = 1,
+    [int]   $MaxParallel = 2,
+	[int]   $MinPassMarkers = 52,
     [switch]$Sequential,
     [switch]$KeepLog
 )
@@ -49,7 +51,7 @@ function Get-ExpectedPhases {
 }
 
 $expectedPhases = Get-ExpectedPhases
-$expectedPassCount = 1
+$expectedPassCount = $MinPassMarkers
 
 $stderrNoiseAllowlist = @(
     'ERROR_FILEOPEN',
@@ -96,7 +98,7 @@ function Wait-AllForDone {
                 continue
             }
             if ( Test-Path $p.StdoutPath ) {
-                # sbox-server holds the stdout file open in write mode — we need
+                # sbox-server holds the stdout file open in write mode - we need
                 # explicit FileShare.ReadWrite to read it concurrently. ReadAllText
                 # uses FileShare.Read which would IOException here.
                 $content = $null
@@ -183,7 +185,19 @@ function Test-SelftestIteration {
     }
 }
 
-# Seed list — same convention que l'ancienne version.
+function Test-RetryableBootCompileRace {
+    param([pscustomobject]$Result)
+
+    if ( $Result.SawDone -or $Result.PassCount -gt 0 -or $Result.TcLines.Count -gt 0 ) { return $false }
+    if ( -not (Test-Path $Result.StdoutPath) ) { return $false }
+
+    $stdout = Get-Content $Result.StdoutPath -Raw -ErrorAction SilentlyContinue
+    return $stdout -match "Compile of 'local\.tree_chopping' Failed" `
+        -or $stdout -match "couldn't find Component type TreeChopping\.SceneStarter" `
+        -or $stdout -match "Object reference not set to an instance of an object"
+}
+
+# Seed list - same convention que l'ancienne version.
 $seedList = @()
 if ( $Seeds -le 1 ) {
     $seedList = @(0)
@@ -193,7 +207,13 @@ if ( $Seeds -le 1 ) {
     }
 }
 
-$parallelLabel = if ( $Sequential -or $seedList.Count -eq 1 ) { 'sequential' } else { 'parallel' }
+if ( $MaxParallel -lt 1 ) { $MaxParallel = 1 }
+if ( $MaxParallel -gt 2 ) {
+    Write-Host "[harness] MaxParallel capped to 2 (sbox-server local compile can race above this)"
+    $MaxParallel = 2
+}
+
+$parallelLabel = if ( $Sequential -or $seedList.Count -eq 1 -or $MaxParallel -eq 1 ) { 'sequential' } else { "parallel x$MaxParallel" }
 Write-Host "[harness] sbox-server: $Sbox"
 Write-Host "[harness] project:     $Project"
 Write-Host "[harness] mode:        $parallelLabel, $($seedList.Count) iter, $TimeoutSeconds`s timeout each"
@@ -202,23 +222,39 @@ Write-Host "[harness] seeds:       $($seedList -join ', ')"
 $globalStart = (Get-Date)
 $results = @()
 
-if ( $Sequential -or $seedList.Count -eq 1 ) {
+if ( $Sequential -or $seedList.Count -eq 1 -or $MaxParallel -eq 1 ) {
     foreach ( $seed in $seedList ) {
         $proc = Start-SelftestProcess -Seed $seed
         Wait-AllForDone -Procs @($proc) -TimeoutSeconds $TimeoutSeconds
         $results += (Test-SelftestIteration -Proc $proc)
     }
 } else {
-    # Parallel : spawn all, wait all, analyze all.
-    Write-Host "[harness] spawning $($seedList.Count) processes in parallel..."
-    $procs = @()
-    foreach ( $seed in $seedList ) {
-        $procs += (Start-SelftestProcess -Seed $seed)
+    # Parallel in small batches. Launching 4+ local sbox-server compilers at once
+    # can race the generated assembly cache and boot without game components.
+    for ( $i = 0; $i -lt $seedList.Count; $i += $MaxParallel ) {
+        $end = [Math]::Min( $i + $MaxParallel - 1, $seedList.Count - 1 )
+        $batchSeeds = @( $seedList[$i..$end] )
+        Write-Host "[harness] spawning $($batchSeeds.Count) processes in parallel: $($batchSeeds -join ', ')"
+        $procs = @()
+        foreach ( $seed in $batchSeeds ) {
+            $procs += (Start-SelftestProcess -Seed $seed)
+        }
+        Wait-AllForDone -Procs $procs -TimeoutSeconds $TimeoutSeconds
+        foreach ( $p in $procs ) {
+            $results += (Test-SelftestIteration -Proc $p)
+        }
     }
-    Wait-AllForDone -Procs $procs -TimeoutSeconds $TimeoutSeconds
-    foreach ( $p in $procs ) {
-        $results += (Test-SelftestIteration -Proc $p)
-    }
+}
+
+for ( $i = 0; $i -lt $results.Count; $i++ ) {
+    if ( -not (Test-RetryableBootCompileRace -Result $results[$i]) ) { continue }
+
+    Write-Host "[harness] retrying seed=$($results[$i].Seed) sequentially after sbox local compile race"
+    $retryProc = Start-SelftestProcess -Seed $results[$i].Seed
+    Wait-AllForDone -Procs @($retryProc) -TimeoutSeconds $TimeoutSeconds
+    $retryResult = Test-SelftestIteration -Proc $retryProc
+    $retryResult | Add-Member -NotePropertyName RetriedAfterCompileRace -NotePropertyValue $true
+    $results[$i] = $retryResult
 }
 
 $globalElapsed = ((Get-Date) - $globalStart).TotalSeconds
@@ -230,7 +266,7 @@ foreach ( $r in $results ) {
     if ( $r.TcLines.Count -gt 0 ) {
         $r.TcLines | ForEach-Object { Write-Host $_ }
     } else {
-        Write-Host "(no [TC_TEST]/[TC_INV]/[SceneStarter] lines — check stdout : $($r.StdoutPath))"
+        Write-Host "(no [TC_TEST]/[TC_INV]/[SceneStarter] lines - check stdout : $($r.StdoutPath))"
     }
     Write-Host "---------------------------------------------------------"
     Write-Host "[harness] seed=$($r.Seed) summary:"
@@ -241,6 +277,7 @@ foreach ( $r in $results ) {
     Write-Host "  TC_INV  FAILs     : $($r.InvFailCount)"
     Write-Host "  exception lines   : $($r.ExceptionCount)"
     Write-Host "  PASS markers      : $($r.PassCount) (need $expectedPassCount)"
+    if ( $r.PSObject.Properties.Name -contains 'RetriedAfterCompileRace' ) { Write-Host "  retry             : sbox local compile race" }
     if ( $r.FirstException ) { Write-Host "  first exception   : $($r.FirstException)" }
     Write-Host "  stdout log        : $($r.StdoutPath)"
 }

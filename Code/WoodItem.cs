@@ -18,6 +18,10 @@ public sealed class WoodItem : Component
 	private AxeController _axe;
 	private bool _magnetized;
 	private TimeSince _timeSinceFullFeedback = 999f;
+	private TimeSince _timeSinceFullReject = 999f;
+	private bool _debugValheimDrop;
+	private Vector3 _debugInitialPosition;
+	private Vector3 _debugInitialVelocity;
 
 	public static WoodItem SpawnAt( Scene scene, Vector3 pos, float scaleMul = 1f, WoodType type = WoodType.Wood )
 	{
@@ -26,11 +30,19 @@ public sealed class WoodItem : Component
 
 	public static WoodItem SpawnAt( Scene scene, Vector3 pos, float scaleMul, WoodType type, Vector3 burstDir )
 	{
+		return SpawnInternal( scene, pos, scaleMul, type, burstDir, valheimDrop: false );
+	}
+
+	public static WoodItem SpawnValheimDropAt( Scene scene, Vector3 pos, float scaleMul, WoodType type )
+	{
+		return SpawnInternal( scene, pos, scaleMul, type, Vector3.Zero, valheimDrop: true );
+	}
+
+	private static WoodItem SpawnInternal( Scene scene, Vector3 pos, float scaleMul, WoodType type, Vector3 burstDir, bool valheimDrop )
+	{
 		var go = scene.CreateObject();
 		go.Name = "WoodItem";
-		// Short lift only: Valheim drops thud near the log, they don't spray
-		// upward like arcade pickups.
-		go.WorldPosition = pos + Vector3.Up * Game.Random.Float( 2f, 5f );
+		go.WorldPosition = valheimDrop ? pos : pos + Vector3.Up * Game.Random.Float( 2f, 5f );
 		// Random yaw 0-360° — Valheim DropOnDestroyed.OnDestroyed pattern :
 		// `Quaternion.Euler(0, Random.Range(0, 360), 0)` sur chaque drop.
 		float yaw = Game.Random.Float( 0f, 360f );
@@ -48,6 +60,7 @@ public sealed class WoodItem : Component
 
 		var col = go.AddComponent<BoxCollider>();
 		col.Scale = new Vector3( Tunables.CubeBase );
+		col.ColliderFlags |= ColliderFlags.IgnoreMass;
 
 		var rb = go.AddComponent<Rigidbody>();
 		rb.MassOverride = 1.8f;
@@ -58,30 +71,45 @@ public sealed class WoodItem : Component
 		var item = go.AddComponent<WoodItem>();
 		item.Body = rb;
 		item.Type = type;
+		item._debugValheimDrop = valheimDrop;
+		item._debugInitialPosition = go.WorldPosition;
 		// TimeSince default value = Time.Now (le struct interne stocke t=0,
 		// donc (float)t = Time.Now - 0 = un grand nombre). Reset explicit ici
 		// pour que _timeSinceSpawn track le délai DEPUIS spawn comme attendu.
 		item._timeSinceSpawn = 0f;
-		// Initial upward + outward velocity so items burst from the log.
 		if ( rb.PhysicsBody.IsValid() )
 		{
-			var burst = new Vector3(
-				Game.Random.Float( -35f, 35f ),
-				Game.Random.Float( -35f, 35f ),
-				Game.Random.Float( 55f, 115f ) );
-			if ( burstDir.LengthSquared > 0.001f )
+			if ( valheimDrop )
 			{
-				burst += burstDir.Normal * Game.Random.Float( 20f, 55f );
+				rb.Velocity = Vector3.Zero;
+				rb.AngularVelocity = Vector3.Zero;
 			}
-			rb.Velocity = burst;
-			rb.AngularVelocity = new Vector3(
-				Game.Random.Float( -2.5f, 2.5f ),
-				Game.Random.Float( -2.5f, 2.5f ),
-				Game.Random.Float( -2.5f, 2.5f ) );
+			else
+			{
+				var burst = new Vector3(
+					Game.Random.Float( -35f, 35f ),
+					Game.Random.Float( -35f, 35f ),
+					Game.Random.Float( 55f, 115f ) );
+				if ( burstDir.LengthSquared > 0.001f )
+				{
+					burst += burstDir.Normal * Game.Random.Float( 20f, 55f );
+				}
+				rb.Velocity = burst;
+				rb.AngularVelocity = new Vector3(
+					Game.Random.Float( -2.5f, 2.5f ),
+					Game.Random.Float( -2.5f, 2.5f ),
+					Game.Random.Float( -2.5f, 2.5f ) );
+			}
+			item._debugInitialVelocity = rb.Velocity;
 		}
 		Sfx.Play( "sounds/wood_drop.sound", go.WorldPosition, volume: 0.25f, pitchMin: 0.85f, pitchMax: 1.20f );
 		return item;
 	}
+
+	internal bool DebugValheimDrop => _debugValheimDrop;
+	internal Vector3 DebugInitialPosition => _debugInitialPosition;
+	internal Vector3 DebugInitialVelocity => _debugInitialVelocity;
+	internal bool DebugMagnetized => _magnetized;
 
 	protected override void OnUpdate()
 	{
@@ -101,8 +129,22 @@ public sealed class WoodItem : Component
 		_axe ??= Scene?.GetAllComponents<AxeController>().FirstOrDefault();
 		if ( !_axe.IsValid() ) return;
 
-		var toPlayer = (_axe.WorldPosition + Vector3.Up * (Tunables.PlayerEyeHeight * 0.4f)) - WorldPosition;
+		var pickupTarget = _axe.WorldPosition + Vector3.Up * (Tunables.PlayerEyeHeight * 0.4f);
+		var toPlayer = pickupTarget - WorldPosition;
 		float dist = toPlayer.Length;
+		var gs = GameState.Get( Scene );
+		var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
+
+		if ( gs.IsValid() && gs.BackpackFull )
+		{
+			if ( dist < Tunables.WoodItemMagnetRange )
+			{
+				if ( _magnetized || dist < Tunables.WoodItemPickupRange * 1.5f )
+					ShowFullFeedback( hud );
+				RejectFromFullBackpack( pickupTarget, toPlayer, dist );
+			}
+			return;
+		}
 
 		// Magnetic flight kicks in inside MagnetRange ; once magnetized stays
 		// so until consumed (no flicker if player walks back and forth past
@@ -127,8 +169,21 @@ public sealed class WoodItem : Component
 
 		if ( _magnetized && Body.IsValid() )
 		{
-			var dir = toPlayer.Normal;
-			Body.Velocity = dir * Tunables.WoodItemMagnetSpeed;
+			if ( dist > 0.001f )
+			{
+				var dir = toPlayer.Normal;
+				// Valheim moves ItemDrop.transform directly during AutoPickup.
+				float step = MathF.Min( Tunables.WoodItemMagnetSpeed * Time.Delta, dist );
+				WorldPosition += dir * step;
+				toPlayer = pickupTarget - WorldPosition;
+				dist = toPlayer.Length;
+			}
+			Body.Velocity = Vector3.Zero;
+			if ( Body.PhysicsBody.IsValid() )
+			{
+				Body.PhysicsBody.Position = WorldPosition;
+				Body.PhysicsBody.Velocity = Vector3.Zero;
+			}
 		}
 
 		// Pickup : credit max(1, round(WoodMultiplier)) units + destroy. The
@@ -136,8 +191,6 @@ public sealed class WoodItem : Component
 		// the new value (fine — small edge case).
 		if ( dist < Tunables.WoodItemPickupRange )
 		{
-			var gs = GameState.Get( Scene );
-			var hud = Scene?.GetAllComponents<WoodHud>().FirstOrDefault();
 			if ( gs.IsValid() )
 			{
 				int worth = Math.Max( 1, (int)MathF.Round( gs.WoodMultiplier ) );
@@ -148,12 +201,8 @@ public sealed class WoodItem : Component
 				{
 					// Backpack full — show the warning, bail without consuming
 					// so the item lingers until the player flushes the bag.
-					if ( (float)_timeSinceFullFeedback > 0.7f )
-					{
-						_timeSinceFullFeedback = 0f;
-						if ( hud.IsValid() ) hud.ShowBackpackFullHint();
-						Sfx.Play( "sounds/backpack_full.sound", WorldPosition, volume: 0.60f, pitchMin: 0.65f, pitchMax: 0.85f );
-					}
+					ShowFullFeedback( hud );
+					RejectFromFullBackpack( pickupTarget, toPlayer, dist );
 					return;
 				}
 				// Pass type pour que le toast affiche "Wood / Finewood / CoreWood".
@@ -163,6 +212,48 @@ public sealed class WoodItem : Component
 			Sfx.Play( "sounds/wood_pickup.sound", WorldPosition,
 				volume: 0.34f, pitchMin: 1.85f, pitchMax: 2.15f );
 			GameObject?.Destroy();
+		}
+	}
+
+	private void ShowFullFeedback( WoodHud hud )
+	{
+		if ( (float)_timeSinceFullFeedback <= 0.7f ) return;
+		_timeSinceFullFeedback = 0f;
+		if ( hud.IsValid() ) hud.ShowBackpackFullHint();
+		Sfx.Play( "sounds/backpack_full.sound", WorldPosition, volume: 0.60f, pitchMin: 0.65f, pitchMax: 0.85f );
+	}
+
+	private void RejectFromFullBackpack( Vector3 pickupTarget, Vector3 toPlayer, float dist )
+	{
+		if ( !_magnetized && dist > Tunables.WoodItemFullRejectDistance ) return;
+		if ( (float)_timeSinceFullReject <= Tunables.WoodItemFullRejectCooldown ) return;
+		_timeSinceFullReject = 0f;
+		_magnetized = false;
+
+		var away = (-toPlayer).WithZ( 0f );
+		if ( away.LengthSquared < 0.001f )
+			away = new Vector3( Game.Random.Float( -1f, 1f ), Game.Random.Float( -1f, 1f ), 0f );
+		if ( away.LengthSquared < 0.001f ) away = Vector3.Forward;
+		away = away.Normal;
+
+		if ( dist < Tunables.WoodItemFullRejectDistance )
+			WorldPosition = pickupTarget + away * Tunables.WoodItemFullRejectDistance - Vector3.Up * (Tunables.PlayerEyeHeight * 0.2f);
+
+		if ( !Body.IsValid() ) return;
+		Body.MotionEnabled = true;
+		Body.Gravity = true;
+		Body.LinearDamping = 1.4f;
+		Body.AngularDamping = 2.6f;
+		Body.Velocity = away * Tunables.WoodItemFullRejectSpeed + Vector3.Up * Tunables.WoodItemFullRejectUpSpeed;
+		Body.AngularVelocity = new Vector3(
+			Game.Random.Float( -3f, 3f ),
+			Game.Random.Float( -3f, 3f ),
+			Game.Random.Float( -3f, 3f ) );
+		if ( Body.PhysicsBody.IsValid() )
+		{
+			Body.PhysicsBody.Position = WorldPosition;
+			Body.PhysicsBody.Velocity = Body.Velocity;
+			Body.PhysicsBody.AngularVelocity = Body.AngularVelocity;
 		}
 	}
 }
