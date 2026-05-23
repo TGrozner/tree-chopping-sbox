@@ -605,12 +605,6 @@ public sealed class Tree : Component, IChoppable
 		return actualChopPower > baseChopPower ? Tunables.ChopComboFinalPushMul : 1f;
 	}
 
-	internal static float ComputeFellKickPowerScale( int baseChopPower, int actualChopPower, bool allowComboPush = true )
-	{
-		return 1f;
-	}
-
-
 	// Valheim TreeBase.ShakeAnimation (RPC_Shake) â€” coroutine lignes 194-209.
 	// Two-axis buzz vibrato : Sin(t*40Hz) * (1-t)Â³ * 1.5Â° en pitch, Cos(t*36Hz)
 	// * (1-t)Â³ * 1.5Â° en roll. Duration 1s. Restart le shake Ã  chaque hit
@@ -681,7 +675,7 @@ public sealed class Tree : Component, IChoppable
 			_rootStump = null;
 		}
 		TreeStump.SpawnAt( Scene, _spawnFootPos, _trunkWidth, _trunkTint, Kind, _biomeDifficulty, IsMythic );
-		_spawnedLog = FallenLog.SpawnFromTree( this, _fellDir, fellPower, allowComboPush );
+		_spawnedLog = FallenLog.SpawnFromTree( this, _fellDir );
 
 		if ( !_spawnedLog.IsValid() )
 		{

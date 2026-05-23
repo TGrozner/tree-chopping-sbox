@@ -4,6 +4,8 @@ param(
 	[int]$MaxParallel = 2,
 	[int]$TimeoutSeconds = 75,
 	[int]$MinPassMarkers = 52,
+	[switch]$FullSelftest,
+	[switch]$PhysicsOnly,
 	[switch]$SkipSelftest
 )
 
@@ -34,8 +36,18 @@ if ( -not (Test-Path $selftest) ) {
 	exit 2
 }
 
-Write-Host "[check] selftest seeds=$Seeds maxParallel=$MaxParallel timeout=${TimeoutSeconds}s minPassMarkers=$MinPassMarkers" -ForegroundColor Cyan
-& $selftest -Seeds $Seeds -MaxParallel $MaxParallel -TimeoutSeconds $TimeoutSeconds -MinPassMarkers $MinPassMarkers
+if ( $PhysicsOnly -and $MinPassMarkers -eq 52 ) { $MinPassMarkers = 13 }
+
+Write-Host "[check] selftest seeds=$Seeds maxParallel=$MaxParallel timeout=${TimeoutSeconds}s minPassMarkers=$MinPassMarkers profile=$(if ($PhysicsOnly) { 'physics' } elseif ($FullSelftest) { 'full' } else { 'quick' })" -ForegroundColor Cyan
+$selftestArgs = @{
+	Seeds = $Seeds
+	MaxParallel = $MaxParallel
+	TimeoutSeconds = $TimeoutSeconds
+	MinPassMarkers = $MinPassMarkers
+}
+if ( $FullSelftest ) { $selftestArgs.Full = $true }
+if ( $PhysicsOnly ) { $selftestArgs.PhysicsOnly = $true }
+& $selftest @selftestArgs
 if ( $LASTEXITCODE -ne 0 ) {
 	Write-Error "[check] selftest failed"
 	exit $LASTEXITCODE

@@ -11,7 +11,7 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 2. **Headless est le loop par défaut, pas l'éditeur :**
    - `dotnet build C:\dev\tree-chopping-sbox\Code\tree_chopping.csproj` pour valider les types.
    - `sbox-server.exe +game <sbproj> +maxplayers 1` pour le lifecycle + physique (pas de rendu, pas d'input client). `Log.Info` → stdout.
-   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/deposit, cascade, too-hard, stats, prestige. `-Seeds N` tourne en batches parallèles de 2 et retry uniquement la race connue de compile sbox locale (`SceneStarter` missing après compile NRE). **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
+   - **`tools\selftest.ps1`** lance le mow-the-lawn scenario end-to-end via la ConVar `+tc_selftest 1` → exit 0 = PASS / 1 = FAIL / 3 = TIMEOUT. Le harness dérive son contrat depuis `SelfTest.Phase` et couvre swing réel, spawn distribution, stump/respawn, split, pickup/deposit, cascade, too-hard, stats, prestige. `-Seeds N` tourne en batches parallèles de 2 et retry uniquement la race connue de compile sbox locale (`SceneStarter` missing après compile NRE). Pour itérer vite sur TreeLog/log physics, `tools\check.ps1 -PhysicsOnly` lance le sous-contrat logs/gravity/cascade/Valheim launch/drop. **À relancer après TOUT changement dans Tree / GameState / SceneStarter.SpawnForest / AxeController swing path.** Build clean ≠ scénario vert.
    - `sbox.exe` ne marche PAS sur projets locaux (traite le sbproj comme un cloud package et 404). Seuls `sbox-dev.exe` (éditeur) et `sbox-server.exe` (headless) gèrent du dev non shippé.
 
 3. **`System.Environment.*` est sur le deny-list de la whitelist du compiler s&box.** `GetEnvironmentVariable`, `GetCommandLineArgs`, etc. font échouer la compile avec `"is not allowed when whitelist is enabled"`. Pour les flags de lancement → `[ConVar("name")]`, set via `sbox-server.exe ... +name value`.
@@ -24,11 +24,11 @@ Chaque ligne ici a déjà coûté du debug à une session précédente. Pas d'ex
 
 7. **`SetCursorPos` dans le viewport Play envoie de l'`Input.AnalogLook`** — chaque move souris pivote la caméra. Donc "click puis screenshot stable" ne marche pas, le click déplace d'abord le curseur. Privilégier le headless selftest pour valider la logique. GUI screenshot ([[sbox-screenshot-runtime]]) seulement quand il faut des pixels.
 
-8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le player les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` flippe la valeur à `true` quand `ChopsRemaining` tombe à 0 (multi-chop). Les voisins debout restent donc kinematic, et la cascade Valheim passe par `Tree.OnCollisionStart` + `ApplyImpactDamage` : vitesse d'impact → damage → shake/fell/split. Garde le kinematic-standing, ne reviens pas à une propagation physique pure.
+8. **Rigidbody arbres debout : `MotionEnabled = false` obligatoire.** Sinon le player les fait tomber juste en marchant dedans — wood serait gagné sans swing, et l'arène collapserait toute seule. `StartFell` spawn un `FallenLog` Rigidbody séparé quand `ChopsRemaining` tombe à 0 (multi-chop). Les voisins debout restent donc kinematic, et la cascade Valheim passe uniquement par les vraies collisions `FallenLog.OnCollisionStart` + `ApplyImpactDamage` : vitesse d'impact → damage → shake/fell/split.
 
-9. **Tree physics = Valheim first, tests mandatory.** Pour arbres/logs/sublogs, ne tune pas une physique maison tant qu'un comportement Valheim existe dans `_valheim-decompile`. Copier d'abord le pattern décompilé (`TreeBase.SpawnLog`, `TreeLog.RPC_Damage`, `ImpactEffect`, `HitData`), puis adapter seulement l'unité/shape s&box nécessaire. Toute divergence volontaire doit être nommée dans un test anti-régression ou dans `_valheim-decompile/TREE-PIPELINE.md`.
+9. **Tree physics = Valheim first, tests mandatory.** Pour arbres/logs/smaller logs, ne tune pas une physique maison tant qu'un comportement Valheim existe dans `_valheim-decompile`. Copier d'abord le pattern décompilé (`TreeBase.SpawnLog`, `TreeLog.RPC_Damage`, `ImpactEffect`, `HitData`), puis adapter seulement l'unité/shape s&box nécessaire. Toute divergence volontaire doit être nommée dans un test anti-régression ou dans `_valheim-decompile/TREE-PIPELINE.md`.
 
-   **Invariant gravity-first:** un log en chute (`IsFalling`) appartient a la physique monde : pas de ground-contact damping, pas de force-land, pas de roll coupling scripté, pas de velocity cap "pour lisser". La seule compensation s&box tolérée est landed-only et depenetration-only quand le log est réellement sous la peau du terrain, pour remplacer `Rigidbody.maxDepenetrationVelocity`.
+   **Invariant gravity-first:** un `FallenLog` est un équivalent Valheim `TreeLog` : un Rigidbody monde, gravity-on, choppable/damageable après la grace `m_firstFrame=0.2s`, sans état physique "landed" spécial. Pas de ground-contact damping, pas de force-land, pas de roll coupling scripté, pas de lift/depenetration manuel, pas de velocity cap "pour lisser", pas de player-bump damping. La seule compensation s&box tolérée sur le mouvement des logs est shape-only : des formes de collision de support distribuées pour remplacer le collider prefab/mesh Valheim.
 
 10. **Un test qui prend un raccourci passe pendant que le chemin réel est cassé.** Le premier SelfTest appelait `Tree.Chop()` direct et a caché 2 bugs prod (`GetAllComponents<Component>` retournant 0, `Tree.IChoppable.IsValid` excluant les landed logs). Chaque phase de selftest DOIT exercer au moins un code path joueur réel — `AxeController.DebugSwing → ChooseSwingTarget → Chop`, pas `Chop()` direct. **Corollaire TDD : quand tu ajoutes un nouveau pipeline runtime, écris d'abord la phase de selftest qui DOIT échouer sans ton impl, puis ajoute l'impl. Si la phase passe avant que tu codes l'impl, elle ne teste rien.**
 
@@ -47,11 +47,11 @@ Workflow type pour un changement runtime :
 - Source canonique pour Codex : `AGENTS.md` + `Code/AGENTS.md`.
 - `CLAUDE.md`, `Code/CLAUDE.md` et `.claude/settings.json` restent en compat legacy. Ne pas les supprimer sans demande explicite.
 - `.codex/hooks.json` est configuré, mais les sessions Codex doivent quand même lancer explicitement `tools\check.ps1` après les changements runtime critiques tant que l'auto-hook n'a pas été observé dans la session.
-- Commande réflexe : `tools\check.ps1` = `dotnet build` puis `tools\selftest.ps1 -Seeds 1 -MaxParallel 2 -TimeoutSeconds 75`. Pour fuzz plus large sans race compile sbox : `tools\check.ps1 -Seeds 4 -MaxParallel 2 -TimeoutSeconds 120`.
+- Commande réflexe : `tools\check.ps1` = `dotnet build` puis selftest quick. Pour les passes TreeLog pendant tuning physics : `tools\check.ps1 -PhysicsOnly -Seeds 1 -MaxParallel 1 -TimeoutSeconds 90` (~22s selftest actuel). Pour fuzz plus large sans race compile sbox : `tools\check.ps1 -Seeds 4 -MaxParallel 2 -TimeoutSeconds 120`.
 
 **Harness automation (`.codex/hooks.json`)** :
 - **PostToolUse hook** lance `dotnet build Code/tree_chopping.csproj` après chaque Edit/Write/MultiEdit sur `Code/**/*.cs`. Échec → exit 2 + stderr remonté ici comme blocking message. Étape 1 du workflow appliquée automatiquement.
-- **Stop hook** lance `tools\selftest.ps1` (1 seed, ~12s) si `Tree.cs` / `GameState.cs` / `SceneStarter.cs` / `AxeController.cs` / `WoodItem.cs` / `ShopStation.cs` apparaissent dans `git status`. Échec → bloque le stop une fois ; appel de Stop suivant override (`stop_hook_active` guard). Étape 2 partiellement appliquée — seulement pour les fichiers du chop/wood path.
+- **Stop hook** lance `tools\selftest.ps1` (1 seed quick, ~30s actuel) si `Tree.cs` / `GameState.cs` / `SceneStarter.cs` / `AxeController.cs` / `WoodItem.cs` / `ShopStation.cs` apparaissent dans `git status`. Échec → bloque le stop une fois ; appel de Stop suivant override (`stop_hook_active` guard). Étape 2 partiellement appliquée — seulement pour les fichiers du chop/wood path.
 - **Limitation à connaître :** le Stop hook utilise `git status`, pas le track des fichiers édités cette session. Si la branche a des changements pendants sur un fichier critical avant que tu démarres, le hook se déclenchera quand même. Pour bypass délibéré : commit/stash avant, ou Stop deux fois (la 2e passe).
 - Scripts : `tools/hooks/post-edit-build.ps1` et `tools/hooks/stop-selftest.ps1` — modifie-les si la couverture ne te convient pas.
 
@@ -134,7 +134,7 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 3. `Ready` (0.6s linger) → frame "before", idle pose visible
 4. `Swinging` → trigger `DebugRequestSwing`, re-swing every 0.75s pour multi-chop
 5. `Falling` → wait until tree leaves Standing+Falling state
-6. `Landed` (1.5s linger) → log_break SFX, dust burst, SnapTrunkOnImpact, cam settle (pas de wood banner — Phase F le crédit passe par l'item pickup, hors séquence FilmStrip standard)
+6. `Landed` (1.5s linger) → log_landing/log_split SFX, dust/chip burst, cam settle (pas de wood banner — Phase F le crédit passe par l'item pickup, hors séquence FilmStrip standard)
 7. `Done` → orchestrator stoppe la capture
 
 `Phase` + `Elapsed` + `WoodAtFinish` + `SwingsFired` exposed en `[Property, ReadOnly]` pour polling via bridge. `GameState.Save` skip quand FilmStrip est actif → la save user n'est jamais nukée par le `ResetForTest`.
@@ -153,7 +153,7 @@ Installé 2026-05-19. Un MCP `sbox` (LouSputthole/Sbox-Codex v1.3.1) expose 99 t
 
 **Cold-start scripté** (éditeur pas ouvert encore) : `.\tools\filmstrip.ps1 -ColdStart` lance sbox-dev avec `+tc_filmstrip 1`. Le directeur auto-active sur le premier Play, plus besoin de flipper `Active=true`.
 
-**Quand tu DOIS l'utiliser** : tout changement à HUD / chip burst / camera shake / FOV punch / fell torque / fall ramp / landing dust / banner timing / sfx layering. Tout ce qui se juge "à l'œil" mais pas via une assertion C#. Si tu changes `Tunables.SwingFovPunch` ou `Tunables.FellTorque` ou un seuil dans `ChopParticles` et que tu écris "ça devrait être mieux" sans capture, tu rates le feedback loop.
+**Quand tu DOIS l'utiliser** : tout changement à HUD / chip burst / camera shake / FOV punch / fall readability / landing dust / banner timing / sfx layering. Tout ce qui se juge "à l'œil" mais pas via une assertion C#. Si tu changes un seuil de feedback visuel/audio et que tu écris "ça devrait être mieux" sans capture, tu rates le feedback loop.
 
 **Quand tu peux SKIP** : changements purement logiques (state machine refactor, GameState math, IChoppable plumbing) — le selftest headless les couvre.
 
@@ -235,25 +235,28 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
     ├─ Si > 0 : KickWobble (lean réactif décay 0.6s) + DarkenTrunkOnce + SpawnChopNotch (cube sombre stuck on trunk side)
     └─ Si <= 0 : StartFell(direction)
   Tree.StartFell :
-    ├─ Reset _baseRotation (wobble cleared) ; destroy _rootStump (no more promontoires)
-    ├─ MotionEnabled = true (était false debout — gotcha #8 anti-bump)
-    ├─ Big canopy leaves burst (3 directions, ~80 leaves total)
-    └─ Groan SFX (log_break pitched 0.48..0.62 = stretched timber-creak)
-  Tree.TickFall (OnFixedUpdate) :
-    ├─ Mass-scaled ApplyTorque sur (Up × _fellDir), no impulse — gravité + torque only
-    │   (sapling et veteran ont la même accel angulaire, fix du "petits arbres flyent")
-    └─ Trigger BecomeLandedLog when upDot < TreeFallenUpDotMax OR 5s timeout (stuck against neighbor)
-  FallenLog.BecomeLandedLog (n'AUTO-CREDIT PLUS de wood — Phase F change) :
-    ├─ Damping landed (TreeAngularDampLanded / TreeLinearDampLanded)
-    ├─ log_break SFX volume × speedFrac (mass-scaled landing pitch)
-    ├─ Dust burst (3 directions, ~24 brown leaves up + side)
-    ├─ SnapTrunkOnImpact : upper trunk + canopy rotate 12-22° misalign + 6u offset
-    │   → lit visually comme "le tronc s'est cassé à l'impact" sans physics break
-    └─ ChopsRemaining = Tunables.LogChopHP[Kind] (le tronc landed reste IChoppable)
-  FallenLog.Chop sur landed log :
-    └─ HP <= 0 → SplitIntoLogs : spawn N WoodItems alignés sur l'axe du tronc couché,
-       N = TreeKindLandedDropCount[Kind], items burst au final chop du landed log
-       (Luck stat = chance de bonus items, Mythic = +2 items, résolu ici une seule fois)
+    ├─ Reset _baseRotation (wobble cleared), destroy canopy/root stump
+    ├─ Spawn `FallenLog` as the real Valheim TreeLog owner; the standing `Tree` no longer owns log physics
+    ├─ HP is set immediately from `Tunables.LogChopHP[Kind]`, not reset at landing
+    └─ Groan SFX (tree_groan pitched 0.48..0.62 = stretched timber-creak)
+  FallenLog.SpawnFromTree :
+    ├─ Gravity-on Rigidbody, mass from Valheim TreeLog full/half mass ratios, CCD on
+    ├─ `ResetInertiaTensor`, then one Valheim-style off-center impulse
+    │   (`hitDir * 0.2m/s * mass` at `+4m * scale`) — no scripted torque seed
+    └─ Runtime Z is grounded from generated log length so tall procedural trees do not spawn logs in the air
+  FallenLog.OnFixedUpdate :
+    ├─ Falling logs are physics-owned: gravity, inertia and contacts rule
+    ├─ No ground-contact damping, force-land, roll coupling, velocity cap, or manual sleep while falling
+    └─ Transition to landed only after stable-ish ground support / low motion
+  FallenLog.BecomeLandedLog :
+    ├─ Label only: keeps the same Rigidbody physics and preserves remaining HP
+    ├─ Does not write gravity, damping, velocity, angular velocity, or sleep state
+    ├─ log_landing SFX volume × speedFrac (mass-scaled landing pitch)
+    └─ Dust + break visual feedback; no auto-credit wood
+  FallenLog.Chop/Damage :
+    └─ TreeLogs are IChoppable after the Valheim 0.2s fresh-log grace;
+       HP <= 0 splits/drops. Parent logs with smaller logs spawn parent drops first,
+       then fresh `FallenLog`/TreeLog children with gravity-on physics and no scripted inherited velocity.
   WoodItem (small physics cube, MassOverride=0.5, brown WoodItemTint) :
     ├─ Spawn velocity = burst up+out, gravity-on initially
     ├─ MAGNET PROXIMITY : in radius < WoodItemMagnetRange → Gravity=off, damping bumped,
@@ -263,10 +266,11 @@ Tree pipeline (Phase F/G — Valheim two-stage chop) :
     │   └─ Banked → ShowWoodPickupToast + "blip" SFX + destroy
     └─ WoodItemDespawnDelay timeout pour cleanup si abandonné
 
-  **Cascade domino** : implémentée via `Tree.OnCollisionStart` + `ApplyImpactDamage`.
+  **Cascade domino** : implémentée via `FallenLog.OnCollisionStart` + `ApplyImpactDamage`.
     Standing trees = MotionEnabled=false jusqu'à `StartFell`, donc un tronc qui tombe
     ne pousse pas réellement le voisin debout : il lui applique un damage scalé par
     vitesse d'impact façon Valheim ImpactEffect, puis le voisin shake/fell/split selon HP.
+    `OnCollisionUpdate` ne réapplique pas de damage et ne corrige pas le mouvement.
 
 Économie deux-pool (Wood vs BackpackWood) :
   BackpackWood = ramassé sur le terrain, cappé par BackpackCapacity[BackpackTier].
@@ -380,10 +384,10 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 - TreeBase bonus drop placement : `Random.insideUnitCircle * 0.5m`, per-prefab `m_spawnYOffset` mapped by kind (Beech/Fir-like 4m, Birch/Oak/Pine-like 0.5m), `m_spawnYStep=0.3m`.
 - Bonus DamageText sur Mythic fell + Luck-triggered drops (Valheim pattern : Pickable.Interact fire Bonus sur skill-driven bonus yield)
 - Grow animation au respawn (TreeBase.GrowAnimation scale 0→1 sur 0.3s)
-- Per-kind impact/groan/initial-omega multipliers (Brittle = low split threshold, Veteran = slow start)
-- `Rigidbody.maxDepenetrationVelocity=1f` emulated where s&box exposes no direct equivalent; do not confuse it with a general log speed cap.
+- Per-kind impact/groan audio multipliers only. Log launch physics has no per-kind omega/torque multiplier.
+- No `Rigidbody.maxDepenetrationVelocity` emulation in gameplay code. Source 2 contacts own depenetration; our only log-motion compensation is shape-only support colliders.
 - Auto-pickup magnet (Player.AutoPickup) : 80u range = 2m, grace 0.5s post-spawn (c_AutoPickupDelay)
-- **Cascade domino via ImpactEffect pattern** : `Tree.OnCollisionStart` calcule damage scalé `LerpStep(min, max, speed) × baseDamage` sur les autres `Tree`/`FallenLog`. Les prefabs Valheim TreeLog ont `m_damageToSelf=false`, donc un tronc ne doit pas se splitter juste en frappant le sol. Calibration extraite : ImpactMinSpeed=1m/s, ImpactMaxSpeed=5m/s, ImpactInterval=0.25s, ImpactToolTier=2, Rigidbody mass full/half=100/50, drag/angularDrag=0.1/0.2.
+- **Cascade domino via ImpactEffect pattern** : `FallenLog.OnCollisionStart` calcule damage scalé `LerpStep(min, max, speed) × baseDamage` sur les autres `Tree`/`FallenLog`; `OnCollisionUpdate` ne réapplique pas les dégâts. Les prefabs Valheim TreeLog ont `m_damageToSelf=false`, donc un tronc ne doit pas se splitter juste en frappant le sol. Calibration extraite : ImpactMinSpeed=1m/s, ImpactMaxSpeed=5m/s, ImpactInterval=0.25s, ImpactToolTier=2, Rigidbody mass full/half=100/50, drag/angularDrag=0.1/0.2.
 
 **Déviations RETIRÉES** (don't put them back without explicit Thomas go) :
 - Cascade momentum-based (mass × velocity / mass ratio) — remplacé par damage scaling Valheim
@@ -398,7 +402,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 **Outils d'audit** :
 - `ilspycmd -t <Class> <dll>` pour décompiler une classe ciblée. Cache en `$env:TEMP\valheim_*.cs`. Décompile globale : `ilspycmd -p -o /tmp/valheim_full <dll>` (603 fichiers).
 - `mcp__sbox__trigger_hotload` pour pousser nos changes dans sbox-dev ouvert.
-- `tools/check.ps1` : build + selftest, expose `-Seeds`, `-MaxParallel`, `-TimeoutSeconds`, `-MinPassMarkers` (default 52). `-Seeds 4 -MaxParallel 2` prend ~60s et couvre 52 PASS markers par seed.
+- `tools/check.ps1` : build + selftest, expose `-Seeds`, `-MaxParallel`, `-TimeoutSeconds`, `-MinPassMarkers`, `-PhysicsOnly`, `-FullSelftest` (default 52 markers, physics-only 13 focused markers). `-PhysicsOnly -Seeds 1` est le loop rapide logs/gravity; `-Seeds 4 -MaxParallel 2` reste le fuzz plus large.
 
 **Déviations restantes (assumées)** :
 - Pipeline TreeBase destroy + spawn TreeLog désormais aligné : `Tree` standing détruit après spawn `FallenLog`, qui porte le chop/impact landed.
@@ -409,7 +413,7 @@ Thomas a dit "Valheim-tier" pour les arbres. Decompile direct via `ilspycmd -t <
 **Outils d'audit** :
 - `ilspycmd -t <Class> <dll>` pour décompiler une classe ciblée. Cache en `$env:TEMP\valheim_*.cs`.
 - `mcp__sbox__trigger_hotload` pour pousser nos changes dans sbox-dev ouvert.
-- `tools/selftest.ps1` : phase contract dérivé de `Code/SelfTest.cs`, 52 PASS markers sur le pipeline chop/economy/Valheim-feel. `-Seeds 2 -MaxParallel 2` ~30s, `-Seeds 4 -MaxParallel 2` ~60s.
+- `tools/selftest.ps1` : phase contract dérivé de `Code/SelfTest.cs`, 52 PASS markers sur le pipeline chop/economy/Valheim-feel. `-PhysicsOnly` passe `+tc_selftest_physics 1` et vérifie seulement split logs, gravity, support, cascade, falling impact, Valheim launch/drop/damping.
 
 **Drift restant dans CE document** : certains détails HUD/shop peuvent encore évoluer vite. Si tu touches au hub/shop, relis `ShopStation.cs`, `WoodHud.cs` et `GameState.cs` avant d'éditer la doc.
 

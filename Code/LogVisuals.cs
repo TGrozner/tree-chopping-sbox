@@ -10,7 +10,7 @@ public static class LogVisuals
 		{
 			if ( _logModel is not null ) return _logModel;
 
-			const int sides = 10;
+			const int sides = Tunables.LogVisualSides;
 			var buffer = new VertexBuffer();
 			buffer.Init( false );
 			float half = 0.5f;

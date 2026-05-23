@@ -38,8 +38,8 @@ public static class ValheimEffects
 		Sfx.PlayLocal( "sounds/chop_wood.sound", volume: biteVol, pitchMin: 0.95f * pitchMul * logPitch, pitchMax: 1.18f * pitchMul * logPitch );
 		Sfx.Play( "sounds/axe_hit_wood.sound", point, volume: hitVol * 0.20f, pitchMin: 0.88f * pitchMul * logPitch, pitchMax: 1.02f * pitchMul * logPitch );
 		if ( !heavy ) return;
-		Sfx.PlayLocal( "sounds/log_break.sound", volume: volume * 0.13f, pitchMin: 1.18f * pitchMul, pitchMax: 1.34f * pitchMul );
-		Sfx.Play( "sounds/log_break.sound", point, volume: volume * 0.10f, pitchMin: 1.18f * pitchMul, pitchMax: 1.34f * pitchMul );
+		Sfx.PlayLocal( "sounds/log_split.sound", volume: volume * 0.10f, pitchMin: 1.18f * pitchMul, pitchMax: 1.34f * pitchMul );
+		Sfx.Play( "sounds/log_split.sound", point, volume: volume * 0.08f, pitchMin: 1.18f * pitchMul, pitchMax: 1.34f * pitchMul );
 	}
 
 	public static void TooHard( Scene scene, Vector3 point, Vector3 dir )
@@ -62,7 +62,7 @@ public static class ValheimEffects
 		ChipBurst.Spawn( scene, point, dir, Tunables.ChipBurstCount + Tunables.ChipBurstCount / 2, trunkTint );
 		ChipBurst.SpawnLeaves( scene, point + Vector3.Up * 12f, dir, 10, new Color( 0.52f, 0.40f, 0.28f, 1f ) );
 		float pitchMul = Tunables.TreeKindGroanPitchMul[(int)kind];
-		Sfx.Play( "sounds/log_break.sound", point,
+		Sfx.Play( "sounds/log_split.sound", point,
 			volume: 0.28f, pitchMin: 0.92f * pitchMul, pitchMax: 1.10f * pitchMul );
 	}
 
@@ -92,7 +92,7 @@ public static class ValheimEffects
 		bool violent = damageScale >= Tunables.ImpactViolentScale;
 		bool hard = damageScale >= Tunables.ImpactHardScale;
 		float vol = hard ? 0.70f + damageScale * 0.45f : 0.32f + softScale * 0.35f;
-		Sfx.Play( hard ? "sounds/log_break.sound" : "sounds/axe_hit_wood.sound", point,
+		Sfx.Play( "sounds/log_impact.sound", point,
 			volume: vol,
 			pitchMin: violent ? 0.50f : (hard ? 0.62f : 0.72f),
 			pitchMax: violent ? 0.68f : (hard ? 0.84f : 0.95f) );
@@ -111,19 +111,23 @@ public static class ValheimEffects
 	{
 		var dustTint = new Color( 0.62f, 0.48f, 0.35f, 1f );
 		int dustCount = (int)(10 + damageScale * 16f);
+		Sfx.Play( "sounds/log_landing.sound", point,
+			volume: 0.55f + damageScale * 0.28f,
+			pitchMin: 0.48f,
+			pitchMax: 0.68f );
 		ChipBurst.SpawnLeaves( scene, point + Vector3.Up * 8f, Vector3.Up, dustCount, dustTint );
 	}
 
 	public static void LogDestroyed( Scene scene, Vector3 point, Color? leafTint = null )
 	{
-		Sfx.Play( "sounds/log_break.sound", point, volume: 1.0f, pitchMin: 0.62f, pitchMax: 0.82f );
+		Sfx.Play( "sounds/log_split.sound", point, volume: 1.0f, pitchMin: 0.62f, pitchMax: 0.82f );
 		if ( leafTint.HasValue )
 			ChipBurst.SpawnLeaves( scene, point, Vector3.Up, 18, leafTint.Value );
 	}
 
 	public static void SmallerLogsSpawned( Vector3 point )
 	{
-		Sfx.Play( "sounds/log_break.sound", point, volume: 0.95f, pitchMin: 0.58f, pitchMax: 0.78f );
+		Sfx.Play( "sounds/log_split.sound", point, volume: 0.95f, pitchMin: 0.58f, pitchMax: 0.78f );
 	}
 
 	public static void DropChip( Scene scene, Vector3 point, Vector3 dir, Color tint, int count = 2 )

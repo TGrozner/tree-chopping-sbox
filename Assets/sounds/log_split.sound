@@ -1,0 +1,33 @@
+{
+  "UI": false,
+  "Volume": "0.88",
+  "Pitch": "1.0",
+  "Decibels": 79,
+  "SelectionMode": "Random",
+  "Sounds": [
+    "sounds/cc0/wood/wood_breaking_01.vsnd",
+    "sounds/cc0/wood/wood_breaking_02.vsnd",
+    "sounds/cc0/wood/wood_cracking_01.vsnd",
+    "sounds/cc0/wood/wood_cracking_02.vsnd",
+    "sounds/cc0/wood/wood_cracking_03.vsnd",
+    "sounds/cc0/wood/wood_cracking_04.vsnd"
+  ],
+  "Occlusion": true,
+  "AirAbsorption": true,
+  "Transmission": true,
+  "OcclusionRadius": 64,
+  "DistanceAttenuation": true,
+  "Distance": 8000,
+  "Falloff": [
+    { "x": 0, "y": 1, "in": 0, "out": -1.7, "mode": "Mirrored" },
+    { "x": 0.06, "y": 0.28, "in": 2.4, "out": -2.4, "mode": "Mirrored" },
+    { "x": 0.22, "y": 0.05, "in": 0.16, "out": -0.16, "mode": "Mirrored" },
+    { "x": 1, "y": 0, "in": 0, "out": 0, "mode": "Mirrored" }
+  ],
+  "DefaultMixer": {
+    "Name": "unknown",
+    "Id": "00000000-0000-0000-0000-000000000000"
+  },
+  "__references": [],
+  "__version": 1
+}

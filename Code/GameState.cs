@@ -446,6 +446,13 @@ public sealed class GameState : Component
 		SanitizeLoadedState();
 	}
 
+	internal void DebugAddStockpileForTest( int wood, int finewood = 0, int corewood = 0 )
+	{
+		Wood += Math.Max( 0, wood );
+		Finewood += Math.Max( 0, finewood );
+		CoreWood += Math.Max( 0, corewood );
+	}
+
 	public void ResetForTest()
 	{
 		Wood = 0;

@@ -371,7 +371,7 @@ public sealed class FilmStrip : Component
 
 	private void TickLanded()
 	{
-		// Linger so the impact dust / snap have time to read.
+		// Linger so impact dust/chips have time to read.
 		if ( (float)_phaseTime < 1.5f ) return;
 		_lastReSwing = 0.999f;
 		Log.Info( "[TC_FILM] LANDED → chopping trunk" );

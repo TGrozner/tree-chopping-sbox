@@ -17,6 +17,8 @@ param(
     [int]   $Seeds = 1,
     [int]   $MaxParallel = 2,
 	[int]   $MinPassMarkers = 52,
+    [switch]$Full,
+    [switch]$PhysicsOnly,
     [switch]$Sequential,
     [switch]$KeepLog
 )
@@ -51,6 +53,25 @@ function Get-ExpectedPhases {
 }
 
 $expectedPhases = Get-ExpectedPhases
+if ( $PhysicsOnly ) {
+    $physicsPhaseNames = @(
+        'Init',
+        'TestSplitLogSpawn',
+        'TestImpactNoSelfDamage',
+        'TestLandedLogGravity',
+        'TestLandedLogSupport',
+        'TestCascadeDamage',
+        'TestCascadeCollision',
+        'TestFallingImpactSplit',
+        'TestTunablesValheimSanity',
+        'TestValheimLogLaunch',
+        'TestValheimTreeLogHitImpulse',
+        'TestValheimDropGeometry',
+        'TestRollingLogsDamping'
+    )
+    $expectedPhases = @( $expectedPhases | Where-Object { $physicsPhaseNames -contains $_ } )
+    if ( $MinPassMarkers -eq 52 ) { $MinPassMarkers = 13 }
+}
 $expectedPassCount = $MinPassMarkers
 
 $stderrNoiseAllowlist = @(
@@ -67,7 +88,9 @@ function Start-SelftestProcess {
     $logErr = Join-Path $env:TEMP "tc-selftest-$stamp-s${Seed}.stderr.log"
     Remove-Item $logOut, $logErr -ErrorAction SilentlyContinue
 
-    $argList = @( '+game', "`"$Project`"", '+maxplayers', '1', '+tc_selftest', '1', '+tc_selftest_quick', '1' )
+    $argList = @( '+game', "`"$Project`"", '+maxplayers', '1', '+tc_selftest', '1' )
+    if ( -not $Full ) { $argList += @( '+tc_selftest_quick', '1' ) }
+    if ( $PhysicsOnly ) { $argList += @( '+tc_selftest_physics', '1' ) }
     if ( $Seed -gt 0 ) { $argList += @( '+tc_selftest_seed', "$Seed" ) }
 
     $proc = Start-Process -FilePath $Sbox -ArgumentList $argList -PassThru -NoNewWindow `
@@ -217,6 +240,7 @@ $parallelLabel = if ( $Sequential -or $seedList.Count -eq 1 -or $MaxParallel -eq
 Write-Host "[harness] sbox-server: $Sbox"
 Write-Host "[harness] project:     $Project"
 Write-Host "[harness] mode:        $parallelLabel, $($seedList.Count) iter, $TimeoutSeconds`s timeout each"
+Write-Host "[harness] profile:     $(if ($PhysicsOnly) { 'physics' } elseif ($Full) { 'full' } else { 'quick' })"
 Write-Host "[harness] seeds:       $($seedList -join ', ')"
 
 $globalStart = (Get-Date)

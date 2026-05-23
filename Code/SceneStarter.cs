@@ -36,6 +36,7 @@ public sealed class SceneStarter : Component
 				Seed = SeedOverride;
 				Log.Info( $"[SceneStarter] Seed override: {Seed}" );
 			}
+			bool physicsSelftest = SelfTest.IsActiveRequest() && SelfTest.PhysicsOnly;
 
 			EnsureGameState();
 			EnsureHud();
@@ -55,11 +56,14 @@ public sealed class SceneStarter : Component
 			var camera = Scene.GetAllComponents<CameraComponent>().FirstOrDefault();
 			var player = SpawnPlayerCharacter( camera );
 			SpawnShop();
-			HubProps.Spawn( Scene, ResolvedPlayerSpawn, ShopStationArcRadius );
+			if ( !physicsSelftest ) HubProps.Spawn( Scene, ResolvedPlayerSpawn, ShopStationArcRadius );
 			// HubAmphitheatre dropped 2026-05-21 : "vire tous les trucs en
 			// pierre du spawn". Hub is now just terrain + wooden props + the
 			// 4 invisible station zones with their worldspace labels.
-			SpawnForest();
+			if ( !physicsSelftest )
+				SpawnForest();
+			else
+				Log.Info( "[SceneStarter] Physics selftest world: skipped forest and hub props" );
 			SpawnStarterSapling();
 			SpawnPet( player );
 
@@ -255,10 +259,10 @@ public sealed class SceneStarter : Component
 			.Select( t => t.WorldPosition )
 			.ToList();
 
-		spawned += SpawnProgressionGrove( placed, new Vector2( 1640f, -520f ), 15, 360f, 210f, TreeKind.Normal, TreeKind.Sapling, 0.62f );
-		spawned += SpawnProgressionGrove( placed, new Vector2( 1840f,  520f ), 14, 360f, 220f, TreeKind.Normal, TreeKind.Brittle, 0.58f );
-		spawned += SpawnProgressionGrove( placed, new Vector2( 2320f, -260f ), 12, 420f, 260f, TreeKind.Veteran, TreeKind.Normal, 0.68f );
-		spawned += SpawnProgressionGrove( placed, new Vector2( 2460f,  420f ), 10, 360f, 240f, TreeKind.Veteran, TreeKind.Brittle, 0.64f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 1640f, -520f ), 18, 380f, 220f, TreeKind.Normal, TreeKind.Sapling, 0.62f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 1840f,  520f ), 16, 380f, 230f, TreeKind.Normal, TreeKind.Brittle, 0.58f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 2320f, -260f ), 14, 440f, 270f, TreeKind.Veteran, TreeKind.Normal, 0.68f );
+		spawned += SpawnProgressionGrove( placed, new Vector2( 2460f,  420f ), 12, 380f, 250f, TreeKind.Veteran, TreeKind.Brittle, 0.64f );
 
 		Log.Info( $"[SceneStarter] Progression groves spawned {spawned} scripted trees" );
 		return spawned;
@@ -291,7 +295,7 @@ public sealed class SceneStarter : Component
 
 	private void SpawnStarterResourceField()
 	{
-		const int StarterCount = 72;
+		const int StarterCount = 84;
 		const float StartOffset = 80f;
 		const float EndOffset = 760f;
 		const float Spacing = 128f;
@@ -413,8 +417,8 @@ public sealed class SceneStarter : Component
 			if ( placed.Any( p => p.Distance( pos ) < spacing ) ) continue;
 
 			placed.Add( pos );
-			float distBeav = MathF.Sqrt( dxPad * dxPad + dyPad * dyPad );
-			float diff = ComputeBiomeDifficulty( distBeav );
+			float distFromSpawn = MathF.Sqrt( dxPad * dxPad + dyPad * dyPad );
+			float diff = ComputeBiomeDifficulty( distFromSpawn );
 			Tree.SpawnAt( Scene, pos, diff );
 			spawned++;
 		}
